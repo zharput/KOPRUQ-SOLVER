@@ -1,4 +1,9 @@
 build/
+vcpkg_installed/
+.codex/
+*.bak
+*.zip
+*.tmp
 .vs/
 .vscode/*.log
 *.user

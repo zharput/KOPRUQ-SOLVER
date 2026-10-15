@@ -1,0 +1,1 @@
+{"version":"2.0.0","tasks":[{"label":"Build KOPRUQ Solver","type":"shell","command":"powershell","args":["-ExecutionPolicy","Bypass","-File","${workspaceFolder}/scripts/build.ps1"]}]}

@@ -1,0 +1,38 @@
+cmake_minimum_required(VERSION 3.20)
+
+project(KOPRUQ_SOLVER VERSION 0.1.0 LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+include(CTest)
+
+find_package(Eigen3 CONFIG REQUIRED)
+
+add_library(kopruq_solver_core INTERFACE)
+target_include_directories(kopruq_solver_core INTERFACE ${PROJECT_SOURCE_DIR}/include)
+target_link_libraries(kopruq_solver_core INTERFACE Eigen3::Eigen)
+target_compile_features(kopruq_solver_core INTERFACE cxx_std_20)
+
+if(MSVC)
+  target_compile_options(kopruq_solver_core INTERFACE /W4 /permissive- /EHsc)
+else()
+  target_compile_options(kopruq_solver_core INTERFACE -Wall -Wextra -Wpedantic)
+endif()
+
+add_executable(kopruq_solver_cli apps/cli/main.cpp)
+target_link_libraries(kopruq_solver_cli PRIVATE kopruq_solver_core)
+add_executable(kopruq_sparse_assembly_benchmark apps/benchmarks/sparse_assembly_benchmark.cpp)
+target_link_libraries(kopruq_sparse_assembly_benchmark PRIVATE kopruq_solver_core)
+add_executable(kopruq_solver_benchmark apps/benchmarks/solver_benchmark.cpp)
+target_link_libraries(kopruq_solver_benchmark PRIVATE kopruq_solver_core)
+
+if(BUILD_TESTING)
+  find_package(GTest CONFIG REQUIRED)
+  add_executable(kopruq_solver_tests tests/unit/core_tests.cpp)
+  target_link_libraries(kopruq_solver_tests PRIVATE kopruq_solver_core GTest::gtest_main)
+  if(MSVC)
+    target_compile_options(kopruq_solver_tests PRIVATE /bigobj)
+  endif()
+  include(GoogleTest)
+  gtest_discover_tests(kopruq_solver_tests)
+endif()

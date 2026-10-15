@@ -1,0 +1,32 @@
+Package: vcpkg-cmake-config
+Version: 2026-07-21
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 6cb40187efa7b54575df466e90d8ed46665447ddb3d38aa91d6bd75e71a79d8e
+Status: install ok installed
+
+Package: vcpkg-cmake
+Version: 2025-08-07
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 1bcd9f76092a105952aedd7f65909275f6a79aa87d1f5ddf2286ab91a109f8bd
+Status: install ok installed
+
+Package: eigen3
+Version: 5.0.1
+Depends: vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 46a3c592d783023e580b376ccea114b8eafc6c56b4a9c0793c207a5f6967265a
+Description: C++ template library for linear algebra: matrices, vectors, numerical solvers, and related algorithms.
+Status: install ok installed
+
+Package: gtest
+Version: 1.18.0
+Depends: vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 9d25a4b6776d1f8658cc1e7a0041de66bbf6b8f7f078228d0345851ad0d626cf
+Description: Google Testing and Mocking Framework
+Status: install ok installed
+

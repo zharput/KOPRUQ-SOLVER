@@ -1,0 +1,256 @@
+﻿$$-------------------------------------------------------$$
+$$      midas Civil Data File
+$$-------------------------------------------------------$$
+
+$$-------------------------------------------------------$$
+$$      Set from Mesh Set
+$$-------------------------------------------------------$$
+
+$$ Element 
+SET 1 = 1 THRU 10
+
+$$-------------------------------------------------------$$
+$$      Set from Output Mesh Set
+$$-------------------------------------------------------$$
+SET 3 = 1 THRU 10
+
+$$-------------------------------------------------------$$
+$$      Direct Text Input for Case Control
+$$-------------------------------------------------------$$
+
+TITLE = Static Load
+SUBCASE 1
+  SOL 101
+  LABEL = POINT
+  LOAD = 1
+  SPC = 1
+  GEOPARM = 1
+  DISPLACEMENT(PLOT) = ALL
+  SPCFORCES(PLOT) = ALL
+  FORCE(PLOT, CORNER) = ALL
+  VBARSEGFORCE(PLOT, CORNER) = ALL
+  STRESS(PLOT, CORNER) = ALL
+  VBARMULTISTRESS(PLOT, CORNER) = ALL
+  BSTGP(PLOT) = ALL
+  LINELOAD(PLOT) = ALL
+  USE(INITLOAD) = 1 (0 , 2)
+
+$$-------------------------------------------------------$$
+$$      Direct Text Input for Bulk Data
+$$-------------------------------------------------------$$
+BEGIN BULK
+$$ Parameters of Equation Solver
+PARAM, UNITS, M-N-J-SEC
+$$ Parameters of Element Setting
+PARAM, QUAD4STRUC, HYB
+PARAM, ADJUSTELEMSHAPE, ON
+PARAM, OUTPUTPLASTICTYPE, 1
+PARAM, WARNAUTOSPC, ON
+PARAM, DUPCNSTRERROR, OFF
+PARAM, SOLUTIONERROR, ON
+PARAM, FACTMINTOL,            1e-13
+PARAM, FACTDIAG,            1e-10
+PARAM, PRTCONTACTWARN, OFF
+PARAM, CEPELAS, 1.0e-8 
+PARAM, AUTOSPC, OFF
+PARAM, SELF2MASS, OFF 
+PARAM, RESVDAMP, OFF
+PARAM, SHELLFOLDANGL, 0.0 
+PARAM, INENCODING, UTF-8
+PARAM, OUTENCODING, UTF-8
+PARAM, GBLTEMPD,               0.
+PARAM, SPCLOCALGLOBALALL, ON 
+PARAM, TENDONAREAEFFECT, ALL 
+PARAM, TENDONELASTICLOSS, OFF 
+PARAM, TENDONRELAXLOSS, OFF 
+PARAM, TENDONCRSHLOSS, OFF 
+PARAM, LINELENGTHRATIO, ON 
+PARAM, USEBARCOUPMASSINERTIA, OFF 
+PARAM, FESSHELL, OFF 
+PARAM, FESSOLID, OFF 
+PARAM, SPRING2SPCF, OFF 
+PARAM, DVALOCALGLOBALALL, ON 
+PARAM, BUFFERBINARYTYPE, MEM 
+PARAM, IOBUFFERSIZE, -1 
+PARAM, NOEQNODALFORPRESSURE, ALL 
+$$ Parameters of Analysis Case
+PARAM, BARSHEARSTR, MAX
+PARAM, BARCDEFSTR, COMBBENDING
+PARAM, BARENDCFMTOL, 1.E-10
+PARAM, SCALINGOUTPUTBAR, OFF 
+PARAM, ELEMRSLTCORD, MATERIAL
+PARAM, OUTPUTSHELLTYPE, 0
+PARAM, OUTPUTPLANETYPE, 1
+PARAM, OUTINITSTEP, OFF
+PARAM, STRESSERROR, OFF 
+PARAM, BAROUTSEGMENT, 4 
+PARAM, RELRESULTNODE, -1
+PARAM, LAYERBARTHERMAL, ON 
+PARAM, SLAVE2MASTER, ON 
+PARAM, OFFSETTOLERANCE, 1.e-3 
+PARAM, LUMPMASSMETHOD, ROWSUM
+PARAM, INTERMEDIATECASEBLOCK, ON
+PARAM, CASEBLOCK, ON
+PARAM, MINMAXBLOCKINFO, YES
+PARAM, ALLELEMLIST, ON
+PARAM, NLSEQUENTIAL, ON
+PARAM, MANUALSUBCASETEMPCTRL, ON
+PARAM, INITIALFORCE2SPCF, OFF
+PARAM, STRUCTURALSPCMERGE, ON
+PARAM, MERGEINITIALCONDITION, YES
+PARAM, LIMITMOTIONELAS, YES
+PARAM, USEPLANEFESFORMULA, YES
+PARAM, HINGEELAS, 2.e-5
+PARAM, AXISY4STRUC, FUL
+PARAM, INTERMEDIATECONV, U
+PARAM, ASSUMEDPRESS, OFF
+PARAM, TRANSPOSEBINOUTPUT, YES
+PARAM, INTERMEDIATEDUMMYSPRING, YES
+PARAM, SEPRATIONTENSCOMPTOTAL, YES
+PARAM, USEFESEQTRUSS, NO 
+PARAM, K6ROTDIAGMINBYMEMBRANE, YES 
+PARAM, USEMPCEVECTORINDEPENDENTDOFIDS, YES 
+GEOPARM, 1, Z,            9.806, , 1000, , , 
+       , , , YES, , , , , 
+       , , , NO, , , , , 
+       ,              0.6,           4181.3,             2.22,          334000.,           293.15, , NO, 
+WRALINK, 2, , , , , , , 
+       , C:\_ZHarput_Data\KOPRUQ-SOLVER\xmidas\deneme1_ST_POINT.rst
+NAMEMAP, 1, LD[POINT], , , , , , 
+
+$$-------------------------------------------------------$$
+$$      Coordinate
+$$-------------------------------------------------------$$
+CORD2R , 1, , 0.0, 0.0, 0.0, 0.0, 0.0, 1.0
+       , 1.0, 0.0, 0.0, , , , , 
+
+$$-------------------------------------------------------$$
+$$      Function
+$$-------------------------------------------------------$$
+
+$$-------------------------------------------------------$$
+$$      Material Data
+$$-------------------------------------------------------$$
+MAT1   , 1,     30000000000., ,               0.,               0.,               0., 0.0, 0.0
+       , 0.0, 0.0, 0.0, 0.0, , , , 
+MAT4   , 1,               0.,               0.,               0., , 0.0, 1.0, 
+MAT1   , 2, 199948023746.047, ,              0.3, 7861.61646502528, 0.0, 0.0, 0.0
+       , 0.0, 0.0, 0.0, 0.0, , 0.0, 0.0, 0.0
+MAT4   , 2, 0.0, 0.0, 7861.61646502528, , 0.0, 1.0, 
+
+$$-------------------------------------------------------$$
+$$      Property Data
+$$-------------------------------------------------------$$
+PBAR   , 1, 1,           0.3915,       0.00815625,   0.020002028625, 0.01968186579908, ,           0.3915
+       ,            -0.25,           0.3915,             0.25,           0.3915,             0.25,          -0.3915,            -0.25,          -0.3915
+       , 0.83333333333333, 0.83333333333333, , , 3.83141762452107, , , 3.83141762452107
+       , , , , , 0.0, 0.0, , YES
+       , , , , , , , , 
+       ,             0.25, 0.0,            -0.25, 0.0, 0.0,           0.3915, 0.0,          -0.3915
+
+$$-------------------------------------------------------$$
+$$      Load Data
+$$-------------------------------------------------------$$
+FORCE  , 5, 11, 0, 1.0,               0.,               0.,         -100000., 
+
+$$-------------------------------------------------------$$
+$$      Load Set
+$$-------------------------------------------------------$$
+LOAD   , 1,               1.,               1., 5, , , , 
+
+$$-------------------------------------------------------$$
+$$      Boundary Condition
+$$-------------------------------------------------------$$
+SPC1   , 26, 1234569, 1, , , , , 
+SPCADD , 1, 26, , , , , , 
+
+$$-------------------------------------------------------$$
+$$      Node
+$$-------------------------------------------------------$$
+GRID   , 1, , 0.0, 0.0, 0.0, 0, , 
+GRID   , 2, ,              0.5, 0.0, 0.0, 0, , 
+GRID   , 3, ,               1., 0.0, 0.0, 0, , 
+GRID   , 4, ,              1.5, 0.0, 0.0, 0, , 
+GRID   , 5, ,               2., 0.0, 0.0, 0, , 
+GRID   , 6, ,              2.5, 0.0, 0.0, 0, , 
+GRID   , 7, ,               3., 0.0, 0.0, 0, , 
+GRID   , 8, ,              3.5, 0.0, 0.0, 0, , 
+GRID   , 9, ,               4., 0.0, 0.0, 0, , 
+GRID   , 10, ,              4.5, 0.0, 0.0, 0, , 
+GRID   , 11, ,               5., 0.0, 0.0, 0, , 
+
+$$-------------------------------------------------------$$
+$$      Element
+$$-------------------------------------------------------$$
+CBAR   , 1, 1, 1, 2,               0.,               1.,               0., 
+       , , ,               0.,               0.,               0.,               0.,               0.,               0.
+       , , , , , , , , NO
+       , , , , , , , , NO
+       , , , , , , , , 
+       , , , , , , , , 
+       , , , , , , , , 
+CBAR   , 2, 1, 2, 3,               0.,               1.,               0., 
+       , , ,               0.,               0.,               0.,               0.,               0.,               0.
+       , , , , , , , , NO
+       , , , , , , , , NO
+       , , , , , , , , 
+       , , , , , , , , 
+       , , , , , , , , 
+CBAR   , 3, 1, 3, 4,               0.,               1.,               0., 
+       , , ,               0.,               0.,               0.,               0.,               0.,               0.
+       , , , , , , , , NO
+       , , , , , , , , NO
+       , , , , , , , , 
+       , , , , , , , , 
+       , , , , , , , , 
+CBAR   , 4, 1, 4, 5,               0.,               1.,               0., 
+       , , ,               0.,               0.,               0.,               0.,               0.,               0.
+       , , , , , , , , NO
+       , , , , , , , , NO
+       , , , , , , , , 
+       , , , , , , , , 
+       , , , , , , , , 
+CBAR   , 5, 1, 5, 6,               0.,               1.,               0., 
+       , , ,               0.,               0.,               0.,               0.,               0.,               0.
+       , , , , , , , , NO
+       , , , , , , , , NO
+       , , , , , , , , 
+       , , , , , , , , 
+       , , , , , , , , 
+CBAR   , 6, 1, 6, 7,               0.,               1.,               0., 
+       , , ,               0.,               0.,               0.,               0.,               0.,               0.
+       , , , , , , , , NO
+       , , , , , , , , NO
+       , , , , , , , , 
+       , , , , , , , , 
+       , , , , , , , , 
+CBAR   , 7, 1, 7, 8,               0.,               1.,               0., 
+       , , ,               0.,               0.,               0.,               0.,               0.,               0.
+       , , , , , , , , NO
+       , , , , , , , , NO
+       , , , , , , , , 
+       , , , , , , , , 
+       , , , , , , , , 
+CBAR   , 8, 1, 8, 9,               0.,               1.,               0., 
+       , , ,               0.,               0.,               0.,               0.,               0.,               0.
+       , , , , , , , , NO
+       , , , , , , , , NO
+       , , , , , , , , 
+       , , , , , , , , 
+       , , , , , , , , 
+CBAR   , 9, 1, 9, 10,               0.,               1.,               0., 
+       , , ,               0.,               0.,               0.,               0.,               0.,               0.
+       , , , , , , , , NO
+       , , , , , , , , NO
+       , , , , , , , , 
+       , , , , , , , , 
+       , , , , , , , , 
+CBAR   , 10, 1, 10, 11,               0.,               1.,               0., 
+       , , ,               0.,               0.,               0.,               0.,               0.,               0.
+       , , , , , , , , NO
+       , , , , , , , , NO
+       , , , , , , , , 
+       , , , , , , , , 
+       , , , , , , , , 
+
+ENDDATA

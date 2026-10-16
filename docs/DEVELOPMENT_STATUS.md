@@ -3,8 +3,11 @@
 > Initial status assembled from user-provided development reports, **not** independently re-executed in this document. Claude must inspect repository state and refresh evidence before changing a milestone to COMPLETE.
 
 ## Current priority
-**Phase 3.2R5 — Performance, robustness and release gate** (next unblocked
-task; R4 is verified complete).
+**Phase 3.2R5 — Performance, robustness and release gate — BLOCKED** by an
+acute build-environment issue discovered while starting R5 (see "Known
+blocking issue" below). R1-R4 remain verified complete; nothing about their
+evidence is affected, since it was captured before this instability began
+and `build/` is not version-controlled.
 
 ## Established reported history
 | Milestone | Status | Evidence / qualification |
@@ -24,10 +27,49 @@ task; R4 is verified complete).
   reconfigure. Worked around for the existing `build/debug` and
   `build/release` trees by reconfiguring with `-DVCPKG_MANIFEST_INSTALL=OFF`
   (dependencies were already present in `vcpkg_installed`). This defers but
-  does not fix the underlying permission denial (consistent with
-  Defender/Smart App Control interference); a clean build directory will
-  likely hit it again and need the same workaround or a real root-cause fix.
+  does not fix the underlying permission denial.
 - Do not disable security protections or terminate unrelated processes.
+
+## New blocking issue (2026-10-16, R5 start) — ACTIVE, NOT A CODE DEFECT
+While starting R5, newly linked `.exe` files in `build/debug` and
+`build/release` began intermittently coming out **0 bytes** (link reports
+success, or fails with `LNK1104: cannot open file`) or **disappearing
+entirely** minutes after a successful build, with no source change and no
+process of mine touching them. Diagnosis performed:
+- `Get-MpComputerStatus`: Windows Defender real-time protection and
+  antivirus are **disabled**.
+- `Get-CimInstance ... AntiVirusProduct`: three registered security
+  products — Windows Defender, **FortiClient**, **ESET Security**.
+- Smart App Control (`VerifiedAndReputablePolicyState`) is **off** (0).
+- The affected file was not different each time in a fixed way: retrying a
+  build of the *same* target repeatedly eventually produces a valid,
+  correctly-sized executable, but a *different* target already built
+  earlier would then turn up 0 bytes or missing on the next check, with no
+  rebuild of mine touching it. This points to a background process
+  scanning/quarantining newly-created executables asynchronously, most
+  consistent with FortiClient and/or ESET Security's real-time/EDR
+  protection reacting to a short burst of many new small `.exe` files being
+  created (a pattern these products commonly treat as a
+  suspicious/ransomware-like indicator), not a build-script or compiler
+  problem.
+- This is **confined to `build/`**, which is not version-controlled; no
+  source file, test file, or Git history was affected. `git status` stayed
+  clean except for the intentional, not-yet-verified R5 benchmark edit.
+- Per project rules, I did not disable Defender/FortiClient/ESET, did not
+  terminate their processes, and did not request any such change myself.
+  Stopped further rebuild attempts once the pattern escalated from
+  individual 0-byte files to whole executables disappearing, rather than
+  keep retrying into a worsening state.
+- **This requires user/IT action to resolve durably**: most likely an
+  exclusion for `C:\_ZHarput_Data\KOPRUQ-SOLVER\build\` (or the whole
+  repository) in FortiClient's and/or ESET's real-time-scan/EDR policy.
+  That is a security-setting change outside this session's authority to
+  make.
+- Until resolved, R5 benchmark numbers and a fresh CLI smoke check cannot be
+  reliably captured. R1-R4's CTest evidence is unaffected: it was captured
+  earlier in this session while the build tree was still stable, and
+  `tests/unit/*` test logic does not depend on the CLI/benchmark apps that
+  are being hit.
 
 ## Test integrity
 - Historical 25-test suite was overwritten and cannot be claimed recovered.
@@ -78,13 +120,52 @@ task; R4 is verified complete).
 - Milestone status: **COMPLETE**
 - Next unblocked roadmap task: Phase 3.2R5 — performance, robustness and release gate
 
+### 2026-10-16 — Phase 3.2R5 start — BLOCKED (environment, not code)
+- Git HEAD / working tree: `502d51e`; one uncommitted, not-yet-verified
+  change: `apps/benchmarks/solver_benchmark.cpp` now also times
+  `LinearStaticSolver::recover()` per run (previously only
+  assembly/reduction/symbolic/numeric/solve were measured), addressing the
+  roadmap's "measure recovery separately" criterion. Not committed because
+  it has not been successfully built and run end-to-end yet.
+- Current task: reproducible benchmarks at increasing size with
+  assembly/Kff/factorization/solve/recovery measured separately, full
+  Debug/Release CTest, CLI smoke test, requalification report.
+- Commands executed: multiple `cmake --build` attempts/retries on
+  `build/debug` and `build/release`; one experimental, reverted
+  `-DVCPKG_APPLOCAL_DEPS=OFF` reconfigure (it stopped vcpkg from copying
+  required runtime DLLs next to Release test executables, causing them to
+  fail at runtime with no DLL — reverted back to `ON` immediately; noted
+  here so a future session does not retry the same dead end);
+  `Get-MpComputerStatus`, `Get-CimInstance ... AntiVirusProduct`, registry
+  check of `VerifiedAndReputablePolicyState` for diagnosis.
+- Source/test files changed: `apps/benchmarks/solver_benchmark.cpp`
+  (uncommitted).
+- Debug focused / full CTest: last clean confirmation before the new
+  blocking issue appeared was 26/26 (same run documented in the R4 entry
+  above). Could not get a second clean confirmation afterward because
+  individual executables kept coming out 0 bytes or disappearing (see "New
+  blocking issue" above) — not because any test logic changed or failed.
+- Release focused / full CTest: not re-confirmed this session after the
+  issue appeared, for the same reason.
+- Independent numerical reference and error: none produced yet for R5 —
+  blocked before any benchmark run completed cleanly.
+- Root cause of any failures: environmental, not a code defect — see "New
+  blocking issue" above. Most likely FortiClient/ESET real-time/EDR
+  protection reacting to many new small executables being created in a
+  short window.
+- Milestone status: **BLOCKED** (genuine external blocker; stopped per
+  project rules rather than continuing to retry into a worsening state or
+  touching security software).
+- Next unblocked roadmap task: none — paused for user/IT input on the new
+  blocking issue before continuing R5.
+
 ## Next autonomous action
-Proceed with Phase 3.2R5 (performance, robustness and release gate) per
-`docs/SOLVER_ROADMAP.md`: reproducible benchmark models at increasing size,
-separately measured assembly/Kff-extraction/factorization/solve/recovery
-timings, confirmation that sparse complexity improvements do not compromise
-accuracy, full Debug/Release CTest, CLI smoke tests, a test-inventory audit,
-and a requalification report listing verified and unverified capabilities.
-Existing benchmark apps (`apps/benchmarks/solver_benchmark.cpp`,
-`apps/benchmarks/sparse_assembly_benchmark.cpp`) should be inspected first
-to see how much of R5 they already cover before adding new benchmark code.
+Paused. Phase 3.2R5 is next once the build-environment issue above is
+resolved (most likely a FortiClient/ESET exclusion for the `build/`
+directory or the repository, decided and applied by the user/IT — outside
+this session's authority). Once the build tree is stable again: finish and
+verify the `solver_benchmark.cpp` recovery-timing change, run it at the
+existing 100/1,000/10,000-element sizes, confirm sparse complexity scaling
+and residuals, re-run full Debug/Release CTest, redo the CLI smoke test,
+audit the complete test inventory, and write the final requalification
+report listing verified and unverified capabilities.

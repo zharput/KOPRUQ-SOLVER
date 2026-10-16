@@ -23,9 +23,9 @@ record the current policy in this document too:
   restrictive approval-gated rule governs.
 
 ## Current priority
-**Phase 6.1 — modal analysis — COMPLETE (verified on CI, run
-`38902536528`).** Phases 4.1, 4.1b, 4.2, 4.3, 4.4, 5.1 complete. Next work
-awaits approval (see "Next autonomous action").
+**Phase 6.1b — JSON/CLI support for modal analysis — COMPLETE (verified on
+CI, run `38906210839`).** Phases 4.1, 4.1b, 4.2, 4.3, 4.4, 5.1, 6.1 complete.
+Next work awaits approval (see "Next autonomous action").
 
 **Phase 3.2 requalification — COMPLETE (verified on CI, run `38872157394`,
 commit `1ed5ae4`).** Next: Phase 4, which has **not started** — its first
@@ -63,6 +63,7 @@ linking, no executables).
 | Phase 5.1 | COMPLETE (verified) | Beam end releases by static condensation; unstable-combination rejection; JSON `releases`; Debug/Release/ASan 83/83 on CI run `38894147560`; commits `4dee2b5`, `cbef2e8`, `41aec8a` |
 | Phase 4.4 | COMPLETE (verified) | `validateModel()`/`validateModelOrThrow()` for direct C++ API callers; `Restraints` promoted to namespace scope; Debug/Release/ASan 97/97 on CI run `38896544673`; commits `dba9837`, `a942083` |
 | Phase 6.1 | COMPLETE (verified) | Consistent mass matrix, Guyan mass condensation for released ends, `ModalSolver`; Debug/Release/ASan 104/104 on CI run `38902536528`; commits `63402a5`, `d12a40a`, `bca8206` |
+| Phase 6.1b | COMPLETE (verified) | JSON `kopruq-modal-results` v1, CLI `modal` command; Debug/Release/ASan 110/110 on CI run `38906210839`; commits `86f90d1`, `31fb203` |
 
 ## Known blocking issue (worked around, not root-caused)
 - CMake/vcpkg compiler detection fails with permission denied for `CMakeCXXCompilerId.exe`
@@ -196,6 +197,11 @@ status`); no data loss.
 - **Verified 2026-10-16 on CI** (run `38902536528`, commit `bca8206`):
   Debug **104/104**, Release **104/104**, AddressSanitizer **104/104** — the
   97 above + 7 `Modal`. Static analysis: 0 blocking.
+- **Verified 2026-10-16 on CI** (run `38906210839`, commit `31fb203`):
+  Debug **110/110**, Release **110/110**, AddressSanitizer **110/110** — the
+  104 above + 5 `ModalResultsJson`/`Cli` GoogleTest cases + 1 CTest run of
+  the real CLI executable (`cli.modal_portal_frame_example`). Static
+  analysis: 0 blocking.
 - Every new test is in a dedicated file; inventory audited before/after each
   milestone.
 
@@ -587,16 +593,37 @@ status`); no data loss.
   intended for large models.
 - Milestone status: **Phase 6.1 COMPLETE.**
 
+### 2026-10-16 — Phase 6.1b: JSON/CLI support for modal analysis
+- Approved: user "devam" without picking among four proposed options;
+  chose the smallest one (closing the gap just created in 6.1) per the
+  "decide and report" rule.
+- `kopruq/io/ModalResultsJson.hpp`: new, separate format
+  "kopruq-modal-results" v1 (not folded into the static "kopruq-results"
+  format, which has a fixed, unrelated key set) --
+  `schemas/modal_results.schema.json`. CLI gained a "modal <model.json>
+  [-o <out>] [-n <num-modes>]" command; argument parsing and file I/O
+  factored into small shared helpers so "solve" and "modal" do not
+  duplicate that logic. "solve"'s own behaviour is unchanged.
+- Files: `include/kopruq/io/ModalResultsJson.hpp` (new),
+  `include/kopruq/io/Cli.hpp`, `schemas/modal_results.schema.json` (new),
+  `tests/unit/modal_io_tests.cpp` (new, 6 tests), `CMakeLists.txt`
+  (+1 CTest CLI run).
+- Debug / Release / ASan (run `38906210839`): 110/110 each, first
+  attempt; static analysis 0 blocking; benchmark residuals unchanged.
+- Verified properties: every mode-shape component serialized exactly;
+  deterministic output; the published schema's top-level and per-mode
+  keys match the writer's actual output; CLI exit codes 0/1/2/3/4 for
+  the new command, including a default `-n` and an override.
+- Milestone status: **Phase 6.1b COMPLETE.**
+
 ## Next autonomous action
 Awaiting user approval (mandatory checkpoint). Phase 3.2, all of Phase 4
-(4.1-4.4), Phase 5.1 and Phase 6.1 are complete and verified. Candidate next
-increments:
-1. **JSON/CLI support for modal analysis** -- smaller, closes the gap just
-   noted (modal results currently only reachable through the C++ API).
-2. **Phase 5.2 -- end springs and eccentric offsets**, generalizing 5.1.
-3. **Phase 6.2 -- response spectrum analysis**, building directly on 6.1's
-   modes (modal combination rules, code-specific spectra kept outside the
+(4.1-4.4), Phase 5.1 and Phase 6.1/6.1b are complete and verified. Candidate
+next increments:
+1. **Phase 5.2 -- end springs and eccentric offsets**, generalizing 5.1.
+2. **Phase 6.2 -- response spectrum analysis**, building on 6.1's modes
+   (modal combination rules, code-specific spectra kept outside the
    solver kernel per the roadmap).
-4. **Phase 8 -- bridge-specific loading** (moving loads/influence lines,
+3. **Phase 8 -- bridge-specific loading** (moving loads/influence lines,
    bearings, construction stages).
 Say which, or propose a different scope.

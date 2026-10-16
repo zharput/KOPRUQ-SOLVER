@@ -203,3 +203,10 @@ condensation for released ends, `ModalSolver`. Two test bugs found and
 fixed in this period (full-vector residual including restrained DOFs; wrong
 section property in the continuum-convergence check) -- no production
 defect.
+
+## Addendum — Phase 6.1b (2026-10-16)
+
+CI run `38906210839` (commit `31fb203`): Debug/Release/ASan 110/110, first
+attempt, 0 blocking static analysis findings. Added JSON
+("kopruq-modal-results" v1) and CLI (`modal` command) support for modal
+analysis. No defects found during this increment.

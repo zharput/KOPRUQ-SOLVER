@@ -23,9 +23,14 @@ record the current policy in this document too:
   restrictive approval-gated rule governs.
 
 ## Current priority
-**Phase 6.1b — JSON/CLI support for modal analysis — COMPLETE (verified on
-CI, run `38906210839`).** Phases 4.1, 4.1b, 4.2, 4.3, 4.4, 5.1, 6.1 complete.
-Next work awaits approval (see "Next autonomous action").
+**Phase 6.2 — response spectrum analysis — BLOCKED (GitHub Actions runner
+provisioning, not code).** Code and tests are written, compiled successfully
+earlier in this same CI pipeline, and the one test-side issue found (spectrum
+range too narrow for the model's actual periods) was already fixed and
+pushed. Every run since then fails in ~2 seconds with no runner assigned
+(`runner_id: 0`, empty steps, no logs) -- see "Known blocking issue" below.
+Phases 4.1-4.4, 5.1, 6.1, 6.1b remain complete and verified; nothing about
+them is affected.
 
 **Phase 3.2 requalification — COMPLETE (verified on CI, run `38872157394`,
 commit `1ed5ae4`).** Next: Phase 4, which has **not started** — its first
@@ -64,6 +69,38 @@ linking, no executables).
 | Phase 4.4 | COMPLETE (verified) | `validateModel()`/`validateModelOrThrow()` for direct C++ API callers; `Restraints` promoted to namespace scope; Debug/Release/ASan 97/97 on CI run `38896544673`; commits `dba9837`, `a942083` |
 | Phase 6.1 | COMPLETE (verified) | Consistent mass matrix, Guyan mass condensation for released ends, `ModalSolver`; Debug/Release/ASan 104/104 on CI run `38902536528`; commits `63402a5`, `d12a40a`, `bca8206` |
 | Phase 6.1b | COMPLETE (verified) | JSON `kopruq-modal-results` v1, CLI `modal` command; Debug/Release/ASan 110/110 on CI run `38906210839`; commits `86f90d1`, `31fb203` |
+
+## Known blocking issue (2026-10-16, Phase 6.2) -- GitHub Actions runner provisioning, ACTIVE
+- Branch `ci/phase6.2-response-spectrum`, commit `a7997c6`: every CI run since
+  ~14:00 UTC fails in every job (`ninja-release`, `ninja-debug`, `ninja-asan`,
+  `ninja-analyze`) within 2 seconds of being created, with `runner_id: 0`,
+  `runner_name: ""` and an empty `steps` list -- i.e. no runner was ever
+  assigned and nothing executed, so there is no build/test failure to
+  diagnose. Fetching each job's logs returns an Azure Blob Storage
+  `BlobNotFound` error, consistent with no log ever being written.
+- Tried: a rerun of the stuck run (`POST .../rerun`, attempt 3, same result)
+  and a brand-new run from an empty commit (`a7997c6`) -- both failed
+  identically.
+- Runs earlier the same day (through ~13:33 UTC, including this exact
+  workflow and commit chain) completed normally, so this is not the
+  workflow file, the code, or a one-off transient blip; it started
+  partway through this session's heavy same-day usage (dozens of
+  4-job Windows-runner CI runs).
+- Likely cause: a GitHub Actions usage/spending limit or included-minutes
+  quota reached for the account (Windows runners bill at a 2x multiplier,
+  and today's session ran many full 4-job matrices). Could not confirm via
+  API: `GET /users/zharput/settings/billing/actions` returned 404 with this
+  token's permissions.
+- This requires the user's action (GitHub account billing/Actions settings),
+  per project rules on external/billing matters -- not something this
+  session can resolve or safely retry around. Stopped retrying once the
+  pattern was confirmed identical across a rerun and a fresh run, rather
+  than continuing to burn further attempts against the same limit.
+- Local builds remain separately blocked by the ESET `@Trojan.ML/Augur`
+  false positive (see below); until one of these is resolved, no
+  Debug/Release/ASan verification is currently possible for new changes.
+  Phase 6.2's code sits on `ci/phase6.2-response-spectrum`, unmerged into
+  `main`, pending a clean CI run.
 
 ## Known blocking issue (worked around, not root-caused)
 - CMake/vcpkg compiler detection fails with permission denied for `CMakeCXXCompilerId.exe`

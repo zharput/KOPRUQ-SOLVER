@@ -91,6 +91,25 @@ process of mine touching them. Diagnosis performed:
   `tests/unit/*` test logic does not depend on the CLI/benchmark apps that
   are being hit.
 
+### Update (same day, after user approval to continue)
+Rebuilt `build/debug` and confirmed, at that moment, all 5 CTest
+executables present with correct nonzero sizes and a clean **26/26 PASS**
+(`kopruq_solver_cli.exe`, not a CTest target, was 0 bytes at the same time).
+Shortly after, with **no build command issued in between** — only `ls`/
+`rm`/`stat` — 3 of those same 5 just-verified executables
+(`kopruq_assembly_requalification_tests.exe`,
+`kopruq_beam3d_requalification_tests.exe`,
+`kopruq_linear_static_solver_requalification_tests.exe`) had disappeared
+entirely and a 4th (`kopruq_recovery_requalification_tests.exe`) had gone to
+0 bytes, leaving only 2 of 8 built executables intact. This rules out a
+pure link-time race: something is removing/truncating already-written,
+already-verified executables in this directory **asynchronously, after the
+fact**, independent of any build activity on my part. Per the stricter
+retry rule just added to `CLAUDE.md`, stopped immediately rather than
+continuing to rebuild into a worsening state, and reported it as a blocker
+instead. Source tree remained clean throughout (confirmed via `git
+status`); no data loss.
+
 ## Test integrity
 - Historical 25-test suite was overwritten and cannot be claimed recovered.
 - **Verified 2026-10-16** (after R2 changes, commit `f050918`): Debug 12/12,

@@ -1,0 +1,93 @@
+# Builds and tests KOPRUQ-SOLVER in Debug and Release on a GitHub-hosted
+# Windows runner with the same MSVC + Ninja + vcpkg toolchain and CMake
+# presets used locally. Compiled binaries never touch the developer machine.
+name: CI
+
+on:
+  push:
+    branches: [main, "ci/**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    name: ${{ matrix.preset }}
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        preset: [ninja-debug, ninja-release]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: MSVC developer environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Set vcpkg paths
+        shell: pwsh
+        run: |
+          $ws = $env:GITHUB_WORKSPACE -replace '\\','/'
+          "VCPKG_ROOT=$ws/vcpkg" >> $env:GITHUB_ENV
+          "VCPKG_DEFAULT_BINARY_CACHE=$ws/vcpkg-bincache" >> $env:GITHUB_ENV
+
+      - name: Restore vcpkg binary cache
+        uses: actions/cache@v4
+        with:
+          path: vcpkg-bincache
+          key: vcpkg-${{ runner.os }}-${{ matrix.preset }}-${{ hashFiles('vcpkg.json') }}
+
+      - name: Bootstrap vcpkg at the manifest baseline
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force vcpkg-bincache | Out-Null
+          git clone --quiet https://github.com/microsoft/vcpkg.git vcpkg
+          $baseline = (Get-Content vcpkg.json -Raw | ConvertFrom-Json).'builtin-baseline'
+          git -C vcpkg checkout --quiet $baseline
+          ./vcpkg/bootstrap-vcpkg.bat -disableMetrics
+
+      - name: Configure
+        run: cmake --preset ${{ matrix.preset }}
+
+      - name: Build
+        run: cmake --build --preset ${{ matrix.preset }}
+
+      - name: Test inventory
+        run: ctest --preset ${{ matrix.preset }} -N
+
+      - name: Test
+        run: ctest --preset ${{ matrix.preset }} --output-junit ctest-junit.xml
+
+      - name: CLI smoke test
+        if: matrix.preset == 'ninja-release'
+        shell: pwsh
+        run: |
+          $cli = "build/release/kopruq_solver_cli.exe"
+          & $cli --version; if ($LASTEXITCODE -ne 0) { throw "--version exit $LASTEXITCODE" }
+          & $cli --help;    if ($LASTEXITCODE -ne 0) { throw "--help exit $LASTEXITCODE" }
+          & $cli bogus;     if ($LASTEXITCODE -ne 2) { throw "unknown command: expected exit 2, got $LASTEXITCODE" }
+          $global:LASTEXITCODE = 0
+
+      - name: Benchmarks
+        if: matrix.preset == 'ninja-release'
+        shell: pwsh
+        run: |
+          & build/release/kopruq_sparse_assembly_benchmark.exe | Tee-Object -FilePath benchmark-sparse-assembly.txt
+          if ($LASTEXITCODE -ne 0) { throw "sparse assembly benchmark exit $LASTEXITCODE" }
+          & build/release/kopruq_solver_benchmark.exe | Tee-Object -FilePath benchmark-solver.txt
+          if ($LASTEXITCODE -ne 0) { throw "solver benchmark exit $LASTEXITCODE" }
+
+      - name: Upload test and benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-${{ matrix.preset }}
+          path: |
+            build/*/ctest-junit.xml
+            build/*/Testing/Temporary/LastTest.log
+            benchmark-*.txt
+          if-no-files-found: ignore

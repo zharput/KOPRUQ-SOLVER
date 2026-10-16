@@ -5,8 +5,11 @@
 // - Member loads are distributed forces in kN/m, uniform or linearly varying
 //   over a segment [start, end] given as fractions of the member length
 //   (0 = node1, 1 = node2), in member-local or global axes.
-// - Global-axis intensities act per unit of true member length (not per
-//   horizontal projection).
+// - Global-axis intensities act per unit of true member length by default.
+//   With projected = true they act per unit length of the member's
+//   projection onto the plane normal to the load direction (for gravity
+//   loads: the horizontal projection), i.e. the true-length intensity is
+//   w * L_projected / L. Only valid for global-axis loads.
 // - Equivalent nodal loads are the consistent Euler-Bernoulli load vector
 //   f = integral(N^T q dx) with the element's cubic Hermite / linear shape
 //   functions, which equals the negated exact fixed-end forces. Element end
@@ -31,6 +34,7 @@ struct MemberLoad {
   int direction{};          // 0, 1, 2 = x, y, z of the chosen axes
   Real w1{}, w2{};          // intensity at start and end of the loaded segment [kN/m]
   Real start{0}, end{1};    // loaded segment as fractions of member length
+  bool projected{false};    // global loads only: intensity per projected length (see above)
 };
 
 struct LoadCase {

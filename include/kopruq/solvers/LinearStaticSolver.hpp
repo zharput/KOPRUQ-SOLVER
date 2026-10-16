@@ -59,13 +59,21 @@ static AppliedLoads assembleLoadCase(const Model&m,const DofManager&dm,const Loa
     if(ld.direction<0||ld.direction>2)throw AssemblyError(AssemblyErrorCode::InvalidLoad,"member load direction must be 0, 1 or 2");
     if(!std::isfinite(ld.w1)||!std::isfinite(ld.w2)||!std::isfinite(ld.start)||!std::isfinite(ld.end)||ld.start<0||ld.end>1||!(ld.start<ld.end))
       throw AssemblyError(AssemblyErrorCode::InvalidLoad,"member load intensity or segment is invalid");
+    if(ld.projected&&ld.axes!=LoadAxes::Global)throw AssemblyError(AssemblyErrorCode::InvalidLoad,"projected member loads must be in global axes");
     const auto&e=*it->second;
     const Node*n1=detail::find_by_id(nodes,e.node1),*n2=detail::find_by_id(nodes,e.node2);
     if(!n1||!n2)throw AssemblyError(AssemblyErrorCode::MissingNode,"element references missing node");
     Beam3DGeometry g{{n1->x,n1->y,n1->z},{n2->x,n2->y,n2->z},e.reference_y};
     auto ax=Beam3D::axes(g);
     Eigen::Matrix3d R; R.row(0)=ax.x.transpose(); R.row(1)=ax.y.transpose(); R.row(2)=ax.z.transpose();
-    auto eff=detail::memberLoadEffect(ld,R,(g.node2-g.node1).norm());
+    MemberLoad trueLength=ld;
+    if(ld.projected){
+      // Projection onto the plane normal to the load direction: L_p / L = sqrt(1 - (x . d)^2).
+      Real c=ax.x(ld.direction);
+      Real ratio=std::sqrt(std::max(Real(0),1-c*c));
+      trueLength.w1*=ratio; trueLength.w2*=ratio; trueLength.projected=false;
+    }
+    auto eff=detail::memberLoadEffect(trueLength,R,(g.node2-g.node1).norm());
     auto d=dm.element_dofs(e.node1,e.node2);
     for(int b=0;b<4;++b){Eigen::Vector3d v=R.transpose()*eff.equivalent.segment<3>(3*b);for(int i=0;i<3;++i)a.F((Eigen::Index)d[3*b+i])+=v(i);}
     Eigen::Vector3d fg=R.transpose()*eff.force, mg=R.transpose()*eff.moment_node1;

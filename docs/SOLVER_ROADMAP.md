@@ -94,7 +94,7 @@ factorization, combinations by superposition, `StaticSolution::fixed`.
 Debug/Release/ASan 46/46 after 4.1b.
 - Immutable/validated model representation; nodes, beam sections, materials, supports, connectivity, local axes.
 - ~~Nodal loads, distributed member loads, self-weight, consistent equivalent nodal loads, load cases and combinations.~~ Done in 4.1 (concentrated member loads and distributed moments not yet supported).
-- Reliable import/export and schema versioning; structured errors and reproducible result metadata.
+- ~~Reliable import/export and schema versioning; structured errors and reproducible result metadata.~~ Done in **4.2 (CI run `38884699955`)**: JSON `kopruq-model` v1 input with path-qualified validation, `kopruq-results` v1 deterministic output with SHA-256 input metadata, CLI `solve`.
 
 ### Phase 5 — Additional structural elements and releases
 - Beam end releases, rotational springs, eccentric offsets, rigid links and constraints with independent benchmarks.

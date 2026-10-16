@@ -23,9 +23,10 @@ record the current policy in this document too:
   restrictive approval-gated rule governs.
 
 ## Current priority
-**Phase 4.1 / 4.1b — member loads (incl. projected global loads) and load
-cases — COMPLETE (verified on CI, run `38878331252`).** Phase 4.2 awaits scope approval (see "Next autonomous
-action").
+**Phase 4.2 — JSON model input, results output and CLI solve path —
+COMPLETE (verified on CI, run `38884699955`).** Phase 4.1/4.1b (member
+loads, projected loads, load cases) complete. Next work awaits approval (see
+"Next autonomous action").
 
 **Phase 3.2 requalification — COMPLETE (verified on CI, run `38872157394`,
 commit `1ed5ae4`).** Next: Phase 4, which has **not started** — its first
@@ -58,7 +59,8 @@ linking, no executables).
 | Phase 3.2R5 | COMPLETE (verified) | Benchmarks + linear-scaling fix, ASan, `/analyze` gate, diagnostics fields; Debug/Release/ASan 30/30 on CI run `38872157394`; commits `1a42c61`, `734b2fc`, `c564dc3`, `506a8be`, `1ed5ae4` |
 | Phase 4.1 | COMPLETE (verified) | Member loads, self-weight, load cases/combinations, `fixed`; Debug/Release/ASan 41/41 on CI run `38874706685`; commits `4fefc25`, `9389ab3` |
 | Phase 4.1b | COMPLETE (verified) | Projected-length option for global member loads; Debug/Release/ASan 46/46 on CI run `38878331252`; commits `08af7ed`, `7036b61`, `cecbe0d` |
-| Phase 4.2+ | NOT STARTED | Awaiting scope approval |
+| Phase 4.2 | COMPLETE (verified) | JSON model I/O (`kopruq-model` v1), results (`kopruq-results` v1), CLI `solve`; Debug/Release/ASan 61/61 on CI run `38884699955`; commits `2d9e4da`, `b3b6ab0`, `24f1c65` |
+| Phase 4.3+ | NOT STARTED | Awaiting scope approval |
 
 ## Known blocking issue (worked around, not root-caused)
 - CMake/vcpkg compiler detection fails with permission denied for `CMakeCXXCompilerId.exe`
@@ -175,6 +177,11 @@ status`); no data loss.
 - **Verified 2026-10-16 on CI** (run `38878331252`, commit `cecbe0d`):
   Debug **46/46**, Release **46/46**, AddressSanitizer **46/46** — the 41
   above + 5 `ProjectedLoads` (Phase 4.1b). Static analysis: 0 blocking.
+- **Verified 2026-10-16 on CI** (run `38884699955`, commit `24f1c65`):
+  Debug **61/61**, Release **61/61**, AddressSanitizer **61/61** — the 46
+  above + 13 I/O GoogleTest cases (`Sha256`, `ModelJson`, `ResultsJson`,
+  `Cli`) + 2 CTest runs of the real CLI executable. Static analysis: 0
+  blocking.
 - Every new test is in a dedicated file; inventory audited before/after each
   milestone.
 
@@ -395,19 +402,43 @@ status`); no data loss.
   0 blocking; benchmark residuals unchanged.
 - Milestone status: **Phase 4.1b COMPLETE.**
 
-## Next autonomous action
-Awaiting user approval (mandatory checkpoint). Proposed **Phase 4.2 — model
-input/output and CLI solve path**, so the solver can be used end-to-end
-without writing C++:
-1. JSON model input (nodes, materials incl. unit_weight, sections, beams,
-   restraints, load cases, combinations) validated against a versioned
-   `schemas/model.schema.json`; structured, path-qualified error messages.
-2. JSON results output (displacements, reactions, end forces, diagnostics)
-   against a versioned `schemas/results.schema.json`, with reproducible
-   metadata (solver version, schema version, input hash).
-3. `kopruq_solver_cli solve <model.json> -o <results.json>`, with CLI and
-   round-trip tests on CI.
+### 2026-10-16 — Phase 4.2: JSON model I/O, results, CLI solve path
+- Approved: Phase 4.2 with `nlohmann-json` (vcpkg, 3.12.0 at baseline),
+  used only by the new `kopruq_solver_io` INTERFACE target.
+- Files: `include/kopruq/io/{ModelJson,ResultsJson,Sha256,Cli}.hpp` (new),
+  `apps/cli/main.cpp`, `schemas/model.schema.json`,
+  `schemas/results.schema.json` (full draft 2020-12 schemas replacing the
+  placeholders), `examples/{cantilever,portal_frame}.json`,
+  `tests/unit/io_tests.cpp` (13 tests), `tests/data/invalid_model.json`,
+  `CMakeLists.txt`, `vcpkg.json`, `README.md`.
+- Validation is done by the C++ reader (structure, types, ids, references,
+  duplicates, value ranges, beam geometry, unknown keys), not by a
+  JSON-Schema engine; `ModelJson.SchemaFileMatchesReaderKeys` keeps the
+  published schema's property/required sets identical to the reader's.
+- CI run `38883546173`: 59/60 in all three configurations, 1 failing test —
+  `ModelJson.RejectsInvalidValuesWithPaths`. Root cause (production defect
+  in the new reader): nlohmann stores C++-assigned integers as signed, and
+  the reader accepted only unsigned ids, so valid ids in programmatically
+  built JSON were rejected. Fixed (`24f1c65`) with a regression test.
+  (The `b3b6ab0` commit message says 11 I/O tests; there are 12 there, 13
+  with the regression test.)
+- Debug / Release / ASan (run `38884699955`): 61/61 each; static analysis
+  0 blocking (289 C6326 in tests only).
+- Verified properties: SHA-256 FIPS vectors; exact model write→read round
+  trip; JSON-pipeline solves bit-identical to direct API solves; every
+  displacement, reaction and end force serialized exactly; byte-identical
+  output for identical input; 30 invalid-input cases + an invalid file
+  reported at the expected JSON paths; CLI exit codes 0/1/2/3/4.
+- Milestone status: **Phase 4.2 COMPLETE.**
 
-Decision needed: a JSON parser dependency. Proposal: `nlohmann-json` via
-vcpkg (header-only, MIT, widely used); alternative: a small hand-written
-parser (no new dependency, more code to verify).
+## Next autonomous action
+Awaiting user approval (mandatory checkpoint). Candidate next increments
+(choose one; each needs scope/formulation approval):
+1. **Phase 4.3 — member point loads and distributed moments**, completing
+   the load types common in bridge models (axle loads on a member,
+   eccentric loads), with closed-form fixed-end-force references.
+2. **Phase 5.1 — beam end releases** (moment hinges, pinned connections)
+   via static condensation, with independent hand-calculated references.
+3. **Phase 4.4 — immutable validated model + structured errors in the C++
+   API** (the JSON reader already validates; the C++ API still accepts
+   unchecked models).

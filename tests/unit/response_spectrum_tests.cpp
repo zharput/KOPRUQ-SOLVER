@@ -85,7 +85,7 @@ TEST(ResponseSpectrum, MassParticipationSumsToOneWithAllModes) {
   auto m=cantilever(5.0,4);
   // free dofs = 4 nodes * 6 = 24 (node1 fixed, 5 nodes total -> 4 free nodes).
   kopruq::ResponseSpectrumInput in; in.direction=2; in.num_modes=24;
-  in.spectrum={{0.001,9.81},{1000.0,9.81}};
+  in.spectrum={{1e-8,9.81},{1e6,9.81}}; // wide and flat: unit test, not a realistic engineering spectrum
   auto r=kopruq::ResponseSpectrumSolver::solve(m,fixedNode1(),in);
   ASSERT_TRUE(r.status.success)<<r.status.message;
   EXPECT_EQ(r.modes.size(),24u);
@@ -97,7 +97,7 @@ TEST(ResponseSpectrum, SingleElementModeMatchesIndependentDenseComputation) {
   double L=5.0;
   auto m=cantilever(L,1);
   kopruq::ResponseSpectrumInput in; in.direction=1; in.num_modes=6;
-  in.spectrum={{0.01,4.0},{0.1,8.0},{1.0,8.0},{10.0,1.0}};
+  in.spectrum={{1e-8,4.0},{0.1,8.0},{1.0,8.0},{1e6,1.0}}; // wide at both ends so every mode of this stiff single element is covered
   auto r=kopruq::ResponseSpectrumSolver::solve(m,fixedNode1(),in);
   ASSERT_TRUE(r.status.success)<<r.status.message;
   ASSERT_EQ(r.modes.size(),6u);

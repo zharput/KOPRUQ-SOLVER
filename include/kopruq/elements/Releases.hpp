@@ -100,4 +100,26 @@ inline Beam3DVector completeDisplacements(const Beam3DMatrix& k, const Releases&
   return out;
 }
 
+// Guyan (static) condensation of a mass matrix consistent with the stiffness
+// condensation above: with T = K_rr^-1 K_ra (u_r = T u_a under static
+// equilibrium, the same assumption K_c already makes),
+//   M_c = M_aa - M_ar T - T^T M_ra + T^T M_rr T.
+// Returned as a full 12x12 with zero released rows/columns, matching K_c.
+inline Beam3DMatrix condensedMass(const Beam3DMatrix& k, const Beam3DMatrix& massMat, const Releases& rel) {
+  if (!anyReleased(rel)) return massMat;
+  auto p = detail::partition(k, rel);
+  const auto na = static_cast<Eigen::Index>(p.a.size()), nr = static_cast<Eigen::Index>(p.r.size());
+  Eigen::MatrixXd T = p.Krr.ldlt().solve(p.Kra);   // K_rr^-1 K_ra, na columns, nr rows
+  Eigen::MatrixXd Maa(na, na), Mar(na, nr), Mrr(nr, nr);
+  for (Eigen::Index i = 0; i < na; ++i) {
+    for (Eigen::Index j = 0; j < na; ++j) Maa(i, j) = massMat(p.a[i], p.a[j]);
+    for (Eigen::Index j = 0; j < nr; ++j) Mar(i, j) = massMat(p.a[i], p.r[j]);
+  }
+  for (Eigen::Index i = 0; i < nr; ++i) for (Eigen::Index j = 0; j < nr; ++j) Mrr(i, j) = massMat(p.r[i], p.r[j]);
+  Eigen::MatrixXd Mc = Maa - Mar * T - T.transpose() * Mar.transpose() + T.transpose() * Mrr * T;
+  Beam3DMatrix out = Beam3DMatrix::Zero();
+  for (Eigen::Index i = 0; i < na; ++i) for (Eigen::Index j = 0; j < na; ++j) out(p.a[i], p.a[j]) = Mc(i, j);
+  return 0.5 * (out + out.transpose());
+}
+
 } // namespace kopruq

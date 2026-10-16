@@ -23,7 +23,10 @@ record the current policy in this document too:
   restrictive approval-gated rule governs.
 
 ## Current priority
-**Phase 3.2R5 — Performance, robustness and release gate — IN PROGRESS.**
+**Phase 3.2R5 — Performance, robustness and release gate — INCOMPLETE**:
+everything except sanitizers/static analysis is done and verified on CI
+(see the 2026-10-16 "scaling fix" log entry and
+`docs/REQUALIFICATION_REPORT.md`).
 The local build blocker (ESET `@Trojan.ML/Augur` false positive, see below)
 is still unresolved on the developer machine, but is now **sidestepped
 legitimately via CI**: per the user's decision (2026-10-16), all Debug and
@@ -274,13 +277,37 @@ status`); no data loss.
   with ID→index maps built once per call, re-verify 26/26 on CI, and
   confirm near-linear scaling.
 
+### 2026-10-16 — Phase 3.2R5: scaling fix, inventory audit, report
+- Git HEAD: `734b2fc` (code) + docs commit, on `ci/perf-id-lookups`,
+  fast-forwarded into `main` after CI passed.
+- Source files changed: `include/kopruq/assembly/MatrixAssembler.hpp`,
+  `include/kopruq/solvers/LinearStaticSolver.hpp` — element node/material/
+  section lookups now via ID→pointer indices built once per call
+  (`detail::index_by_id`, last match wins, as the old scans did). Local
+  check: affected translation units compiled to `.obj` only (no link, no
+  executable), no warnings.
+- Debug full CTest (CI run `38863504705`): 26/26 PASS.
+- Release full CTest (same run): 26/26 PASS. CLI smoke PASS.
+- Benchmarks at 10,000 elements: assembly 99.30 → 19.44 ms, recovery
+  253.1 → 31.41 ms; 1,000 → 10,000 growth now ~9.9× (assembly) and ~11.3×
+  (recovery), i.e. linear. Residuals bit-identical before/after
+  (abs 0.0467754, normalized 3.14632e-19).
+- Test inventory audit: 26 `TEST` cases in 5 files = 26 CTest tests; no
+  disabled/skipped tests; no test file deleted in Git history;
+  `core_tests.cpp` unchanged since `1f67b16`.
+- Gaps found (not fixed, recorded in the report): `residual_norm`,
+  `relative_residual`, `fixed`, `element_equilibrium_error`,
+  `element_moment_equilibrium_error` never populated; `NonFiniteSolution`
+  never produced.
+- Milestone status: **R5 INCOMPLETE** — only sanitizers/static analysis
+  remain.
+
 ## Next autonomous action
 Awaiting user approval (mandatory checkpoint). Proposed next work period:
-1. Replace O(elements × nodes) lookups in `MatrixAssembler::assemble()` and
-   `LinearStaticSolver::recover()` with ID→index maps built once per call
-   (no change to formulation, ordering, signs or public API).
-2. Re-run CI: 26/26 Debug/Release must stay green and benchmark residuals
-   unchanged; confirm assembly/recovery scale near-linearly to 10,000
-   elements.
-3. Finish R5: test-inventory audit and the requalification report listing
-   verified and unverified capabilities.
+1. Close R5: add an MSVC AddressSanitizer job and an MSVC `/analyze`
+   static-analysis job to CI; triage any findings.
+2. Close the gaps found in the audit: populate `residual_norm` /
+   `relative_residual` / `fixed`, report `NonFiniteSolution`, and fill the
+   aggregate element-equilibrium fields — each with independent tests.
+3. Mark Phase 3.2 requalification complete and propose the Phase 4 scope
+   (model/load architecture) for approval before starting it.

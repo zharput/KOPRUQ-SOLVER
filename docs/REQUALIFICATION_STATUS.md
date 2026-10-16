@@ -66,3 +66,12 @@ the Beam3D requalification suite. CLI smoke check (`kopruq_solver_cli
 --version`, `--help`, and an unknown command) confirmed expected exit codes;
 the CLI does not yet expose model loading, so this is not a solve-path
 validation.
+
+## R3–R5
+
+R3 (linear static), R4 (recovery and strain energy) and R5 (benchmarks,
+scaling fix, inventory audit) are summarized, with verified and unverified
+capabilities, in `docs/REQUALIFICATION_REPORT.md`. Since 2026-10-16 all
+Debug/Release verification runs on GitHub Actions
+(`.github/workflows/ci.yml`) because local executables are quarantined by
+an ESET false positive (`@Trojan.ML/Augur`).

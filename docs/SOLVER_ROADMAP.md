@@ -60,7 +60,14 @@ are at floating-point roundoff (`< 1e-9`–`1e-10` relative), since
 `UᵗKU = Σ(TᵤUᵤ)ᵗkₗ(TᵤUᵤ)` is an exact identity, not an approximation.
 Debug and Release full CTest 26/26 PASS.
 
-### R5 — Performance, robustness and release gate
+### R5 — Performance, robustness and release gate — INCOMPLETE (sanitizers/static analysis pending)
+Done and verified on CI (run `38863504705`, commit `734b2fc`): benchmarks at
+100/1,000/10,000 elements with every phase timed separately; quadratic
+lookups in assembly/recovery fixed (10,000 elements: assembly 99.3 → 19.4 ms,
+recovery 253.1 → 31.4 ms, residuals bit-identical); Debug and Release CTest
+26/26; CLI smoke; test-inventory audit; `docs/REQUALIFICATION_REPORT.md`.
+Outstanding: AddressSanitizer and static analysis.
+
 - Reproducible benchmark models at increasing size (e.g. 100, 1,000, 10,000 elements) within practical memory/time limits.
 - Measure sparse assembly, Kff extraction, factorization, solve, and recovery separately.
 - Confirm sparse complexity improvements do not compromise accuracy.

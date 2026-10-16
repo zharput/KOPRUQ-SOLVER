@@ -33,7 +33,8 @@ inline const KeySpec units{{},{"length","force","angle"}};
 inline const KeySpec node{{"id","x","y","z"},{}};
 inline const KeySpec material{{"id","elastic_modulus","poisson_ratio"},{"unit_weight"}};
 inline const KeySpec section{{"id","area","Iy","Iz","J"},{}};
-inline const KeySpec beam{{"id","nodes","material","section"},{"reference_y"}};
+inline const KeySpec beam{{"id","nodes","material","section"},{"reference_y","releases"}};
+inline const KeySpec releases{{},{"start","end"}};
 inline const KeySpec support{{"node","restraints"},{}};
 inline const KeySpec load_case{{"name"},{"self_weight","nodal","member","point"}};
 inline const KeySpec nodal_load{{"node","values"},{}};
@@ -90,6 +91,8 @@ class ModelReader {
  private:
   std::set<Id> nodeIds_, materialIds_, sectionIds_, beamIds_;
   std::unordered_map<Id, Eigen::Vector3d> coords_;
+  std::unordered_map<Id, Material> materials_;
+  std::unordered_map<Id, Section> sections_;
   std::unordered_map<std::string, std::size_t> caseIndex_;
 
   void issue(const std::string& p, std::string m) { issues.push_back({p, std::move(m)}); }
@@ -227,6 +230,7 @@ class ModelReader {
       if (!valid) continue;
       if (!materialIds_.insert(mat.id).second) { issue(key(p, "id"), "duplicate material id " + std::to_string(mat.id)); continue; }
       in.model.materials.push_back(mat);
+      materials_[mat.id] = mat;
     }
   }
 
@@ -251,6 +255,7 @@ class ModelReader {
       if (!valid) continue;
       if (!sectionIds_.insert(sec.id).second) { issue(key(p, "id"), "duplicate section id " + std::to_string(sec.id)); continue; }
       in.model.sections.push_back(sec);
+      sections_[sec.id] = sec;
     }
   }
 
@@ -276,6 +281,7 @@ class ModelReader {
         std::vector<Real> r;
         if (numbers(b, p, "reference_y", 3, r)) e.reference_y = Eigen::Vector3d(r[0], r[1], r[2]); else ok = false;
       }
+      if (const json* rl = field(b, "releases")) ok = readReleases(*rl, key(p, "releases"), e.releases) && ok;
       if (!ok) continue;
       bool valid = true;
       for (int k = 0; k < 2; ++k) {
@@ -289,10 +295,32 @@ class ModelReader {
         try { Beam3D::axes(Beam3DGeometry{coords_[e.node1], coords_[e.node2], e.reference_y}); }
         catch (const std::exception& ex) { issue(p, std::string("invalid geometry: ") + ex.what()); valid = false; }
       }
+      if (valid && anyReleased(e.releases)) {
+        const Material& mat = materials_.at(e.material); const Section& sec = sections_.at(e.section);
+        Beam3DProperties bp{mat.elastic_modulus, mat.elastic_modulus / (2 * (1 + mat.poisson_ratio)), sec.area, sec.Iy, sec.Iz, sec.J};
+        try { condensedStiffness(Beam3D::localStiffness((coords_[e.node2] - coords_[e.node1]).norm(), bp), e.releases); }
+        catch (const std::exception& ex) { issue(key(p, "releases"), ex.what()); valid = false; }
+      }
       if (!valid) continue;
       if (!beamIds_.insert(e.id).second) { issue(key(p, "id"), "duplicate beam id " + std::to_string(e.id)); continue; }
       in.model.beams.push_back(e);
     }
+  }
+
+  bool readReleases(const json& j, const std::string& p, Releases& out) {
+    if (!object(j, p, model_keys::releases)) return false;
+    bool ok = true;
+    const char* ends[2] = {"start", "end"};
+    for (int e = 0; e < 2; ++e) {
+      const json* v = field(j, ends[e]);
+      if (!v) continue;
+      if (!v->is_array() || v->size() != 6) { issue(key(p, ends[e]), "must be an array of 6 booleans (UX, UY, UZ, RX, RY, RZ, member-local)"); ok = false; continue; }
+      for (std::size_t k = 0; k < 6; ++k) {
+        if (!(*v)[k].is_boolean()) { issue(at(key(p, ends[e]), k), "must be true or false"); ok = false; }
+        else out[6 * e + k] = (*v)[k].get<bool>();
+      }
+    }
+    return ok;
   }
 
   void readSupports(const json& root, const std::string& R, ModelInput& in) {
@@ -476,7 +504,9 @@ inline json writeModel(const ModelInput& in) {
   j["beams"] = json::array();
   for (const auto& e : in.model.beams)
     j["beams"].push_back({{"id", e.id}, {"nodes", {e.node1, e.node2}}, {"material", e.material}, {"section", e.section},
-                          {"reference_y", {e.reference_y.x(), e.reference_y.y(), e.reference_y.z()}}});
+                          {"reference_y", {e.reference_y.x(), e.reference_y.y(), e.reference_y.z()}},
+                          {"releases", {{"start", std::array<bool, 6>{e.releases[0], e.releases[1], e.releases[2], e.releases[3], e.releases[4], e.releases[5]}},
+                                        {"end", std::array<bool, 6>{e.releases[6], e.releases[7], e.releases[8], e.releases[9], e.releases[10], e.releases[11]}}}}});
   j["supports"] = json::array();
   for (const auto& [node, r] : in.restraints) j["supports"].push_back({{"node", node}, {"restraints", r}});
   j["load_cases"] = json::array();

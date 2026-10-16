@@ -2,6 +2,7 @@
 #include "SolverStatus.hpp"
 #include "../assembly/MatrixAssembler.hpp"
 #include "../loads/Loads.hpp"
+#include "../elements/Releases.hpp"
 #include "../results/AnalysisResults.hpp"
 #include <Eigen/SparseCholesky>
 #include <map>
@@ -54,23 +55,31 @@ static AppliedLoads assembleLoadCase(const Model&m,const DofManager&dm,const Loa
   if(loads.empty()&&lc.point.empty())return a;
   std::unordered_map<Id,const Beam3DConnection*> beams; beams.reserve(m.beams.size());
   for(const auto&e:m.beams)beams[e.id]=&e;
-  struct Frame{const Beam3DConnection*e;Beam3DGeometry g;Beam3DAxes ax;Eigen::Matrix3d R;Real L;};
+  auto matIdx=detail::index_by_id(m.materials); auto secIdx=detail::index_by_id(m.sections);
+  struct Frame{const Beam3DConnection*e;Beam3DGeometry g;Beam3DAxes ax;Eigen::Matrix3d R;Real L;bool released;Beam3DMatrix kl;};
   auto frameOf=[&](Id element,const char*what){
     auto it=beams.find(element);
     if(it==beams.end())throw AssemblyError(AssemblyErrorCode::InvalidLoad,std::string(what)+" references missing element");
     const auto&e=*it->second;
     const Node*n1=detail::find_by_id(nodes,e.node1),*n2=detail::find_by_id(nodes,e.node2);
     if(!n1||!n2)throw AssemblyError(AssemblyErrorCode::MissingNode,"element references missing node");
-    Frame f{&e,Beam3DGeometry{{n1->x,n1->y,n1->z},{n2->x,n2->y,n2->z},e.reference_y},{},{},0};
+    Frame f{&e,Beam3DGeometry{{n1->x,n1->y,n1->z},{n2->x,n2->y,n2->z},e.reference_y},{},{},0,anyReleased(e.releases),{}};
     f.ax=Beam3D::axes(f.g);
     f.R.row(0)=f.ax.x.transpose(); f.R.row(1)=f.ax.y.transpose(); f.R.row(2)=f.ax.z.transpose();
     f.L=(f.g.node2-f.g.node1).norm();
+    if(f.released){
+      // Released members pass their loads to the nodes through the condensed load vector.
+      const Material*mat=detail::find_by_id(matIdx,e.material); const Section*sec=detail::find_by_id(secIdx,e.section);
+      if(!mat||!sec)throw AssemblyError(AssemblyErrorCode::MissingNode,"element property reference missing");
+      f.kl=Beam3D::localStiffness(f.L,Beam3DProperties{mat->elastic_modulus,mat->elastic_modulus/(2*(1+mat->poisson_ratio)),sec->area,sec->Iy,sec->Iz,sec->J});
+    }
     return f;
   };
   auto accumulate=[&](const Frame&f,const detail::MemberLoadEffect&eff){
     const auto&e=*f.e;
     auto d=dm.element_dofs(e.node1,e.node2);
-    for(int b=0;b<4;++b){Eigen::Vector3d v=f.R.transpose()*eff.equivalent.segment<3>(3*b);for(int i=0;i<3;++i)a.F((Eigen::Index)d[3*b+i])+=v(i);}
+    const detail::Vec12 fc=f.released?condensedLoad(f.kl,e.releases,eff.equivalent):eff.equivalent;
+    for(int b=0;b<4;++b){Eigen::Vector3d v=f.R.transpose()*fc.segment<3>(3*b);for(int i=0;i<3;++i)a.F((Eigen::Index)d[3*b+i])+=v(i);}
     Eigen::Vector3d fg=f.R.transpose()*eff.force, mg=f.R.transpose()*eff.moment_node1;
     auto&el=a.elements[e.id];
     el.equivalent_local+=eff.equivalent; el.force+=fg; el.moment_node1+=mg;
@@ -112,10 +121,20 @@ static AnalysisResults recoverAssembled(const Model&m,const Restraints&rs,const 
     Beam3DGeometry g{{a->x,a->y,a->z},{b->x,b->y,b->z},e.reference_y};Beam3DProperties bp{p.elastic_modulus,p.elastic_modulus/(2*(1+p.poisson_ratio)),s.area,s.Iy,s.Iz,s.J};
     auto T=Beam3D::transformation(Beam3D::axes(g));auto kl=Beam3D::localStiffness((g.node2-g.node1).norm(),bp);auto d=dm.element_dofs(e.node1,e.node2);
     auto li=ap.elements.find(e.id);const ElementLoad*el=li==ap.elements.end()?nullptr:&li->second;
-    Eigen::Matrix<Real,12,1>u,ul,kul,fl,fg;for(int i=0;i<12;++i)u(i)=U((Eigen::Index)d[i]);ul=T*u;kul=kl*ul;
-    // End forces exerted by the nodes on the element: k*u minus the member loads' equivalent nodal loads.
-    fl=el?(kul-el->equivalent_local).eval():kul;fg=T.transpose()*fl;
-    ElementResults er;er.element_id=e.id;for(int i=0;i<12;++i){er.local_end_force[i]=fl(i);er.global_end_force[i]=fg(i);}er.strain_energy=0.5*ul.dot(kul);o.element_strain_energy+=er.strain_energy;
+    Eigen::Matrix<Real,12,1>u,ul,kul,fl,fg;for(int i=0;i<12;++i)u(i)=U((Eigen::Index)d[i]);ul=T*u;
+    Real energy;
+    if(anyReleased(e.releases)){
+      // Released DOFs: use the element's own end displacements, u_r = K_rr^-1 (f_r - K_ra u_a); their end forces vanish.
+      const detail::Vec12 feq=el?el->equivalent_local:detail::Vec12::Zero();
+      const detail::Vec12 uf=completeDisplacements(kl,e.releases,ul,feq);
+      kul=kl*uf;fl=kul-feq;energy=0.5*ul.dot(condensedStiffness(kl,e.releases)*ul);
+    }else{
+      kul=kl*ul;
+      // End forces exerted by the nodes on the element: k*u minus the member loads' equivalent nodal loads.
+      fl=el?(kul-el->equivalent_local).eval():kul;energy=0.5*ul.dot(kul);
+    }
+    fg=T.transpose()*fl;
+    ElementResults er;er.element_id=e.id;for(int i=0;i<12;++i){er.local_end_force[i]=fl(i);er.global_end_force[i]=fg(i);}er.strain_energy=energy;o.element_strain_energy+=er.strain_energy;
     Eigen::Vector3d f1=fg.template head<3>(),f2=fg.template segment<3>(6),m1=fg.template segment<3>(3),m2=fg.template segment<3>(9),r=(g.node2-g.node1).eval();
     Eigen::Vector3d lf=el?el->force:Eigen::Vector3d::Zero(),lm=el?el->moment_node1:Eigen::Vector3d::Zero();
     er.force_balance=f1+f2+lf;er.moment_balance=m1+m2+r.cross(f2)+lm;er.force_balance_norm=er.force_balance.norm();er.moment_balance_norm=er.moment_balance.norm();

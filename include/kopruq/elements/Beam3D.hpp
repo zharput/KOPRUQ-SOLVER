@@ -10,7 +10,7 @@ struct Beam3DGeometry { Eigen::Vector3d node1,node2,reference_y; };
 struct Beam3DProperties { Real E{},G{},A{},Iy{},Iz{},J{}; };
 struct Beam3DAxes { Eigen::Vector3d x,y,z; };
 using Beam3DMatrix=Eigen::Matrix<Real,12,12>;
-enum class Beam3DErrorCode { NonFinite,InvalidLength,InvalidProperty,ZeroLength,ParallelReference };
+enum class Beam3DErrorCode { NonFinite,InvalidLength,InvalidProperty,ZeroLength,ParallelReference,UnstableRelease };
 struct Beam3DError:std::invalid_argument { Beam3DErrorCode code; Beam3DError(Beam3DErrorCode c,const std::string& m):std::invalid_argument(m),code(c){} };
 class Beam3D final:public Element { public:
  explicit Beam3D(Id v):value_(v){} Id id()const override{return value_;}

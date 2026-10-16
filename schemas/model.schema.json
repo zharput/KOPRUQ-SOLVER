@@ -212,6 +212,9 @@
             0
           ],
           "description": "Defines local y: its component normal to the member axis"
+        },
+        "releases": {
+          "$ref": "#/$defs/releases"
         }
       },
       "required": [
@@ -449,6 +452,46 @@
         "value",
         "position"
       ],
+      "additionalProperties": false
+    },
+    "releases": {
+      "type": "object",
+      "description": "End releases in member-local DOF order UX, UY, UZ, RX, RY, RZ; true = released (no end force). Combinations that leave the element unstable are rejected.",
+      "properties": {
+        "start": {
+          "type": "array",
+          "items": {
+            "type": "boolean"
+          },
+          "minItems": 6,
+          "maxItems": 6,
+          "default": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "end": {
+          "type": "array",
+          "items": {
+            "type": "boolean"
+          },
+          "minItems": 6,
+          "maxItems": 6,
+          "default": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        }
+      },
+      "required": [],
       "additionalProperties": false
     }
   }

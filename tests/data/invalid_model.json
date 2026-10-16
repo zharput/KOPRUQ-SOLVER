@@ -1,0 +1,12 @@
+{
+  "schema": "kopruq-model",
+  "schema_version": 1,
+  "nodes": [
+    {"id": 1, "x": 0.0, "y": 0.0, "z": 0.0},
+    {"id": 2, "x": 4.0, "y": 0.0}
+  ],
+  "materials": [{"id": 1, "elastic_modulus": 210000000.0, "poisson_ratio": 0.3, "unit_weigth": 78.5}],
+  "sections": [{"id": 1, "area": 0.3, "Iy": 0.02, "Iz": 0.04, "J": 0.01}],
+  "beams": [{"id": 1, "nodes": [1, 3], "material": 1, "section": 1}],
+  "supports": [{"node": 1, "restraints": [true, true, true, true, true, true]}]
+}

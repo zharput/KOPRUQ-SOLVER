@@ -27,12 +27,20 @@ clean build tree — see `docs/REQUALIFICATION_STATUS.md`). One production
 defect found and fixed (`DofManager` accepted duplicate node IDs). Debug and
 Release full CTest 12/12 PASS; commits `07f7344`, `f050918`.
 
-### R3 — Linear static solver requalification
-- Independently verified axial, flexural, torsional cantilever displacements and mixed load cases.
-- Correct free/restrained DOF partition, reduced Kff, applied loads, sparse solve, numerical residuals, singularity handling.
-- Independent 3D portal-frame dense reference: solve reference equations without calling production solver.
-- Validate multiple load cases, deterministic results, invalid/underconstrained models.
-- Debug/Release full test suite PASS; documented numerical errors.
+### R3 — Linear static solver requalification — COMPLETE (verified)
+Independent `tests/unit/linear_static_solver_requalification_tests.cpp` (10
+tests): analytical axial/flexural/torsional cantilever tip displacements
+and reactions, a combined-load superposition case with a cross-check
+against the sum of single-component solves, direct independent checks of
+`reduceKff` and `assembleLoads` (including non-finite-load rejection), an
+independent dense 18-DOF two-element portal-frame (column + cantilevered
+beam) assembled, partitioned and solved without calling
+`MatrixAssembler`/`DofManager`/`LinearStaticSolver`, `NoRestraints` and
+empty-model `InvalidModel` rejection, a genuinely singular pinned-beam case
+(free rigid-body rotation about the pin), and determinism plus per-load-case
+equilibrium across two distinct load cases. Tolerances are relative to
+displacement/reaction magnitude, `1e-8`–`1e-9`. Debug and Release full
+CTest 22/22 PASS.
 
 ### R4 — Reaction, element-force and energy recovery requalification
 - Reactions only on restrained DOFs: R = KU - F; free DOF residuals separate.

@@ -3,7 +3,14 @@
 > Initial status assembled from user-provided development reports, **not** independently re-executed in this document. Claude must inspect repository state and refresh evidence before changing a milestone to COMPLETE.
 
 ## Current priority
-**Phase 3.2R3 — Linear static solver requalification** (next unblocked task; R2 is verified complete).
+**Phase 3.2R4 — Reaction, element-force and energy recovery requalification**
+(next unblocked task; R3 is verified complete). Note: `LinearStaticSolver`
+already performs reaction/element-force/equilibrium recovery as part of
+`solve()`, and R3's suite already independently checked reactions via global
+statics; R4 should focus on what R3 did not cover: energy consistency
+(`strain_energy`/`element_strain_energy`/`energy_error`), inclined (non-axis-
+aligned) element recovery, and multi-element portal-frame recovery checks,
+without re-deriving what R3 already verified.
 
 ## Established reported history
 | Milestone | Status | Evidence / qualification |
@@ -13,7 +20,8 @@
 | Phase 3.2 | Partially implemented | Reaction/element force recovery; historical 25 tests lost; two current ElementRecovery tests reported PASS |
 | Phase 3.2R1 | COMPLETE (verified) | New Beam3D tests; Debug 7/7, Release 7/7; commit `907ea32` |
 | Phase 3.2R2 | COMPLETE (verified) | New assembly tests; Debug 12/12, Release 12/12; commits `07f7344`, `f050918` |
-| Phase 3.2R3–R5 | NOT STARTED | R3 next |
+| Phase 3.2R3 | COMPLETE (verified) | New linear static solver tests; Debug 22/22, Release 22/22 |
+| Phase 3.2R4–R5 | NOT STARTED | R4 next |
 
 ## Known blocking issue (worked around, not root-caused)
 - CMake/vcpkg compiler detection fails with permission denied for `CMakeCXXCompilerId.exe`
@@ -51,9 +59,22 @@
 - Milestone status: **COMPLETE**
 - Next unblocked roadmap task: Phase 3.2R3 — linear static solver requalification
 
+### 2026-10-16 — Phase 3.2R3 completion
+- Git HEAD / working tree: started at `b364fc3`; new test file plus `CMakeLists.txt` wiring, no uncommitted changes outstanding at session end
+- Current task: independently requalify `LinearStaticSolver` per R3 acceptance criteria
+- Commands executed: `cmake --build build/{debug,release}`, direct run of `kopruq_linear_static_solver_requalification_tests.exe`, `ctest` full suite in both configs, CLI smoke checks
+- Source/test files changed: `tests/unit/linear_static_solver_requalification_tests.cpp` (new, 10 tests), `CMakeLists.txt` (wire new target into `gtest_discover_tests`)
+- Debug focused / full CTest: 10/10 new tests PASS standalone; 22/22 full suite PASS
+- Release focused / full CTest: 22/22 full suite PASS
+- Independent numerical reference and error: analytical Euler–Bernoulli/torsion cantilever formulas (axial, flexural, torsional, combined) matched to relative error < 1e-9; independent dense 18-DOF two-element portal-frame (column + cantilevered beam), assembled/partitioned/solved with a fresh Eigen `LDLT` dense solve (no production assembly/DOF/solver code), matched production displacements and node-1 reactions to relative error < 1e-8/1e-9; `reduceKff`/`assembleLoads` checked against hand-built sparse systems and DOF maps to machine precision
+- Root cause of any failures: none — all 10 new tests passed on first run; no production or test-harness defects found in this milestone
+- Milestone status: **COMPLETE**
+- Next unblocked roadmap task: Phase 3.2R4 — reaction, element-force and energy recovery requalification
+
 ## Next autonomous action
-Proceed with Phase 3.2R3 (linear static solver requalification) per
-`docs/SOLVER_ROADMAP.md`: independent axial/flexural/torsional cantilever and
-mixed-load references, free/restrained DOF partition correctness, independent
-3D portal-frame dense reference, multiple load cases, deterministic results,
-and invalid/underconstrained model handling.
+Proceed with Phase 3.2R4 (reaction/element-force/energy recovery
+requalification) per `docs/SOLVER_ROADMAP.md`, scoped to what R3 did not
+already cover: independent energy-consistency checks
+(`strain_energy`/`element_strain_energy`/`energy_error`), inclined
+(non-axis-aligned) element end-force recovery, and independent multi-element
+portal-frame recovery/equilibrium benchmarks with documented tolerances.

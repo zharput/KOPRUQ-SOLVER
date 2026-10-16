@@ -23,10 +23,9 @@ record the current policy in this document too:
   restrictive approval-gated rule governs.
 
 ## Current priority
-**Phase 4.2 — JSON model input, results output and CLI solve path —
-COMPLETE (verified on CI, run `38884699955`).** Phase 4.1/4.1b (member
-loads, projected loads, load cases) complete. Next work awaits approval (see
-"Next autonomous action").
+**Phase 4.3 — member point loads and distributed moments — COMPLETE
+(verified on CI, run `38887606677`).** Phases 4.1, 4.1b, 4.2 complete. Next
+work awaits approval (see "Next autonomous action").
 
 **Phase 3.2 requalification — COMPLETE (verified on CI, run `38872157394`,
 commit `1ed5ae4`).** Next: Phase 4, which has **not started** — its first
@@ -60,7 +59,8 @@ linking, no executables).
 | Phase 4.1 | COMPLETE (verified) | Member loads, self-weight, load cases/combinations, `fixed`; Debug/Release/ASan 41/41 on CI run `38874706685`; commits `4fefc25`, `9389ab3` |
 | Phase 4.1b | COMPLETE (verified) | Projected-length option for global member loads; Debug/Release/ASan 46/46 on CI run `38878331252`; commits `08af7ed`, `7036b61`, `cecbe0d` |
 | Phase 4.2 | COMPLETE (verified) | JSON model I/O (`kopruq-model` v1), results (`kopruq-results` v1), CLI `solve`; Debug/Release/ASan 61/61 on CI run `38884699955`; commits `2d9e4da`, `b3b6ab0`, `24f1c65` |
-| Phase 4.3+ | NOT STARTED | Awaiting scope approval |
+| Phase 4.3 | COMPLETE (verified) | Member point forces/moments, distributed moments, JSON `point`/`kind`; force-equilibrium metric fix; Debug/Release/ASan 76/76 on CI run `38887606677`; commits `48ad305`, `b2a605f`, `62cd955` |
+| Phase 4.4 / 5.1 | NOT STARTED | Awaiting approval |
 
 ## Known blocking issue (worked around, not root-caused)
 - CMake/vcpkg compiler detection fails with permission denied for `CMakeCXXCompilerId.exe`
@@ -182,6 +182,9 @@ status`); no data loss.
   above + 13 I/O GoogleTest cases (`Sha256`, `ModelJson`, `ResultsJson`,
   `Cli`) + 2 CTest runs of the real CLI executable. Static analysis: 0
   blocking.
+- **Verified 2026-10-16 on CI** (run `38887606677`, commit `62cd955`):
+  Debug **76/76**, Release **76/76**, AddressSanitizer **76/76** — the 61
+  above + 15 `PointLoads`. Static analysis: 0 blocking.
 - Every new test is in a dedicated file; inventory audited before/after each
   milestone.
 
@@ -431,14 +434,48 @@ status`); no data loss.
   reported at the expected JSON paths; CLI exit codes 0/1/2/3/4.
 - Milestone status: **Phase 4.2 COMPLETE.**
 
+### 2026-10-16 — Phase 4.3: member point loads and distributed moments
+- Approved: user "devam" on the recommended option 1.
+- `MemberPointLoad` (force [kN] or moment [kNm] at a position fraction,
+  local or global axes) in `LoadCase::point`; `MemberLoad::kind`
+  (`Force`/`Moment`) for distributed moments [kNm/m]. Moments enter the
+  consistent load vector through the shape-function derivatives
+  (theta_z = dv/dx, theta_y = -dw/dx) and, for torsion, the linear
+  functions. JSON v1 extended additively (`point`, `kind`).
+- Files: `include/kopruq/loads/Loads.hpp`,
+  `include/kopruq/solvers/LinearStaticSolver.hpp`,
+  `include/kopruq/io/ModelJson.hpp`, `schemas/model.schema.json`,
+  `tests/unit/point_load_tests.cpp` (new, 15 tests),
+  `tests/unit/io_tests.cpp` (schema check covers `point_load`),
+  `CMakeLists.txt`.
+- CI run `38886496742`: 3/75 failed in every configuration — the point
+  moment about z and y and the partial distributed moment tests — only on
+  `force_equilibrium_error < 1e-12` (value 1); all displacements and
+  reactions matched. Root cause (pre-existing production defect exposed by
+  moment-only loading): the metric divided round-off net force by
+  round-off force magnitudes. Fix (`62cd955`): force scale also includes
+  applied and reaction moments about the model's bounding-box centre
+  divided by its diagonal; the metric can only decrease for force-loaded
+  cases. Regression test also proves it still detects a perturbed
+  displacement field.
+- Debug / Release / ASan (run `38887606677`): 76/76 each; static analysis
+  0 blocking; benchmark residuals unchanged.
+- Known limitation: the per-element `normalized_force_error` has the same
+  round-off/round-off form; it stayed < 1e-12 in all current tests but can
+  be ill-conditioned for an element carrying only moments. Not changed
+  (would alter the documented aggregate definition); recorded for review.
+- Local build note: since Phase 4.2 the local `build/` trees no longer
+  configure (no local `nlohmann_json`; installing it needs vcpkg compiler
+  detection, which ESET blocks), so local compile-only checks are no longer
+  possible; CI is the only build.
+- Milestone status: **Phase 4.3 COMPLETE.**
+
 ## Next autonomous action
-Awaiting user approval (mandatory checkpoint). Candidate next increments
-(choose one; each needs scope/formulation approval):
-1. **Phase 4.3 — member point loads and distributed moments**, completing
-   the load types common in bridge models (axle loads on a member,
-   eccentric loads), with closed-form fixed-end-force references.
-2. **Phase 5.1 — beam end releases** (moment hinges, pinned connections)
-   via static condensation, with independent hand-calculated references.
-3. **Phase 4.4 — immutable validated model + structured errors in the C++
-   API** (the JSON reader already validates; the C++ API still accepts
-   unchecked models).
+Awaiting user approval (mandatory checkpoint). Recommended next:
+1. **Phase 5.1 — beam end releases** (moment hinges, pinned ends; per end
+   and per rotational/translational DOF) by static condensation of the
+   element stiffness and of the fixed-end forces; independent references:
+   simply supported and propped beams built from released elements,
+   two-span beam with an internal hinge, released portal frame.
+2. Alternatively **Phase 4.4 — validated model in the C++ API** (the JSON
+   reader validates; direct C++ callers still pass unchecked models).

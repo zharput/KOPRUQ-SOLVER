@@ -167,3 +167,14 @@ tests; Debug/Release/ASan are now 41/41. Two §5 items changed:
 - `StaticSolution::fixed` now holds reactions on restrained DOFs.
 Distributed loads, self-weight and combinations are implemented; releases,
 offsets and further analysis types remain unimplemented.
+
+## Addendum — Phases 4.1b–4.3 (2026-10-16)
+
+CI run `38887606677` (commit `62cd955`): Debug/Release/ASan 76/76. Added
+projected global loads (4.1b), JSON model/results I/O and CLI (4.2), member
+point loads and distributed moments (4.3). Defects found and fixed in this
+period: gtest discovery timeout on cold Debug runners (`cecbe0d`, build
+only), signed-integer ids rejected by the JSON reader (`24f1c65`), and the
+global force-equilibrium metric returning ~1 for moment-only loading
+(`62cd955`). Open: the per-element normalized force error has the same
+round-off/round-off form for elements carrying only moments.

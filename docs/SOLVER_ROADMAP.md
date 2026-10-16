@@ -93,7 +93,7 @@ consistent equivalent nodal loads, end forces `k·u − FEF`, self-weight
 factorization, combinations by superposition, `StaticSolution::fixed`.
 Debug/Release/ASan 46/46 after 4.1b.
 - Immutable/validated model representation; nodes, beam sections, materials, supports, connectivity, local axes.
-- ~~Nodal loads, distributed member loads, self-weight, consistent equivalent nodal loads, load cases and combinations.~~ Done in 4.1 (concentrated member loads and distributed moments not yet supported).
+- ~~Nodal loads, distributed member loads, self-weight, consistent equivalent nodal loads, load cases and combinations.~~ Done in 4.1; concentrated member forces/moments and distributed moments added in **4.3 (CI run `38887606677`)**.
 - ~~Reliable import/export and schema versioning; structured errors and reproducible result metadata.~~ Done in **4.2 (CI run `38884699955`)**: JSON `kopruq-model` v1 input with path-qualified validation, `kopruq-results` v1 deterministic output with SHA-256 input metadata, CLI `solve`.
 
 ### Phase 5 — Additional structural elements and releases

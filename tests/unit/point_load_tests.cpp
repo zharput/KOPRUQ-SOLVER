@@ -248,3 +248,19 @@ TEST(PointLoads, JsonReadsWritesAndValidatesPointLoads) {
   EXPECT_TRUE(has(issues([](json& d){ auto& ml=d["load_cases"][0]["member"][0]; ml["axes"]="global"; ml["projected"]=true; }),
                   "$.load_cases[0].member[0].projected", "\"kind\": \"force\""));
 }
+
+TEST(PointLoads, ForceEquilibriumMetricIsMeaningfulForMomentOnlyLoads) {
+  // Regression: with only moments applied, applied and reaction forces are both
+  // round-off, and the old normalization ||sum F|| / (||F_app|| + ||F_reac||)
+  // returned ~1. The scale now also includes moments / model size.
+  auto m=cantilever();
+  LoadCase lc; lc.point={{7,LoadAxes::Local,2,M,40,0.4}};
+  auto s=solve(m,lc);
+  ASSERT_TRUE(s.status.success);
+  EXPECT_LT(s.results.force_equilibrium_error, 1e-12);
+  // The metric must still detect a real imbalance: perturb the free tip deflection.
+  Eigen::VectorXd U=s.global;
+  U(7)+=1e-3*std::abs(s.global(7));
+  auto r=kopruq::LinearStaticSolver::recover(m,fixed1(),lc,U);
+  EXPECT_GT(r.force_equilibrium_error, 1e-6);
+}

@@ -8,6 +8,7 @@
 #include <cmath>
 #include <algorithm>
 #include <unordered_map>
+#include <limits>
 namespace kopruq {
 // residual_norm = ||Kff*u_f - F_f||_2; relative_residual = residual_norm / (||Kff||_F*||u_f||_2 + ||F_f||_2), 0 when the denominator is 0.
 // A solution with any non-finite free displacement is reported as NonFiniteSolution and not recovered.
@@ -127,7 +128,13 @@ static AnalysisResults recoverAssembled(const Model&m,const Restraints&rs,const 
   o.element_equilibrium_error=sfs>0?sfb/sfs:0;o.element_moment_equilibrium_error=sms>0?smb/sms:0;
   Eigen::Vector3d af=ap.force,ar=Eigen::Vector3d::Zero(),am=ap.moment,arm=Eigen::Vector3d::Zero();
   for(const auto&n:o.nodes){const Node*x=detail::find_by_id(nodes,n.node_id);Eigen::Vector3d r(x->x,x->y,x->z),f(n.reaction[0],n.reaction[1],n.reaction[2]),mm(n.reaction[3],n.reaction[4],n.reaction[5]);ar+=f;arm+=mm+r.cross(f);}
-  o.force_balance=af+ar;o.moment_balance=am+arm;o.force_balance_norm=o.force_balance.norm();o.moment_balance_norm=o.moment_balance.norm();o.force_equilibrium_error=o.force_balance_norm/(af.norm()+ar.norm()>0?af.norm()+ar.norm():1);o.moment_equilibrium_error=o.moment_balance_norm/(am.norm()+arm.norm()>0?am.norm()+arm.norm():1);
+  o.force_balance=af+ar;o.moment_balance=am+arm;o.force_balance_norm=o.force_balance.norm();o.moment_balance_norm=o.moment_balance.norm();
+  // Force scale: applied plus reaction forces, plus moments (about the model's bounding-box centre) divided by the model
+  // size, so a purely moment-loaded case is measured against its moments instead of against round-off forces.
+  Eigen::Vector3d lo=Eigen::Vector3d::Constant(std::numeric_limits<Real>::max()),hi=-lo;for(const auto&n:m.nodes){Eigen::Vector3d p(n.x,n.y,n.z);lo=lo.cwiseMin(p);hi=hi.cwiseMax(p);}
+  Real Lc=m.nodes.empty()?0:(hi-lo).norm();Real fscale=af.norm()+ar.norm();if(Lc>0){Eigen::Vector3d c=0.5*(lo+hi);fscale+=((am-c.cross(af)).norm()+(arm-c.cross(ar)).norm())/Lc;}
+  o.force_equilibrium_error=o.force_balance_norm/(fscale>0?fscale:1);
+  o.moment_equilibrium_error=o.moment_balance_norm/(am.norm()+arm.norm()>0?am.norm()+arm.norm():1);
   // External work of the assembled (consistent) loads; equals the sum of element 0.5*u^T*k*u.
   o.strain_energy=0.5*U.dot(ap.F);Real escale=std::max(std::abs(o.strain_energy),std::abs(o.element_strain_energy));o.energy_error=escale>0?std::abs(o.strain_energy-o.element_strain_energy)/escale:0;o.valid=true;return o;
 }

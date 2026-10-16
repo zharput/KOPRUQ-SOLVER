@@ -20,7 +20,8 @@ jobs:
       fail-fast: false
       matrix:
         # ninja-asan: full CTest under MSVC AddressSanitizer.
-        # ninja-analyze: MSVC /analyze build of project code, report-only (no tests).
+        # ninja-analyze: MSVC /analyze build of project code (no tests); fails on any
+        # finding except GoogleTest's C6326 macro false positive in tests\.
         preset: [ninja-debug, ninja-release, ninja-asan, ninja-analyze]
     steps:
       - uses: actions/checkout@v4
@@ -70,6 +71,13 @@ jobs:
           "STATIC-ANALYSIS unique warnings: $($hits.Count)"
           $hits | ForEach-Object { "STATIC-ANALYSIS $_" }
           $hits | Set-Content analyze-warnings.txt
+          # Known false positive: GoogleTest assertion macros expand to
+          # `switch (0) case 0: default:`, which /analyze reports as C6326 on
+          # every assertion line. Only that code, only in tests\, is tolerated;
+          # it stays visible above. Any other finding fails the job.
+          $blocking = $hits | Where-Object { -not ($_ -match '\\tests\\' -and $_ -match 'warning C6326') }
+          "STATIC-ANALYSIS blocking findings: $(@($blocking).Count)"
+          if (@($blocking).Count -gt 0) { $blocking; throw "static analysis findings" }
 
       - name: Test inventory
         if: matrix.preset != 'ninja-analyze'

@@ -64,6 +64,9 @@ if(BUILD_TESTING)
   target_compile_definitions(kopruq_validate_tests PRIVATE KOPRUQ_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
   add_executable(kopruq_modal_tests tests/unit/modal_tests.cpp)
   target_link_libraries(kopruq_modal_tests PRIVATE kopruq_solver_core GTest::gtest_main)
+  add_executable(kopruq_modal_io_tests tests/unit/modal_io_tests.cpp)
+  target_link_libraries(kopruq_modal_io_tests PRIVATE kopruq_solver_io GTest::gtest_main)
+  target_compile_definitions(kopruq_modal_io_tests PRIVATE KOPRUQ_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
   if(MSVC)
     target_compile_options(kopruq_solver_tests PRIVATE /bigobj)
   endif()
@@ -81,10 +84,13 @@ if(BUILD_TESTING)
   gtest_discover_tests(kopruq_release_tests DISCOVERY_TIMEOUT 60)
   gtest_discover_tests(kopruq_validate_tests DISCOVERY_TIMEOUT 60)
   gtest_discover_tests(kopruq_modal_tests DISCOVERY_TIMEOUT 60)
+  gtest_discover_tests(kopruq_modal_io_tests DISCOVERY_TIMEOUT 60)
   # The real CLI executable, end to end.
   add_test(NAME cli.solve_portal_frame_example
            COMMAND kopruq_solver_cli solve ${PROJECT_SOURCE_DIR}/examples/portal_frame.json -o ${CMAKE_BINARY_DIR}/cli_portal_frame_results.json)
   add_test(NAME cli.rejects_invalid_model
            COMMAND kopruq_solver_cli solve ${PROJECT_SOURCE_DIR}/tests/data/invalid_model.json)
   set_tests_properties(cli.rejects_invalid_model PROPERTIES WILL_FAIL TRUE)
+  add_test(NAME cli.modal_portal_frame_example
+           COMMAND kopruq_solver_cli modal ${PROJECT_SOURCE_DIR}/examples/portal_frame.json -o ${CMAKE_BINARY_DIR}/cli_portal_frame_modal_results.json)
 endif()

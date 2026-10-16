@@ -202,7 +202,7 @@ TEST(ModelJson, SchemaFileMatchesReaderKeys) {
   const std::vector<std::pair<const char*, const kopruq::io::KeySpec*>> defs = {
     {"units", &k::units}, {"node", &k::node}, {"material", &k::material}, {"section", &k::section}, {"beam", &k::beam},
     {"support", &k::support}, {"load_case", &k::load_case}, {"nodal_load", &k::nodal_load}, {"member_load", &k::member_load},
-    {"combination", &k::combination}, {"combination_term", &k::combination_term}};
+    {"combination", &k::combination}, {"combination_term", &k::combination_term}, {"point_load", &k::point_load}};
   EXPECT_EQ(schema.at("$defs").size(), defs.size());
   for (const auto& [name, spec] : defs) check(schema.at("$defs").at(name), *spec, name);
   EXPECT_EQ(schema.at("properties").at("schema_version").at("const"), kopruq::io::model_schema_version);

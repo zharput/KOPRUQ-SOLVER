@@ -1,1 +1,1 @@
-{"name":"kopruq-solver","version-string":"0.1.0","builtin-baseline":"20ceb8adbf0504d4b0d5e4058a32f9d4fc896391","dependencies":["eigen3","gtest"]}
+{"name":"kopruq-solver","version-string":"0.1.0","builtin-baseline":"20ceb8adbf0504d4b0d5e4058a32f9d4fc896391","dependencies":["eigen3","gtest","nlohmann-json"]}

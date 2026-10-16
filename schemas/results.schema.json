@@ -1,1 +1,295 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","title":"KOPRUQ results","type":"object"}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kopruq.local/schemas/results/1",
+  "title": "KOPRUQ-SOLVER results, format version 1",
+  "description": "Written by kopruq::io::writeResults (include/kopruq/io/ResultsJson.hpp). Deterministic: no timestamps, sorted keys, round-trip doubles.",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "const": "kopruq-results"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "solver": {
+          "const": "KOPRUQ-SOLVER"
+        },
+        "solver_version": {
+          "type": "string"
+        },
+        "model_schema": {
+          "const": "kopruq-model"
+        },
+        "model_schema_version": {
+          "const": 1
+        },
+        "model_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "units": {
+          "type": "object",
+          "properties": {
+            "length": {
+              "const": "m"
+            },
+            "force": {
+              "const": "kN"
+            },
+            "moment": {
+              "const": "kNm"
+            },
+            "angle": {
+              "const": "rad"
+            }
+          },
+          "required": [
+            "length",
+            "force",
+            "moment",
+            "angle"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "solver",
+        "solver_version",
+        "model_schema",
+        "model_schema_version",
+        "model_sha256",
+        "units"
+      ],
+      "additionalProperties": false
+    },
+    "status": {
+      "$ref": "#/$defs/status"
+    },
+    "load_cases": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/solution"
+      }
+    },
+    "combinations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/solution"
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "metadata",
+    "status",
+    "load_cases",
+    "combinations"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "status": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "code": {
+          "enum": [
+            "Success",
+            "InvalidModel",
+            "NoRestraints",
+            "SingularSystem",
+            "NonFiniteSolution",
+            "NumericalFailure"
+          ]
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "success",
+        "code",
+        "message"
+      ],
+      "additionalProperties": false
+    },
+    "solution": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/status"
+        },
+        "diagnostics": {
+          "type": "object",
+          "properties": {
+            "total_dofs": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "free_dofs": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "fixed_dofs": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "residual_norm": {
+              "type": "number"
+            },
+            "relative_residual": {
+              "type": "number"
+            },
+            "force_equilibrium_error": {
+              "type": "number"
+            },
+            "moment_equilibrium_error": {
+              "type": "number"
+            },
+            "element_equilibrium_error": {
+              "type": "number"
+            },
+            "element_moment_equilibrium_error": {
+              "type": "number"
+            },
+            "max_element_force_error": {
+              "type": "number"
+            },
+            "max_element_moment_error": {
+              "type": "number"
+            },
+            "strain_energy": {
+              "type": "number"
+            },
+            "element_strain_energy": {
+              "type": "number"
+            },
+            "energy_error": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "total_dofs",
+            "free_dofs",
+            "fixed_dofs",
+            "residual_norm",
+            "relative_residual",
+            "force_equilibrium_error",
+            "moment_equilibrium_error",
+            "element_equilibrium_error",
+            "element_moment_equilibrium_error",
+            "max_element_force_error",
+            "max_element_moment_error",
+            "strain_energy",
+            "element_strain_energy",
+            "energy_error"
+          ],
+          "additionalProperties": false
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "displacement": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 6,
+                "maxItems": 6
+              },
+              "reaction": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 6,
+                "maxItems": 6
+              },
+              "restrained": {
+                "type": "array",
+                "items": {
+                  "type": "boolean"
+                },
+                "minItems": 6,
+                "maxItems": 6
+              }
+            },
+            "required": [
+              "id",
+              "displacement",
+              "reaction",
+              "restrained"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "elements": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "local_end_forces": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 12,
+                "maxItems": 12
+              },
+              "global_end_forces": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 12,
+                "maxItems": 12
+              },
+              "strain_energy": {
+                "type": "number"
+              },
+              "normalized_force_error": {
+                "type": "number"
+              },
+              "normalized_moment_error": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "id",
+              "local_end_forces",
+              "global_end_forces",
+              "strain_energy",
+              "normalized_force_error",
+              "normalized_moment_error"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "name",
+        "status"
+      ],
+      "additionalProperties": false,
+      "description": "diagnostics, nodes and elements are present only when status.success is true"
+    }
+  }
+}

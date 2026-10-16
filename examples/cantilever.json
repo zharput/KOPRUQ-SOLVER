@@ -1,0 +1,29 @@
+{
+  "schema": "kopruq-model",
+  "schema_version": 1,
+  "units": {"length": "m", "force": "kN", "angle": "rad"},
+  "nodes": [
+    {"id": 1, "x": 0.0, "y": 0.0, "z": 0.0},
+    {"id": 2, "x": 4.0, "y": 0.0, "z": 0.0}
+  ],
+  "materials": [
+    {"id": 1, "elastic_modulus": 210000000.0, "poisson_ratio": 0.3, "unit_weight": 78.5}
+  ],
+  "sections": [
+    {"id": 1, "area": 0.3, "Iy": 0.02, "Iz": 0.04, "J": 0.01}
+  ],
+  "beams": [
+    {"id": 1, "nodes": [1, 2], "material": 1, "section": 1, "reference_y": [0.0, 0.0, 1.0]}
+  ],
+  "supports": [
+    {"node": 1, "restraints": [true, true, true, true, true, true]}
+  ],
+  "load_cases": [
+    {"name": "G", "self_weight": 1.0},
+    {"name": "Q", "member": [{"element": 1, "axes": "global", "direction": "z", "w1": -10.0}],
+     "nodal": [{"node": 2, "values": [0.0, 0.0, -25.0, 0.0, 0.0, 0.0]}]}
+  ],
+  "combinations": [
+    {"name": "ULS", "terms": [{"case": "G", "factor": 1.35}, {"case": "Q", "factor": 1.5}]}
+  ]
+}

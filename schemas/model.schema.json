@@ -1,1 +1,394 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","title":"KOPRUQ model","type":"object","properties":{"nodes":{"type":"array"}}}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kopruq.local/schemas/model/1",
+  "title": "KOPRUQ-SOLVER model, format version 1",
+  "description": "Canonical units: m, kN, rad. Read by kopruq::io::readModel (include/kopruq/io/ModelJson.hpp), which also checks references, duplicates and geometry.",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "const": "kopruq-model"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "units": {
+      "$ref": "#/$defs/units"
+    },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/node"
+      },
+      "minItems": 1
+    },
+    "materials": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/material"
+      }
+    },
+    "sections": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/section"
+      }
+    },
+    "beams": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/beam"
+      }
+    },
+    "supports": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/support"
+      }
+    },
+    "load_cases": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/load_case"
+      }
+    },
+    "combinations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/combination"
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "nodes",
+    "materials",
+    "sections",
+    "beams",
+    "supports"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "units": {
+      "type": "object",
+      "properties": {
+        "length": {
+          "const": "m"
+        },
+        "force": {
+          "const": "kN"
+        },
+        "angle": {
+          "const": "rad"
+        }
+      },
+      "required": [],
+      "additionalProperties": false,
+      "description": "Optional declaration; only canonical units are accepted."
+    },
+    "node": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        },
+        "z": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "x",
+        "y",
+        "z"
+      ],
+      "additionalProperties": false
+    },
+    "material": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "elastic_modulus": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "kN/m^2"
+        },
+        "poisson_ratio": {
+          "type": "number",
+          "exclusiveMinimum": -1,
+          "exclusiveMaximum": 0.5
+        },
+        "unit_weight": {
+          "type": "number",
+          "minimum": 0,
+          "default": 0,
+          "description": "kN/m^3, used by self-weight"
+        }
+      },
+      "required": [
+        "id",
+        "elastic_modulus",
+        "poisson_ratio"
+      ],
+      "additionalProperties": false
+    },
+    "section": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "area": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "Iy": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "Iz": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "J": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      },
+      "required": [
+        "id",
+        "area",
+        "Iy",
+        "Iz",
+        "J"
+      ],
+      "additionalProperties": false
+    },
+    "beam": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "material": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "section": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "reference_y": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3,
+          "default": [
+            0,
+            1,
+            0
+          ],
+          "description": "Defines local y: its component normal to the member axis"
+        }
+      },
+      "required": [
+        "id",
+        "nodes",
+        "material",
+        "section"
+      ],
+      "additionalProperties": false
+    },
+    "support": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "restraints": {
+          "type": "array",
+          "items": {
+            "type": "boolean"
+          },
+          "minItems": 6,
+          "maxItems": 6,
+          "description": "UX, UY, UZ, RX, RY, RZ"
+        }
+      },
+      "required": [
+        "node",
+        "restraints"
+      ],
+      "additionalProperties": false
+    },
+    "load_case": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "self_weight": {
+          "type": "number",
+          "default": 0,
+          "description": "Factor on unit_weight*area per true length, global -Z"
+        },
+        "nodal": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nodal_load"
+          }
+        },
+        "member": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/member_load"
+          }
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "nodal_load": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 6,
+          "maxItems": 6,
+          "description": "FX, FY, FZ [kN], MX, MY, MZ [kNm], global axes"
+        }
+      },
+      "required": [
+        "node",
+        "values"
+      ],
+      "additionalProperties": false
+    },
+    "member_load": {
+      "type": "object",
+      "properties": {
+        "element": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "axes": {
+          "enum": [
+            "local",
+            "global"
+          ]
+        },
+        "direction": {
+          "enum": [
+            "x",
+            "y",
+            "z"
+          ]
+        },
+        "w1": {
+          "type": "number",
+          "description": "kN/m at start"
+        },
+        "w2": {
+          "type": "number",
+          "description": "kN/m at end; defaults to w1"
+        },
+        "start": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0
+        },
+        "end": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 1
+        },
+        "projected": {
+          "type": "boolean",
+          "default": false,
+          "description": "Global loads only: per length projected on the plane normal to the load direction"
+        }
+      },
+      "required": [
+        "element",
+        "axes",
+        "direction",
+        "w1"
+      ],
+      "additionalProperties": false
+    },
+    "combination": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "terms": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/combination_term"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "name",
+        "terms"
+      ],
+      "additionalProperties": false
+    },
+    "combination_term": {
+      "type": "object",
+      "properties": {
+        "case": {
+          "type": "string",
+          "description": "Load case name"
+        },
+        "factor": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "case",
+        "factor"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

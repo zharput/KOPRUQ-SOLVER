@@ -125,14 +125,26 @@ TEST(Modal, SingleElementCantileverMatchesIndependentDenseEigensolve) {
 
 TEST(Modal, ModesSatisfyEigenproblemResidualAndMassOrthonormality) {
   auto m=cantilever(4.0,3);
-  auto r=kopruq::ModalSolver::solve(m,fixedNode1(),6);
+  auto rs=fixedNode1();
+  auto r=kopruq::ModalSolver::solve(m,rs,6);
   ASSERT_TRUE(r.status.success)<<r.status.message;
   Eigen::SparseMatrix<kopruq::Real> K=kopruq::MatrixAssembler::assemble(m), M=kopruq::MatrixAssembler::assembleMass(m);
+  // K*phi = omega^2*M*phi holds only on the free DOFs; at restrained DOFs
+  // (where phi is zero by construction) it equals the support reaction,
+  // not zero. Restrict the residual to the free rows -- found via
+  // MatrixAssembler::classify(), independent of ModalSolver's internals.
+  kopruq::DofManager dm(m);
+  auto all=rs; for(const auto& n:m.nodes) if(!all.count(n.id)) all[n.id]={};
+  auto b=kopruq::MatrixAssembler::classify(dm,all);
   for (size_t i=0;i<r.modes.size();++i) {
     const auto& mi=r.modes[i];
-    Eigen::VectorXd res=K*mi.shape - (mi.angular_frequency_rad_s*mi.angular_frequency_rad_s)*(M*mi.shape);
-    double scale=std::max((K*mi.shape).norm(),1e-300);
-    EXPECT_LT(res.norm()/scale, 1e-7) << "mode " << i << " eigenproblem residual";
+    Eigen::VectorXd Kphi=K*mi.shape, res=Kphi - (mi.angular_frequency_rad_s*mi.angular_frequency_rad_s)*(M*mi.shape);
+    double scale=0, maxres=0;
+    for (auto idx : b.free) { scale=std::max(scale,std::abs(Kphi((Eigen::Index)idx))); maxres=std::max(maxres,std::abs(res((Eigen::Index)idx))); }
+    EXPECT_LT(maxres/std::max(scale,1e-300), 1e-7) << "mode " << i << " eigenproblem residual (free DOFs only)";
+    // phi is zero at restrained DOFs, so phi^T*M*phi over the full vector
+    // equals the free-DOF-only form regardless of the fixed-row coupling
+    // terms in M*phi -- this part is unaffected by the restriction above.
     EXPECT_NEAR(mi.shape.dot(M*mi.shape), 1.0, 1e-9) << "mode " << i << " mass normalization";
     for (size_t j=i+1;j<r.modes.size();++j) {
       double cross=r.modes[j].shape.dot(M*mi.shape);
@@ -148,8 +160,10 @@ TEST(Modal, FirstFrequencyConvergesToEulerBernoulliContinuumConstant) {
   auto m=cantilever(L,n);
   auto r=kopruq::ModalSolver::solve(m,fixedNode1(),1);
   ASSERT_TRUE(r.status.success)<<r.status.message;
+  // IY < IZ, so bending about the local y-axis (deflection in local z,
+  // governed by IY) is the more flexible plane and gives the first mode.
   double mass_per_length=UW/kopruq::g_standard*A;
-  double constant=r.modes[0].angular_frequency_rad_s*L*L*std::sqrt(mass_per_length/(E*IZ));
+  double constant=r.modes[0].angular_frequency_rad_s*L*L*std::sqrt(mass_per_length/(E*IY));
   EXPECT_NEAR(constant, 3.5160, 0.02*3.5160) << "discretized first-mode constant vs continuum 3.5160";
 }
 

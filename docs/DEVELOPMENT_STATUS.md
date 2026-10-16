@@ -23,8 +23,8 @@ record the current policy in this document too:
   restrictive approval-gated rule governs.
 
 ## Current priority
-**Phase 4.1 — member loads and load cases — COMPLETE (verified on CI, run
-`38874706685`).** Phase 4.2 awaits scope approval (see "Next autonomous
+**Phase 4.1 / 4.1b — member loads (incl. projected global loads) and load
+cases — COMPLETE (verified on CI, run `38878331252`).** Phase 4.2 awaits scope approval (see "Next autonomous
 action").
 
 **Phase 3.2 requalification — COMPLETE (verified on CI, run `38872157394`,
@@ -57,6 +57,7 @@ linking, no executables).
 | Phase 3.2R4 | COMPLETE (verified) | Implemented + requalified strain-energy recovery; Debug 26/26, Release 26/26; commit `643c829` + test commit below |
 | Phase 3.2R5 | COMPLETE (verified) | Benchmarks + linear-scaling fix, ASan, `/analyze` gate, diagnostics fields; Debug/Release/ASan 30/30 on CI run `38872157394`; commits `1a42c61`, `734b2fc`, `c564dc3`, `506a8be`, `1ed5ae4` |
 | Phase 4.1 | COMPLETE (verified) | Member loads, self-weight, load cases/combinations, `fixed`; Debug/Release/ASan 41/41 on CI run `38874706685`; commits `4fefc25`, `9389ab3` |
+| Phase 4.1b | COMPLETE (verified) | Projected-length option for global member loads; Debug/Release/ASan 46/46 on CI run `38878331252`; commits `08af7ed`, `7036b61`, `cecbe0d` |
 | Phase 4.2+ | NOT STARTED | Awaiting scope approval |
 
 ## Known blocking issue (worked around, not root-caused)
@@ -171,6 +172,9 @@ status`); no data loss.
 - **Verified 2026-10-16 on CI** (run `38874706685`, commit `9389ab3`):
   Debug **41/41**, Release **41/41**, AddressSanitizer **41/41** —
   the 30 above + 11 `MemberLoads` (Phase 4.1). Static analysis: 0 blocking.
+- **Verified 2026-10-16 on CI** (run `38878331252`, commit `cecbe0d`):
+  Debug **46/46**, Release **46/46**, AddressSanitizer **46/46** — the 41
+  above + 5 `ProjectedLoads` (Phase 4.1b). Static analysis: 0 blocking.
 - Every new test is in a dedicated file; inventory audited before/after each
   milestone.
 
@@ -371,6 +375,25 @@ status`); no data loss.
   reported strain energy is 0.5*u^T*K*u of the nodal field and excludes the
   fixed-end (interior) state when member loads are present.
 - Milestone status: **Phase 4.1 COMPLETE.**
+
+### 2026-10-16 — Phase 4.1b: projected global member loads
+- User decisions (2026-10-16): global member loads per true length **and**
+  per projected length must both be available; projection is onto the
+  plane normal to the load direction (horizontal projection for gravity);
+  existing element local axes (`reference_y`) are sufficient.
+- `MemberLoad::projected` (default false = true length, unchanged): applied
+  as `w * L_p / L`, `L_p / L = sqrt(1 - (x . d)^2)`; projected local loads
+  rejected (`InvalidLoad`). Files: `include/kopruq/loads/Loads.hpp`,
+  `include/kopruq/solvers/LinearStaticSolver.hpp`,
+  `tests/unit/projected_load_tests.cpp` (new, 5 tests), `CMakeLists.txt`.
+- CI run `38877503974` failed in the Debug job only: post-build
+  `gtest_discover_tests` timed out (CMake default 5 s) listing the unchanged
+  `kopruq_solver_tests.exe`; Release/ASan passed 46/46. Root cause: cold
+  start of a Debug executable on a shared runner. Fix (`cecbe0d`):
+  `DISCOVERY_TIMEOUT 60` on every discovery call; no test changes.
+- Debug / Release / ASan (run `38878331252`): 46/46 each; static analysis
+  0 blocking; benchmark residuals unchanged.
+- Milestone status: **Phase 4.1b COMPLETE.**
 
 ## Next autonomous action
 Awaiting user approval (mandatory checkpoint). Proposed **Phase 4.2 — model

@@ -86,11 +86,12 @@ The phases below are planning targets, **not completed features**. Validate scop
 ### Phase 4 — Production model and load architecture
 **4.1 member loads and load cases — COMPLETE (verified, CI run `38874706685`,
 commits `4fefc25`, `9389ab3`):** uniform/trapezoidal member loads over full
-or partial length in local or global axes (global per true length),
+or partial length in local or global axes (global per true length, or per
+projected length normal to the load direction — 4.1b, CI run `38878331252`),
 consistent equivalent nodal loads, end forces `k·u − FEF`, self-weight
 (`Material::unit_weight`, global −Z), multiple load cases from one
 factorization, combinations by superposition, `StaticSolution::fixed`.
-Debug/Release/ASan 41/41.
+Debug/Release/ASan 46/46 after 4.1b.
 - Immutable/validated model representation; nodes, beam sections, materials, supports, connectivity, local axes.
 - ~~Nodal loads, distributed member loads, self-weight, consistent equivalent nodal loads, load cases and combinations.~~ Done in 4.1 (concentrated member loads and distributed moments not yet supported).
 - Reliable import/export and schema versioning; structured errors and reproducible result metadata.

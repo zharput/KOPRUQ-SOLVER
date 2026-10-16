@@ -24,7 +24,7 @@ struct ElementLoad{detail::Vec12 equivalent_local=detail::Vec12::Zero();Eigen::V
 struct AppliedLoads{Eigen::VectorXd F;std::unordered_map<Id,ElementLoad> elements;Eigen::Vector3d force=Eigen::Vector3d::Zero(),moment=Eigen::Vector3d::Zero();};
 
 class LinearStaticSolver{public:
-using Restraints=std::map<Id,std::array<bool,6>>;
+using Restraints=kopruq::Restraints;  // kept for source compatibility; see Model.hpp
 
 static Eigen::SparseMatrix<Real> reduceKff(const Eigen::SparseMatrix<Real>&K,const std::vector<std::size_t>&f){std::vector<int>mp((size_t)K.rows(),-1);for(size_t i=0;i<f.size();++i)mp[f[i]]=(int)i;std::vector<Eigen::Triplet<Real>>t;for(int c=0;c<K.outerSize();++c)for(Eigen::SparseMatrix<Real>::InnerIterator it(K,c);it;++it)if(mp[it.row()]>=0&&mp[it.col()]>=0)t.emplace_back(mp[it.row()],mp[it.col()],it.value());Eigen::SparseMatrix<Real>o((int)f.size(),(int)f.size());o.setFromTriplets(t.begin(),t.end());return o;}
 

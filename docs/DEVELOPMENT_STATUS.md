@@ -23,6 +23,10 @@ record the current policy in this document too:
   restrictive approval-gated rule governs.
 
 ## Current priority
+**Phase 4.1 — member loads and load cases — COMPLETE (verified on CI, run
+`38874706685`).** Phase 4.2 awaits scope approval (see "Next autonomous
+action").
+
 **Phase 3.2 requalification — COMPLETE (verified on CI, run `38872157394`,
 commit `1ed5ae4`).** Next: Phase 4, which has **not started** — its first
 increment needs user approval of scope and numerical formulation (see "Next
@@ -52,7 +56,8 @@ linking, no executables).
 | Phase 3.2R3 | COMPLETE (verified) | New linear static solver tests; Debug 22/22, Release 22/22 |
 | Phase 3.2R4 | COMPLETE (verified) | Implemented + requalified strain-energy recovery; Debug 26/26, Release 26/26; commit `643c829` + test commit below |
 | Phase 3.2R5 | COMPLETE (verified) | Benchmarks + linear-scaling fix, ASan, `/analyze` gate, diagnostics fields; Debug/Release/ASan 30/30 on CI run `38872157394`; commits `1a42c61`, `734b2fc`, `c564dc3`, `506a8be`, `1ed5ae4` |
-| Phase 4 | NOT STARTED | Awaiting scope/formulation approval |
+| Phase 4.1 | COMPLETE (verified) | Member loads, self-weight, load cases/combinations, `fixed`; Debug/Release/ASan 41/41 on CI run `38874706685`; commits `4fefc25`, `9389ab3` |
+| Phase 4.2+ | NOT STARTED | Awaiting scope approval |
 
 ## Known blocking issue (worked around, not root-caused)
 - CMake/vcpkg compiler detection fails with permission denied for `CMakeCXXCompilerId.exe`
@@ -163,6 +168,9 @@ status`); no data loss.
 - **Verified 2026-10-16 on CI** (run `38872157394`, commit `1ed5ae4`):
   Debug **30/30**, Release **30/30**, AddressSanitizer **30/30** —
   the 26 above + 4 `SolverDiagnostics` (R5).
+- **Verified 2026-10-16 on CI** (run `38874706685`, commit `9389ab3`):
+  Debug **41/41**, Release **41/41**, AddressSanitizer **41/41** —
+  the 30 above + 11 `MemberLoads` (Phase 4.1). Static analysis: 0 blocking.
 - Every new test is in a dedicated file; inventory audited before/after each
   milestone.
 
@@ -335,28 +343,48 @@ status`); no data loss.
   10,000 elements: 9.5–11.5×); absolute times vary ~1.5–2× between CI runs.
 - Milestone status: **R5 COMPLETE; Phase 3.2 requalification COMPLETE.**
 
+### 2026-10-16 — Phase 4.1: member loads, self-weight, load cases
+- Approved conventions (user "devam" on the proposed defaults): global
+  member loads per true length; consistent equivalent nodal loads and end
+  forces `k*u - FEF`; self-weight via `Material::unit_weight` [kN/m^3] in
+  global -Z; load cases from one factorization, combinations by
+  superposition; `StaticSolution::fixed` = reactions on restrained DOFs.
+- Files: `include/kopruq/loads/Loads.hpp` (new: `NodalLoad` moved here,
+  `MemberLoad`, `LoadCase`, `LoadCombination`, equivalent-load quadrature),
+  `include/kopruq/solvers/LinearStaticSolver.hpp` (`assembleLoadCase`,
+  `recoverAssembled`, `solveCases`; `solve`/`recover` kept as wrappers),
+  `include/kopruq/core/Material.hpp` (`unit_weight`),
+  `include/kopruq/assembly/DofManager.hpp` (`AssemblyErrorCode::InvalidLoad`),
+  `tests/unit/member_load_tests.cpp` (new, 11 tests), `CMakeLists.txt`.
+- Debug / Release / ASan full CTest (run `38874706685`): 41/41 each.
+  Static analysis: 189 C6326 in tests, 0 blocking. All prior 30 tests
+  unchanged and passing; benchmark residuals bit-identical to before
+  (nodal-load path arithmetic unchanged).
+- Independent references: closed-form EB cantilever (uniform y, uniform z
+  with theta_y = -dw/dx, axial, root-to-tip triangular), test-local
+  virtual-work integral for a partial trapezoid, fixed-fixed two-element
+  beam (qL^4/384EI, qL^2/12, qL^2/24), vector statics for an inclined member
+  under global load, superposition and direct solve for combinations.
+  All at relative tolerance 1e-9 (combinations 1e-10/1e-12).
+- Closes the report's gap "no analytical Iy-plane check" (local-z tests).
+- Known limitations: no concentrated member loads or distributed moments;
+  reported strain energy is 0.5*u^T*K*u of the nodal field and excludes the
+  fixed-end (interior) state when member loads are present.
+- Milestone status: **Phase 4.1 COMPLETE.**
+
 ## Next autonomous action
-Awaiting user approval (mandatory checkpoint). Phase 4 is not started.
+Awaiting user approval (mandatory checkpoint). Proposed **Phase 4.2 — model
+input/output and CLI solve path**, so the solver can be used end-to-end
+without writing C++:
+1. JSON model input (nodes, materials incl. unit_weight, sections, beams,
+   restraints, load cases, combinations) validated against a versioned
+   `schemas/model.schema.json`; structured, path-qualified error messages.
+2. JSON results output (displacements, reactions, end forces, diagnostics)
+   against a versioned `schemas/results.schema.json`, with reproducible
+   metadata (solver version, schema version, input hash).
+3. `kopruq_solver_cli solve <model.json> -o <results.json>`, with CLI and
+   round-trip tests on CI.
 
-Proposed first increment, **Phase 4.1 — member loads and load cases**
-(highest engineering value for bridges; the current solver accepts nodal
-loads only). It changes the numerical formulation, so these decisions need
-the user's confirmation before implementation:
-1. Distributed member loads: uniform and linearly varying (trapezoidal),
-   full or partial length, in member-local or global axes. For global
-   loads on inclined members: per true member length or per horizontal
-   projection?
-2. Consistent equivalent nodal loads from Euler–Bernoulli fixed-end
-   forces, and element end-force recovery as `k·u − fixed-end forces`
-   (without this, end forces are wrong for loaded members).
-3. Self-weight: needs a new `Material` field (public API change) — weight
-   density in kN/m³ or mass density with g = 9.81 m/s²? Gravity direction
-   −Z?
-4. Load cases solved as multiple right-hand sides with a single
-   factorization; linear combinations with user factors by superposition.
-5. `StaticSolution::fixed`: reactions on fixed DOFs, prescribed
-   displacements, or remove the field?
-
-Later increments (each to be proposed separately): validated/immutable
-model and structured errors; JSON import/export against
-`schemas/model.schema.json` with versioning; CLI solve path.
+Decision needed: a JSON parser dependency. Proposal: `nlohmann-json` via
+vcpkg (header-only, MIT, widely used); alternative: a small hand-written
+parser (no new dependency, more code to verify).

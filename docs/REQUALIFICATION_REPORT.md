@@ -155,3 +155,15 @@ sparse LDLT; sizes up to 10,000 elements only.
 Test-harness defects corrected in R2 (wrong reference `G`, uninitialized
 dynamic matrix, wrong DOF map, uninvoked lambda in `EXPECT_THROW`) are
 recorded in `docs/REQUALIFICATION_STATUS.md`.
+
+## Addendum — Phase 4.1 (2026-10-16)
+
+Since this report, Phase 4.1 (CI run `38874706685`, commit `9389ab3`) added
+member loads, self-weight, load cases and combinations with 11 independent
+tests; Debug/Release/ASan are now 41/41. Two §5 items changed:
+- The UZ–RY (Iy) bending plane now has dedicated analytical cantilever
+  checks (`MemberLoads.CantileverUniformLocalZUsesIyAndThetaYSign`,
+  `GlobalLoadOnInclinedMemberActsPerTrueLength`).
+- `StaticSolution::fixed` now holds reactions on restrained DOFs.
+Distributed loads, self-weight and combinations are implemented; releases,
+offsets and further analysis types remain unimplemented.

@@ -84,6 +84,12 @@ first increment requires user approval of scope and formulation (see
 The phases below are planning targets, **not completed features**. Validate scope and numerical formulations before implementation.
 
 ### Phase 4 — Production model and load architecture
+**4.4 validated model in the C++ API — COMPLETE (verified, CI run
+`38896544673`, commits `dba9837`, `a942083`):** `validateModel()` /
+`validateModelOrThrow()`, same semantic checks as the JSON reader, for
+direct C++ callers; `solveCases()`/`recover()` unchanged. Debug/Release/
+ASan 97/97.
+
 **4.1 member loads and load cases — COMPLETE (verified, CI run `38874706685`,
 commits `4fefc25`, `9389ab3`):** uniform/trapezoidal member loads over full
 or partial length in local or global axes (global per true length, or per
@@ -92,7 +98,7 @@ consistent equivalent nodal loads, end forces `k·u − FEF`, self-weight
 (`Material::unit_weight`, global −Z), multiple load cases from one
 factorization, combinations by superposition, `StaticSolution::fixed`.
 Debug/Release/ASan 46/46 after 4.1b.
-- Immutable/validated model representation; nodes, beam sections, materials, supports, connectivity, local axes.
+- ~~Immutable/validated model representation~~; nodes, beam sections, materials, supports, connectivity, local axes. Validated in **4.4**; not yet immutable (mutation after validation is still possible -- caller discipline only).
 - ~~Nodal loads, distributed member loads, self-weight, consistent equivalent nodal loads, load cases and combinations.~~ Done in 4.1; concentrated member forces/moments and distributed moments added in **4.3 (CI run `38887606677`)**.
 - ~~Reliable import/export and schema versioning; structured errors and reproducible result metadata.~~ Done in **4.2 (CI run `38884699955`)**: JSON `kopruq-model` v1 input with path-qualified validation, `kopruq-results` v1 deterministic output with SHA-256 input metadata, CLI `solve`.
 

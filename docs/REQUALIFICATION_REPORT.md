@@ -187,3 +187,10 @@ condensation, with unstable-combination rejection and JSON support. One
 build-only defect found and fixed in this period: MSVC C1128 on Debug/ASan
 building the JSON/CLI header stack without `/bigobj` (`41aec8a`); no
 numerical or test-logic defect.
+
+## Addendum — Phase 4.4 (2026-10-16)
+
+CI run `38896544673` (commit `a942083`): Debug/Release/ASan 97/97, first
+attempt, 0 blocking static analysis findings. Added `validateModel()` for
+direct C++ API callers, mirroring the JSON reader's checks. No defects
+found during this increment.

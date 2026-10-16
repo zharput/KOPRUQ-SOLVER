@@ -23,9 +23,9 @@ record the current policy in this document too:
   restrictive approval-gated rule governs.
 
 ## Current priority
-**Phase 5.1 — beam end releases — COMPLETE (verified on CI, run
-`38894147560`).** Phases 4.1, 4.1b, 4.2, 4.3 complete. Next work awaits
-approval (see "Next autonomous action").
+**Phase 4.4 — validated model in the C++ API — COMPLETE (verified on CI,
+run `38896544673`).** Phases 4.1, 4.1b, 4.2, 4.3, 5.1 complete. Next work
+awaits approval (see "Next autonomous action").
 
 **Phase 3.2 requalification — COMPLETE (verified on CI, run `38872157394`,
 commit `1ed5ae4`).** Next: Phase 4, which has **not started** — its first
@@ -61,7 +61,7 @@ linking, no executables).
 | Phase 4.2 | COMPLETE (verified) | JSON model I/O (`kopruq-model` v1), results (`kopruq-results` v1), CLI `solve`; Debug/Release/ASan 61/61 on CI run `38884699955`; commits `2d9e4da`, `b3b6ab0`, `24f1c65` |
 | Phase 4.3 | COMPLETE (verified) | Member point forces/moments, distributed moments, JSON `point`/`kind`; force-equilibrium metric fix; Debug/Release/ASan 76/76 on CI run `38887606677`; commits `48ad305`, `b2a605f`, `62cd955` |
 | Phase 5.1 | COMPLETE (verified) | Beam end releases by static condensation; unstable-combination rejection; JSON `releases`; Debug/Release/ASan 83/83 on CI run `38894147560`; commits `4dee2b5`, `cbef2e8`, `41aec8a` |
-| Phase 4.4 | NOT STARTED | Awaiting approval |
+| Phase 4.4 | COMPLETE (verified) | `validateModel()`/`validateModelOrThrow()` for direct C++ API callers; `Restraints` promoted to namespace scope; Debug/Release/ASan 97/97 on CI run `38896544673`; commits `dba9837`, `a942083` |
 
 ## Known blocking issue (worked around, not root-caused)
 - CMake/vcpkg compiler detection fails with permission denied for `CMakeCXXCompilerId.exe`
@@ -189,6 +189,9 @@ status`); no data loss.
 - **Verified 2026-10-16 on CI** (run `38894147560`, commit `41aec8a`):
   Debug **83/83**, Release **83/83**, AddressSanitizer **83/83** — the 76
   above + 7 `Releases`. Static analysis: 0 blocking.
+- **Verified 2026-10-16 on CI** (run `38896544673`, commit `a942083`):
+  Debug **97/97**, Release **97/97**, AddressSanitizer **97/97** — the 83
+  above + 14 `Validate`. Static analysis: 0 blocking.
 - Every new test is in a dedicated file; inventory audited before/after each
   milestone.
 
@@ -507,16 +510,46 @@ status`); no data loss.
   0 blocking; benchmark residuals unchanged.
 - Milestone status: **Phase 5.1 COMPLETE.**
 
+### 2026-10-16 — Phase 4.4: validated model in the C++ API
+- Approved: user "devam" on the recommended option (validated model).
+- `kopruq::validateModel(model, restraints={}, cases={}, combinations={})`
+  (new `include/kopruq/core/Validate.hpp`): reports every issue, not just
+  the first, mirroring the JSON reader's semantic checks but addressed by
+  index/id (no JSON document here): duplicate/zero ids, invalid
+  material/section ranges, missing references, degenerate geometry,
+  unstable end-release combinations (checked without solving, via the
+  same condensation used at assembly), restraints on unknown nodes, and
+  per-load-case/combination checks. `validateModelOrThrow()` throws
+  `ModelValidationError` with the full list. Purely additive:
+  `solveCases()`/`recover()` are unchanged, still reporting only the
+  first problem via whatever exception assembly happens to throw.
+- `Restraints` moved from a nested alias inside `LinearStaticSolver` to
+  `kopruq::Restraints` in `Model.hpp` (needed as this validator's
+  restraints parameter type); `LinearStaticSolver::Restraints` kept as an
+  alias to it, so no existing call site changes.
+- Files: `include/kopruq/core/Validate.hpp` (new),
+  `include/kopruq/core/Model.hpp`,
+  `include/kopruq/solvers/LinearStaticSolver.hpp`,
+  `tests/unit/validate_tests.cpp` (new, 14 tests), `CMakeLists.txt`.
+- Debug / Release / ASan (run `38896544673`): 97/97 each, first attempt;
+  static analysis 0 blocking; benchmark residuals unchanged.
+- Verified properties: every issue category the JSON reader checks is
+  independently flagged with its own path; several simultaneous issues
+  are all reported together, not just the first; both example models
+  validate clean; the throwing variant carries the complete list.
+- Milestone status: **Phase 4.4 COMPLETE.**
+
 ## Next autonomous action
-Awaiting user approval (mandatory checkpoint). Recommended next: **Phase
-4.4 — validated model in the C++ API.** The JSON reader validates models
-thoroughly; direct C++ callers (the existing public API) still pass
-unchecked models straight into assembly/solve, where malformed input
-currently surfaces as whatever exception the element/assembly code happens
-to throw, not a structured, enumerable report. Proposed scope: a
-`Model::validate()` (or a free function) reusing the same checks as the
-JSON reader (duplicate/missing ids, invalid properties, released-DOF
-stability, degenerate geometry) and returning the same kind of
-path-qualified issue list, callable before `solveCases` with no change to
-the existing types. Alternative: skip this and move to Phase 6 (modal/
-buckling) or Phase 8 (bridge-specific loads/bearings) instead -- say which.
+Awaiting user approval (mandatory checkpoint). Phase 3.2 and Phase 4
+(4.1, 4.1b, 4.2, 4.3, 4.4) and Phase 5.1 are now complete and verified.
+Candidate next increments:
+1. **Phase 5.2 — rotational/translational end springs and eccentric
+   offsets**, generalizing 5.1's all-or-nothing releases to finite
+   stiffness and rigid-link geometry, with independent benchmarks.
+2. **Phase 6.1 — modal analysis** (mass matrix, eigenvalue solve, mode
+   normalization, rigid-body-mode check at supports removed), the first
+   step toward response spectrum and buckling.
+3. **Phase 8 — bridge-specific loading** (moving loads/influence lines,
+   bearings, construction stages), picking up the mission statement's
+   bridge focus directly.
+Say which, or propose a different scope.

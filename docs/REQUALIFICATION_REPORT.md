@@ -1,9 +1,10 @@
 # KOPRUQ-SOLVER — Phase 3.2 Requalification Report
 
-Date: 2026-10-16. Commit under test: `734b2fc` (branch `ci/perf-id-lookups`,
+Date: 2026-10-16. Commit under test: `1ed5ae4` (branch `ci/r5-asan-analyze`,
 fast-forwarded into `main`). Evidence source: GitHub Actions run
-`38863504705`, `windows-2022`, MSVC 14.4x + Ninja + vcpkg at manifest
-baseline `20ceb8ad`, CMake presets `ninja-debug` / `ninja-release`.
+`38872157394`, `windows-2022`, MSVC 14.4x + Ninja + vcpkg at manifest
+baseline `20ceb8ad`, CMake presets `ninja-debug`, `ninja-release`,
+`ninja-asan`, `ninja-analyze`.
 
 This report states what the current test suite **independently verifies**
 and what it **does not**. It is a requalification after the loss of the
@@ -13,12 +14,13 @@ historical 25-test suite; it does not restore or reproduce that suite.
 
 | Gate | Result |
 |---|---|
-| Debug full CTest | **26/26 PASS** |
-| Release full CTest | **26/26 PASS** |
-| Test inventory | 26 `TEST` cases in 5 dedicated files = 26 CTest-registered tests; no `DISABLED_`/`GTEST_SKIP`; no test file ever deleted in Git history; `core_tests.cpp` unchanged since baseline `1f67b16` |
+| Debug full CTest | **30/30 PASS** |
+| Release full CTest | **30/30 PASS** |
+| AddressSanitizer (`/fsanitize=address`, RelWithDebInfo) full CTest | **30/30 PASS**, no sanitizer reports |
+| MSVC static analysis (`/analyze`, project code only) | **0 blocking findings**. 142 unique warnings, all C6326 on GoogleTest assertion lines in `tests\` (the macros expand to `switch (0) case 0: default:`); none in `include\kopruq` or `apps\` |
+| Test inventory | 30 `TEST` cases in 6 dedicated files = 30 CTest-registered tests; no `DISABLED_`/`GTEST_SKIP`; no test file ever deleted in Git history; `core_tests.cpp` unchanged since baseline `1f67b16` |
 | CLI smoke (Release) | `--version` exit 0, `--help` exit 0, unknown command exit 2 — PASS |
-| Benchmarks 100 / 1,000 / 10,000 elements | Run; normalized residual ≤ 3.5e-18; near-linear scaling of all phases (§4) |
-| Sanitizers / static analysis | **NOT RUN** — outstanding R5 item |
+| Benchmarks 100 / 1,000 / 10,000 elements | Run; normalized residual ≤ 3.5e-18; all phases scale linearly (§4) |
 
 ## 2. Test inventory
 
@@ -29,7 +31,8 @@ historical 25-test suite; it does not restore or reproduce that suite.
 | `tests/unit/assembly_requalification_tests.cpp` | `AssemblyRequalification` | 5 | R2 |
 | `tests/unit/linear_static_solver_requalification_tests.cpp` | `LinearStaticRequalification` | 10 | R3 |
 | `tests/unit/recovery_requalification_tests.cpp` | `RecoveryRequalification` | 4 | R4 |
-| **Total** | | **26** | |
+| `tests/unit/solver_diagnostics_tests.cpp` | `SolverDiagnostics` | 4 | R5 |
+| **Total** | | **30** | |
 
 All expected values come from test-local analytical formulas or
 independently written dense references, never from the production code
@@ -80,26 +83,46 @@ under test.
   < 1e-10 in all cases, consistent with Clapeyron's theorem.
 - Recovery does not refactorize: verified by code inspection, not by test.
 
-### Performance (R5) — see §4
+### Solver diagnostics (R5)
+- `residual_norm = ‖Kff·u − F‖` and `relative_residual = residual_norm /
+  (‖Kff‖_F‖u‖ + ‖F‖)` (**previously never populated — implemented**,
+  `506a8be`): definition checked against an independent dense `Kff`
+  (relative residual < 1e-14); zero load gives exactly 0, not NaN.
+- `NonFiniteSolution` status (**previously never produced — implemented**):
+  deterministic overflow case (E = 1e-300, F = 1e308) is rejected instead
+  of reported as success.
+- Aggregate `element_equilibrium_error` / `element_moment_equilibrium_error`
+  (**previously never populated — implemented**): force-weighted
+  imbalance over all elements, matched against a test-local aggregation of
+  a portal frame's end forces and bounded by the per-element maximum.
+
+### Performance and robustness (R5) — see §4
 - O(elements × nodes) lookups in assembly and recovery **found and fixed**
   (`734b2fc`); numerical output unchanged bit-for-bit.
+- No memory errors under AddressSanitizer across the full suite; no
+  static-analysis findings in production code.
 
 ## 4. Benchmarks (Release, CI runner, median of 5 after warm-up)
 
 Model: straight cantilever chain of `n` Beam3D elements, node 1 fixed, unit
-load at the tip. Times in milliseconds.
+load at the tip. Times in milliseconds, run `38872157394`.
 
 | Elements | DOFs | Assembly | Kff reduction | Symbolic | Numeric | Solve | Recovery | Normalized residual |
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 100 | 606 | 0.205 | 0.085 | 0.121 | 0.017 | 0.009 | 0.275 | 3.5e-18 |
-| 1,000 | 6,006 | 1.974 | 0.909 | 1.219 | 0.219 | 0.081 | 2.780 | 1.1e-18 |
-| 10,000 | 60,006 | 19.44 | 6.19 | 11.26 | 2.48 | 0.833 | 31.41 | 3.1e-19 |
+| 100 | 606 | 0.273 | 0.111 | 0.175 | 0.023 | 0.009 | 0.350 | 3.5e-18 |
+| 1,000 | 6,006 | 2.714 | 1.086 | 1.628 | 0.284 | 0.102 | 3.746 | 1.1e-18 |
+| 10,000 | 60,006 | 30.50 | 10.31 | 17.56 | 3.28 | 1.03 | 40.29 | 3.1e-19 |
 
-Before the lookup fix (commit `1a42c61`), the 10,000-element row was
-assembly 99.30 ms and recovery 253.1 ms, growing ~32× and ~48× for 10× more
-elements. After the fix, every phase grows ~6–11× for 10× more elements.
-Residuals are identical before and after (abs 0.0467754, normalized
-3.14632e-19 at 10,000 elements).
+Growth from 1,000 to 10,000 elements (10×) within this run: assembly 11.2×,
+Kff reduction 9.5×, symbolic 10.8×, numeric 11.5×, solve 10.1×, recovery
+10.8× — linear in every phase. Before the lookup fix (run `38861593856`,
+commit `1a42c61`) assembly grew 32× and recovery 48× over the same range.
+
+Absolute timings vary by about 1.5–2× between CI runs on shared runners
+(10,000-element assembly: 19.4 ms in run `38863504705`, 30.5 ms here), so
+only within-run ratios are meaningful. Residuals are identical in every run
+before and after the fix (abs 0.0467754, normalized 3.14632e-19 at 10,000
+elements).
 
 Limits of this evidence: runner timings, not the developer workstation; a
 single banded chain topology, which has no fill-in and is a best case for
@@ -109,16 +132,16 @@ sparse LDLT; sizes up to 10,000 elements only.
 
 | Item | Status |
 |---|---|
-| `StaticSolution::residual_norm`, `relative_residual`, `fixed` | Declared, **never populated** by `solve()` |
-| `AnalysisResults::element_equilibrium_error`, `element_moment_equilibrium_error` | Declared, **never populated** (per-element errors and the max are populated) |
-| `SolverStatusCode::NonFiniteSolution`, `NumericalFailure` | Declared, **never produced**; solution finiteness is not checked |
-| Analytical closed-form check of the UZ–RY (Iy) bending plane under tip load | Covered only via stiffness coefficients (R1) and the dense portal reference (R3), not by a dedicated analytical cantilever |
+| `StaticSolution::fixed` | Declared, **never populated**; its intended content (prescribed displacements or reactions on fixed DOFs) is not specified anywhere — needs a decision |
+| `SolverStatusCode::NumericalFailure` | Declared, never produced (used only as the default-initialized code) |
+| Analytical closed-form check of the UZ–RY (Iy) bending plane under tip load | Covered only via stiffness coefficients (R1) and the dense portal references (R3, R5), not by a dedicated analytical cantilever |
 | Recovery re-assembles `K` instead of reusing the solver's matrix | Correct but ~2× assembly work; avoiding it needs an API change |
 | Benchmarks on non-banded (realistic bridge) meshes and > 10,000 elements | Not run |
-| AddressSanitizer / static analysis | Not run |
-| Distributed loads, self-weight, combinations, releases, springs, other element types, modal/buckling/nonlinear analysis | Not implemented (Phase 4+) |
+| `Truss3D`, `Spring` | Header placeholders with an ID only — no stiffness, not assembled, not tested |
+| `schemas/model.schema.json`, `results.schema.json`, `ModelSchema.hpp` | Stubs; no import/export exists |
+| Distributed loads, self-weight, load cases/combinations, releases, offsets, modal/buckling/nonlinear analysis | Not implemented (Phase 4+) |
 | CLI model input / solve path | Not implemented; CLI only prints version/help |
-| Local builds on the developer workstation | Blocked by ESET `@Trojan.ML/Augur` false positive; IT exclusion requested |
+| Local builds on the developer workstation | Blocked by ESET `@Trojan.ML/Augur` false positive; IT exclusion requested; all verification runs on CI |
 
 ## 6. Defects found and fixed during requalification
 
@@ -127,6 +150,7 @@ sparse LDLT; sizes up to 10,000 elements only.
 | `07f7344` | `DofManager` accepted duplicate node IDs (check ran before the index was populated) |
 | `643c829` | Strain-energy fields declared but never computed |
 | `734b2fc` | Quadratic node/property lookups in assembly and recovery |
+| `506a8be` | Residual fields and aggregate element-equilibrium fields never populated; non-finite solutions reported as success |
 
 Test-harness defects corrected in R2 (wrong reference `G`, uninitialized
 dynamic matrix, wrong DOF map, uninvoked lambda in `EXPECT_THROW`) are

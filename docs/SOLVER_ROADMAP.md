@@ -60,13 +60,19 @@ are at floating-point roundoff (`< 1e-9`–`1e-10` relative), since
 `UᵗKU = Σ(TᵤUᵤ)ᵗkₗ(TᵤUᵤ)` is an exact identity, not an approximation.
 Debug and Release full CTest 26/26 PASS.
 
-### R5 — Performance, robustness and release gate — INCOMPLETE (sanitizers/static analysis pending)
-Done and verified on CI (run `38863504705`, commit `734b2fc`): benchmarks at
-100/1,000/10,000 elements with every phase timed separately; quadratic
-lookups in assembly/recovery fixed (10,000 elements: assembly 99.3 → 19.4 ms,
-recovery 253.1 → 31.4 ms, residuals bit-identical); Debug and Release CTest
-26/26; CLI smoke; test-inventory audit; `docs/REQUALIFICATION_REPORT.md`.
-Outstanding: AddressSanitizer and static analysis.
+### R5 — Performance, robustness and release gate — COMPLETE (verified)
+Verified on CI (run `38872157394`, commit `1ed5ae4`): benchmarks at
+100/1,000/10,000 elements with every phase timed separately and scaling
+linearly after the quadratic-lookup fix (`734b2fc`, residuals
+bit-identical); Debug, Release and AddressSanitizer CTest 30/30; MSVC
+`/analyze` gate with 0 findings in production code; CLI smoke;
+test-inventory audit; previously unpopulated residual/non-finite/aggregate
+equilibrium diagnostics implemented and tested (`506a8be`). Details,
+verified and unverified capabilities: `docs/REQUALIFICATION_REPORT.md`.
+
+**Phase 3.2 requalification is complete.** Phase 4 has not started; its
+first increment requires user approval of scope and formulation (see
+`docs/DEVELOPMENT_STATUS.md`).
 
 - Reproducible benchmark models at increasing size (e.g. 100, 1,000, 10,000 elements) within practical memory/time limits.
 - Measure sparse assembly, Kff extraction, factorization, solve, and recovery separately.

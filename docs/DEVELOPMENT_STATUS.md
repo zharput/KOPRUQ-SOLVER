@@ -23,10 +23,11 @@ record the current policy in this document too:
   restrictive approval-gated rule governs.
 
 ## Current priority
-**Phase 3.2R5 — Performance, robustness and release gate — INCOMPLETE**:
-everything except sanitizers/static analysis is done and verified on CI
-(see the 2026-10-16 "scaling fix" log entry and
-`docs/REQUALIFICATION_REPORT.md`).
+**Phase 3.2 requalification — COMPLETE (verified on CI, run `38872157394`,
+commit `1ed5ae4`).** Next: Phase 4, which has **not started** — its first
+increment needs user approval of scope and numerical formulation (see "Next
+autonomous action"). Full verified/unverified capability list:
+`docs/REQUALIFICATION_REPORT.md`.
 The local build blocker (ESET `@Trojan.ML/Augur` false positive, see below)
 is still unresolved on the developer machine, but is now **sidestepped
 legitimately via CI**: per the user's decision (2026-10-16), all Debug and
@@ -36,7 +37,9 @@ created or executed locally. The local ESET exclusion request to IT remains
 open and would restore local builds if granted.
 
 **Verification source of truth from now on:** GitHub Actions run results
-(Debug and Release jobs) for the pushed commit, not local `build/` trees.
+(Debug, Release, ASan and static-analysis jobs) for the pushed commit, not
+local `build/` trees. Locally, only compile-to-`.obj` checks are run (no
+linking, no executables).
 
 ## Established reported history
 | Milestone | Status | Evidence / qualification |
@@ -48,7 +51,8 @@ open and would restore local builds if granted.
 | Phase 3.2R2 | COMPLETE (verified) | New assembly tests; Debug 12/12, Release 12/12; commits `07f7344`, `f050918` |
 | Phase 3.2R3 | COMPLETE (verified) | New linear static solver tests; Debug 22/22, Release 22/22 |
 | Phase 3.2R4 | COMPLETE (verified) | Implemented + requalified strain-energy recovery; Debug 26/26, Release 26/26; commit `643c829` + test commit below |
-| Phase 3.2R5 | NOT STARTED | R5 next |
+| Phase 3.2R5 | COMPLETE (verified) | Benchmarks + linear-scaling fix, ASan, `/analyze` gate, diagnostics fields; Debug/Release/ASan 30/30 on CI run `38872157394`; commits `1a42c61`, `734b2fc`, `c564dc3`, `506a8be`, `1ed5ae4` |
+| Phase 4 | NOT STARTED | Awaiting scope/formulation approval |
 
 ## Known blocking issue (worked around, not root-caused)
 - CMake/vcpkg compiler detection fails with permission denied for `CMakeCXXCompilerId.exe`
@@ -156,6 +160,9 @@ status`); no data loss.
   Debug **26/26**, Release **26/26** (`ctest -N` inventory: 26 tests in both),
   i.e. 2 preserved `ElementRecovery` + 5 Beam3D (R1) + 5 assembly (R2) +
   10 linear static (R3) + 4 recovery (R4).
+- **Verified 2026-10-16 on CI** (run `38872157394`, commit `1ed5ae4`):
+  Debug **30/30**, Release **30/30**, AddressSanitizer **30/30** —
+  the 26 above + 4 `SolverDiagnostics` (R5).
 - Every new test is in a dedicated file; inventory audited before/after each
   milestone.
 
@@ -302,12 +309,54 @@ status`); no data loss.
 - Milestone status: **R5 INCOMPLETE** — only sanitizers/static analysis
   remain.
 
+### 2026-10-16 — Phase 3.2R5 completion: ASan, static analysis, diagnostics
+- Git HEAD: `1ed5ae4` (+ this docs commit) on `ci/r5-asan-analyze`,
+  fast-forwarded into `main`.
+- Files changed: `CMakePresets.json` (`ninja-asan`, `ninja-analyze`),
+  `.github/workflows/ci.yml` (4-job matrix, analyze gate),
+  `include/kopruq/solvers/LinearStaticSolver.hpp`,
+  `include/kopruq/results/AnalysisResults.hpp`,
+  `tests/unit/solver_diagnostics_tests.cpp` (new, 4 tests), `CMakeLists.txt`.
+- AddressSanitizer (RelWithDebInfo + `/fsanitize=address`): full CTest
+  26/26 (run `38871473340`) and 30/30 (runs `38871760106`, `38872157394`),
+  no sanitizer reports.
+- `/analyze` (third-party angle-bracket headers excluded): first run 118
+  unique warnings, second 142 (new test file) — every one C6326 on a
+  GoogleTest assertion line in `tests\` (macro expands to
+  `switch (0) case 0: default:`); 0 in `include\kopruq` and `apps\`. Job
+  now fails on anything else; run `38872157394`: 0 blocking findings.
+- Diagnostics implemented (`506a8be`): `residual_norm`, `relative_residual`
+  (normwise backward error), `NonFiniteSolution` status, aggregate
+  `element_equilibrium_error` / `element_moment_equilibrium_error`.
+  `StaticSolution::fixed` deliberately left unpopulated — its meaning is
+  unspecified.
+- Debug / Release / ASan full CTest (run `38872157394`): 30/30 each.
+  CLI smoke PASS. Benchmarks: linear scaling in every phase (1,000 →
+  10,000 elements: 9.5–11.5×); absolute times vary ~1.5–2× between CI runs.
+- Milestone status: **R5 COMPLETE; Phase 3.2 requalification COMPLETE.**
+
 ## Next autonomous action
-Awaiting user approval (mandatory checkpoint). Proposed next work period:
-1. Close R5: add an MSVC AddressSanitizer job and an MSVC `/analyze`
-   static-analysis job to CI; triage any findings.
-2. Close the gaps found in the audit: populate `residual_norm` /
-   `relative_residual` / `fixed`, report `NonFiniteSolution`, and fill the
-   aggregate element-equilibrium fields — each with independent tests.
-3. Mark Phase 3.2 requalification complete and propose the Phase 4 scope
-   (model/load architecture) for approval before starting it.
+Awaiting user approval (mandatory checkpoint). Phase 4 is not started.
+
+Proposed first increment, **Phase 4.1 — member loads and load cases**
+(highest engineering value for bridges; the current solver accepts nodal
+loads only). It changes the numerical formulation, so these decisions need
+the user's confirmation before implementation:
+1. Distributed member loads: uniform and linearly varying (trapezoidal),
+   full or partial length, in member-local or global axes. For global
+   loads on inclined members: per true member length or per horizontal
+   projection?
+2. Consistent equivalent nodal loads from Euler–Bernoulli fixed-end
+   forces, and element end-force recovery as `k·u − fixed-end forces`
+   (without this, end forces are wrong for loaded members).
+3. Self-weight: needs a new `Material` field (public API change) — weight
+   density in kN/m³ or mass density with g = 9.81 m/s²? Gravity direction
+   −Z?
+4. Load cases solved as multiple right-hand sides with a single
+   factorization; linear combinations with user factors by superposition.
+5. `StaticSolution::fixed`: reactions on fixed DOFs, prescribed
+   displacements, or remove the field?
+
+Later increments (each to be proposed separately): validated/immutable
+model and structured errors; JSON import/export against
+`schemas/model.schema.json` with versioning; CLI solve path.

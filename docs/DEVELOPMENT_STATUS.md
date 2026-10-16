@@ -2,6 +2,26 @@
 
 > Initial status assembled from user-provided development reports, **not** independently re-executed in this document. Claude must inspect repository state and refresh evidence before changing a milestone to COMPLETE.
 
+## Development and reporting policy (effective 2026-10-16)
+Full rules are in `CLAUDE.md`; summarized here per the user's instruction to
+record the current policy in this document too:
+- Work proceeds in approved work periods, each following
+  PLAN → IMPLEMENT → BUILD → TEST → DEBUG → VERIFY → DOCUMENT → REPORT → WAIT
+  FOR APPROVAL.
+- A progress report is produced roughly every 30 minutes of active work (or
+  at natural task boundaries if elapsed time isn't tracked precisely), after
+  each major milestone, on any significant blocker, and before any
+  high-impact decision. **Every progress report is a mandatory approval
+  checkpoint** — development stops and waits for explicit approval ("Continue"
+  / "Approved" / "Devam" / "Onaylıyorum"); silence is not approval.
+- All progress reports are written in Turkish, in the fixed format specified
+  in `CLAUDE.md` (Phase / Completed Work / Verification Results / Problems
+  and Corrections / Development Status / Next Planned Tasks / Approval
+  Request).
+- This supersedes the previous looser "continuous work policy" of working
+  through the whole roadmap unattended; where the two conflict, the more
+  restrictive approval-gated rule governs.
+
 ## Current priority
 **Phase 3.2R5 — Performance, robustness and release gate — BLOCKED** by an
 acute build-environment issue discovered while starting R5 (see "Known

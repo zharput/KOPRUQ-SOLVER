@@ -23,11 +23,17 @@ record the current policy in this document too:
   restrictive approval-gated rule governs.
 
 ## Current priority
-**Phase 3.2R5 — Performance, robustness and release gate — BLOCKED** by an
-acute build-environment issue discovered while starting R5 (see "Known
-blocking issue" below). R1-R4 remain verified complete; nothing about their
-evidence is affected, since it was captured before this instability began
-and `build/` is not version-controlled.
+**Phase 3.2R5 — Performance, robustness and release gate — IN PROGRESS.**
+The local build blocker (ESET `@Trojan.ML/Augur` false positive, see below)
+is still unresolved on the developer machine, but is now **sidestepped
+legitimately via CI**: per the user's decision (2026-10-16), all Debug and
+Release builds/tests run on a GitHub-hosted Windows runner
+(`.github/workflows/ci.yml`, private repository), so no compiled binary is
+created or executed locally. The local ESET exclusion request to IT remains
+open and would restore local builds if granted.
+
+**Verification source of truth from now on:** GitHub Actions run results
+(Debug and Release jobs) for the pushed commit, not local `build/` trees.
 
 ## Established reported history
 | Milestone | Status | Evidence / qualification |
@@ -142,6 +148,11 @@ status`); no data loss.
   Release 12/12, including the two preserved `ElementRecovery` tests, the
   Beam3D requalification suite (R1), and the new assembly requalification
   suite (R2).
+- **Verified 2026-10-16 on CI** (GitHub Actions run `38861593856`, commit
+  `1a42c61`, windows-2022, MSVC + Ninja + vcpkg at the manifest baseline):
+  Debug **26/26**, Release **26/26** (`ctest -N` inventory: 26 tests in both),
+  i.e. 2 preserved `ElementRecovery` + 5 Beam3D (R1) + 5 assembly (R2) +
+  10 linear static (R3) + 4 recovery (R4).
 - Every new test is in a dedicated file; inventory audited before/after each
   milestone.
 
@@ -224,13 +235,52 @@ status`); no data loss.
 - Next unblocked roadmap task: none — paused for user/IT input on the new
   blocking issue before continuing R5.
 
+### 2026-10-16 — Phase 3.2R5: CI verification path + first benchmarks
+- Git HEAD / working tree: `1a42c61` on `ci/github-actions`, fast-forwarded
+  into `main` after the CI run below passed; working tree clean.
+- Current task: restore a trustworthy Debug/Release verification path
+  without bypassing ESET, then take R5's first benchmark measurements.
+- Source/test files changed: `.github/workflows/ci.yml` (new);
+  `apps/benchmarks/solver_benchmark.cpp` (recovery phase now timed
+  separately — previously uncommitted, now verified by CI).
+- Debug full CTest (CI): 26/26 PASS. Release full CTest (CI): 26/26 PASS.
+- CLI smoke (CI, Release): `--version` → `KOPRUQ-SOLVER 0.1.0`, exit 0;
+  `--help` → usage, exit 0; unknown command → `Unknown command: bogus`,
+  exit 2. PASS.
+- Benchmarks (CI runner, Release, median of 5 after warm-up; straight
+  cantilever chain, node 1 fixed, unit load at the tip):
+
+  | elements | DOFs | assembly ms | Kff reduction ms | symbolic ms | numeric ms | solve ms | recovery ms | normalized residual |
+  |---:|---:|---:|---:|---:|---:|---:|---:|---:|
+  | 100 | 606 | 0.247 | 0.093 | 0.136 | 0.018 | 0.008 | 0.366 | 3.5e-18 |
+  | 1,000 | 6,006 | 3.086 | 1.119 | 1.375 | 0.237 | 0.086 | 5.317 | 1.1e-18 |
+  | 10,000 | 60,006 | 99.30 | 7.06 | 11.95 | 2.73 | 0.870 | 253.1 | 3.1e-19 |
+
+  `kopruq_sparse_assembly_benchmark` independently: 0.269 / 2.94 / 97.97 ms
+  median for 100 / 1,000 / 10,000 elements.
+- **Engineering finding (R5 performance gate): assembly and recovery scale
+  quadratically.** From 1,000 to 10,000 elements (10×), Kff reduction,
+  factorization and solve grow ~6–12× (linear, as expected for this banded
+  sparse system), but assembly grows ~32× and recovery ~48×. Code
+  inspection explains it: `MatrixAssembler::assemble()` and
+  `LinearStaticSolver::recover()` locate each element's two nodes by a
+  linear scan over `m.nodes` (and materials/sections by linear scan), and
+  `recover()` repeats node scans per load and per reaction — O(elements ×
+  nodes). Numerical results are unaffected (residuals ~1e-18); this is a
+  scalability defect only. Not yet fixed.
+- Milestone status: **R5 INCOMPLETE** — verification path restored,
+  benchmarks captured, quadratic-scaling defect identified.
+- Next unblocked roadmap task: replace the linear node/property lookups
+  with ID→index maps built once per call, re-verify 26/26 on CI, and
+  confirm near-linear scaling.
+
 ## Next autonomous action
-Paused. Phase 3.2R5 is next once the build-environment issue above is
-resolved (most likely a FortiClient/ESET exclusion for the `build/`
-directory or the repository, decided and applied by the user/IT — outside
-this session's authority). Once the build tree is stable again: finish and
-verify the `solver_benchmark.cpp` recovery-timing change, run it at the
-existing 100/1,000/10,000-element sizes, confirm sparse complexity scaling
-and residuals, re-run full Debug/Release CTest, redo the CLI smoke test,
-audit the complete test inventory, and write the final requalification
-report listing verified and unverified capabilities.
+Awaiting user approval (mandatory checkpoint). Proposed next work period:
+1. Replace O(elements × nodes) lookups in `MatrixAssembler::assemble()` and
+   `LinearStaticSolver::recover()` with ID→index maps built once per call
+   (no change to formulation, ordering, signs or public API).
+2. Re-run CI: 26/26 Debug/Release must stay green and benchmark residuals
+   unchanged; confirm assembly/recovery scale near-linearly to 10,000
+   elements.
+3. Finish R5: test-inventory audit and the requalification report listing
+   verified and unverified capabilities.

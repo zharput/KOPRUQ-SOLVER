@@ -194,3 +194,12 @@ CI run `38896544673` (commit `a942083`): Debug/Release/ASan 97/97, first
 attempt, 0 blocking static analysis findings. Added `validateModel()` for
 direct C++ API callers, mirroring the JSON reader's checks. No defects
 found during this increment.
+
+## Addendum — Phase 6.1 (2026-10-16)
+
+CI run `38902536528` (commit `bca8206`): Debug/Release/ASan 104/104. Added
+modal (free-vibration) analysis: consistent mass matrix, Guyan mass
+condensation for released ends, `ModalSolver`. Two test bugs found and
+fixed in this period (full-vector residual including restrained DOFs; wrong
+section property in the continuum-convergence check) -- no production
+defect.

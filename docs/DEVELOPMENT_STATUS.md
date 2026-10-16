@@ -23,8 +23,8 @@ record the current policy in this document too:
   restrictive approval-gated rule governs.
 
 ## Current priority
-**Phase 4.4 — validated model in the C++ API — COMPLETE (verified on CI,
-run `38896544673`).** Phases 4.1, 4.1b, 4.2, 4.3, 5.1 complete. Next work
+**Phase 6.1 — modal analysis — COMPLETE (verified on CI, run
+`38902536528`).** Phases 4.1, 4.1b, 4.2, 4.3, 4.4, 5.1 complete. Next work
 awaits approval (see "Next autonomous action").
 
 **Phase 3.2 requalification — COMPLETE (verified on CI, run `38872157394`,
@@ -62,6 +62,7 @@ linking, no executables).
 | Phase 4.3 | COMPLETE (verified) | Member point forces/moments, distributed moments, JSON `point`/`kind`; force-equilibrium metric fix; Debug/Release/ASan 76/76 on CI run `38887606677`; commits `48ad305`, `b2a605f`, `62cd955` |
 | Phase 5.1 | COMPLETE (verified) | Beam end releases by static condensation; unstable-combination rejection; JSON `releases`; Debug/Release/ASan 83/83 on CI run `38894147560`; commits `4dee2b5`, `cbef2e8`, `41aec8a` |
 | Phase 4.4 | COMPLETE (verified) | `validateModel()`/`validateModelOrThrow()` for direct C++ API callers; `Restraints` promoted to namespace scope; Debug/Release/ASan 97/97 on CI run `38896544673`; commits `dba9837`, `a942083` |
+| Phase 6.1 | COMPLETE (verified) | Consistent mass matrix, Guyan mass condensation for released ends, `ModalSolver`; Debug/Release/ASan 104/104 on CI run `38902536528`; commits `63402a5`, `d12a40a`, `bca8206` |
 
 ## Known blocking issue (worked around, not root-caused)
 - CMake/vcpkg compiler detection fails with permission denied for `CMakeCXXCompilerId.exe`
@@ -192,6 +193,9 @@ status`); no data loss.
 - **Verified 2026-10-16 on CI** (run `38896544673`, commit `a942083`):
   Debug **97/97**, Release **97/97**, AddressSanitizer **97/97** — the 83
   above + 14 `Validate`. Static analysis: 0 blocking.
+- **Verified 2026-10-16 on CI** (run `38902536528`, commit `bca8206`):
+  Debug **104/104**, Release **104/104**, AddressSanitizer **104/104** — the
+  97 above + 7 `Modal`. Static analysis: 0 blocking.
 - Every new test is in a dedicated file; inventory audited before/after each
   milestone.
 
@@ -539,17 +543,60 @@ status`); no data loss.
   validate clean; the throwing variant carries the complete list.
 - Milestone status: **Phase 4.4 COMPLETE.**
 
+### 2026-10-16 — Phase 6.1: modal (free-vibration) analysis
+- Approved: user "devam" without picking among the three proposed options
+  (5.2 springs/offsets, 6.1 modal, 8 bridge loading); chose 6.1 as the
+  lowest-formulation-risk, best-independently-verifiable increment, and
+  proceeded per the "decide and report" rule when ambiguity remains after
+  offering a clear default.
+- `kopruq/elements/MassMatrix.hpp`: consistent 12x12 local mass matrix by
+  Gauss quadrature of the same Hermite/linear shape functions and sign
+  convention as stiffness/loads; `g_standard = 9.80665` turns
+  `Material::unit_weight` into mass density for dynamics only (no new
+  public field). `Releases.hpp::condensedMass()`: Guyan mass condensation
+  matching the existing stiffness condensation.
+  `MatrixAssembler::assembleMass()`. `kopruq/solvers/ModalSolver.hpp`:
+  lowest N natural frequencies and mass-normalized mode shapes from the
+  free-DOF generalized eigenproblem.
+- Files: `include/kopruq/elements/MassMatrix.hpp` (new),
+  `include/kopruq/solvers/ModalSolver.hpp` (new),
+  `include/kopruq/elements/Releases.hpp`,
+  `include/kopruq/assembly/MatrixAssembler.hpp`,
+  `tests/unit/modal_tests.cpp` (new, 7 tests), `CMakeLists.txt`.
+- CI run `38900022668`: 102/104 passed; 2 failed in every configuration,
+  both **test bugs**, not production defects:
+  - The eigenproblem residual test computed `K*phi - omega^2*M*phi` over
+    the full global vector, including restrained DOFs, where that
+    expression equals the support reaction (generally nonzero), not zero;
+    it only vanishes on the free DOFs. Fixed by restricting to the free
+    rows (found via `MatrixAssembler::classify()`, independent of
+    `ModalSolver`'s internals); the mass-orthonormality checks in the same
+    test were already correct (zero mode-shape entries at restrained DOFs
+    make those terms vanish from `phi^T*M*phi` regardless).
+  - The continuum-convergence test used `E*IZ`, but `IY` (0.02) `< IZ`
+    (0.04) in that section, so the first (lowest-frequency) mode bends
+    about the local y-axis, governed by `IY`; `sqrt(IY/IZ) = 0.707`
+    explained essentially all of the observed discrepancy. Fixed to
+    `E*IY`.
+- Debug / Release / ASan (run `38902536528`): 104/104 each; static
+  analysis 0 blocking; benchmark residuals unchanged.
+- Known limitations: no JSON/CLI support yet for modal analysis (C++ API
+  only); rotary (cross-sectional) inertia about the bending axes is not
+  included, standard for slender Euler-Bernoulli beams; `numModes <= 0`
+  returns every free-DOF mode, which is O(n^3) via a dense solve and not
+  intended for large models.
+- Milestone status: **Phase 6.1 COMPLETE.**
+
 ## Next autonomous action
-Awaiting user approval (mandatory checkpoint). Phase 3.2 and Phase 4
-(4.1, 4.1b, 4.2, 4.3, 4.4) and Phase 5.1 are now complete and verified.
-Candidate next increments:
-1. **Phase 5.2 — rotational/translational end springs and eccentric
-   offsets**, generalizing 5.1's all-or-nothing releases to finite
-   stiffness and rigid-link geometry, with independent benchmarks.
-2. **Phase 6.1 — modal analysis** (mass matrix, eigenvalue solve, mode
-   normalization, rigid-body-mode check at supports removed), the first
-   step toward response spectrum and buckling.
-3. **Phase 8 — bridge-specific loading** (moving loads/influence lines,
-   bearings, construction stages), picking up the mission statement's
-   bridge focus directly.
+Awaiting user approval (mandatory checkpoint). Phase 3.2, all of Phase 4
+(4.1-4.4), Phase 5.1 and Phase 6.1 are complete and verified. Candidate next
+increments:
+1. **JSON/CLI support for modal analysis** -- smaller, closes the gap just
+   noted (modal results currently only reachable through the C++ API).
+2. **Phase 5.2 -- end springs and eccentric offsets**, generalizing 5.1.
+3. **Phase 6.2 -- response spectrum analysis**, building directly on 6.1's
+   modes (modal combination rules, code-specific spectra kept outside the
+   solver kernel per the roadmap).
+4. **Phase 8 -- bridge-specific loading** (moving loads/influence lines,
+   bearings, construction stages).
 Say which, or propose a different scope.

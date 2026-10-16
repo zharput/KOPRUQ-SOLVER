@@ -112,7 +112,11 @@ loads, unstable-combination rejection, JSON `releases`. Debug/Release/ASan
 - Timoshenko beam option if engineering requirements justify it; explicit formulation comparison.
 
 ### Phase 6 — Advanced linear analyses
-- Eigenvalue/modal analysis with mass matrix validation, mode normalization, rigid-body modes.
+**6.1 modal analysis — COMPLETE (verified, CI run `38902536528`, commits
+`63402a5`, `d12a40a`, `bca8206`):** consistent mass matrix, Guyan mass
+condensation for released ends, free-DOF generalized eigenproblem, mass-
+normalized mode shapes. Debug/Release/ASan 104/104.
+- ~~Eigenvalue/modal analysis~~ with mass matrix validation, mode normalization, rigid-body modes.
 - Response spectrum and modal combination methods with code-specific configuration isolated from solver kernel.
 - Linear buckling and P–Delta/geometric stiffness as separate verified capabilities.
 

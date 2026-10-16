@@ -91,6 +91,32 @@ process of mine touching them. Diagnosis performed:
   `tests/unit/*` test logic does not depend on the CLI/benchmark apps that
   are being hit.
 
+### ROOT CAUSE CONFIRMED (2026-10-16, ~09:10)
+ESET Security's own detection log
+(`C:\ProgramData\ESET\ESET Security\Logs\virlog.dat`, read with shared
+access) contains **79 detections, all named `@Trojan.ML/Augur`** (ESET's
+machine-learning "Augur" generic detection), with MSVC `link.exe` as the
+triggering process and detection engine `34000 (20261015)`. Detected files
+are exactly our build outputs — every `kopruq_*.exe` in `build/debug` and
+`build/release` — plus CMake's `CMakeCXXCompilerId.exe`/
+`CMakeCCompilerId.exe` probes in `build/r2-debug*`,
+`build/requalification-r2-debug` and
+`C:\_ZHarput_Data\Tools\vcpkg\buildtrees\detect_compiler\`. This is also
+the root cause of the original R2 `CMakeCXXCompilerId.exe: Permission
+denied` blocker. ESET's `ransomlog.dat` and `hipslog.dat` are empty, so the
+ransomware shield and HIPS were not involved; Fortinet is not implicated.
+Earlier text below speculating about FortiClient or a ransomware-pattern
+heuristic is superseded by this finding.
+
+Assessment: false positive on freshly compiled, unsigned, low-prevalence
+binaries. Correct fix: an ESET PROTECT detection exclusion for
+`C:\_ZHarput_Data\KOPRUQ-SOLVER\build\` and
+`C:\_ZHarput_Data\Tools\vcpkg\buildtrees\` (and optionally a false-positive
+submission to ESET), applied by IT. Not attempted from this session:
+disabling ESET, killing its processes, or altering binaries/build output
+locations to evade the detection would all be bypassing a security
+control and are out of scope.
+
 ### Update (same day, after user approval to continue)
 Rebuilt `build/debug` and confirmed, at that moment, all 5 CTest
 executables present with correct nonzero sizes and a clean **26/26 PASS**

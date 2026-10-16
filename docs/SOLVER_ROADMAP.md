@@ -97,7 +97,11 @@ Debug/Release/ASan 46/46 after 4.1b.
 - ~~Reliable import/export and schema versioning; structured errors and reproducible result metadata.~~ Done in **4.2 (CI run `38884699955`)**: JSON `kopruq-model` v1 input with path-qualified validation, `kopruq-results` v1 deterministic output with SHA-256 input metadata, CLI `solve`.
 
 ### Phase 5 — Additional structural elements and releases
-- Beam end releases, rotational springs, eccentric offsets, rigid links and constraints with independent benchmarks.
+**5.1 beam end releases — COMPLETE (verified, CI run `38894147560`, commits
+`4dee2b5`, `cbef2e8`, `41aec8a`):** static condensation of K and member
+loads, unstable-combination rejection, JSON `releases`. Debug/Release/ASan
+83/83.
+- ~~Beam end releases~~, rotational springs, eccentric offsets, rigid links and constraints with independent benchmarks.
 - Truss elements, spring/link elements, bearing models; numerical stability and mechanisms.
 - Timoshenko beam option if engineering requirements justify it; explicit formulation comparison.
 

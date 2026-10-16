@@ -23,9 +23,9 @@ record the current policy in this document too:
   restrictive approval-gated rule governs.
 
 ## Current priority
-**Phase 4.3 — member point loads and distributed moments — COMPLETE
-(verified on CI, run `38887606677`).** Phases 4.1, 4.1b, 4.2 complete. Next
-work awaits approval (see "Next autonomous action").
+**Phase 5.1 — beam end releases — COMPLETE (verified on CI, run
+`38894147560`).** Phases 4.1, 4.1b, 4.2, 4.3 complete. Next work awaits
+approval (see "Next autonomous action").
 
 **Phase 3.2 requalification — COMPLETE (verified on CI, run `38872157394`,
 commit `1ed5ae4`).** Next: Phase 4, which has **not started** — its first
@@ -60,7 +60,8 @@ linking, no executables).
 | Phase 4.1b | COMPLETE (verified) | Projected-length option for global member loads; Debug/Release/ASan 46/46 on CI run `38878331252`; commits `08af7ed`, `7036b61`, `cecbe0d` |
 | Phase 4.2 | COMPLETE (verified) | JSON model I/O (`kopruq-model` v1), results (`kopruq-results` v1), CLI `solve`; Debug/Release/ASan 61/61 on CI run `38884699955`; commits `2d9e4da`, `b3b6ab0`, `24f1c65` |
 | Phase 4.3 | COMPLETE (verified) | Member point forces/moments, distributed moments, JSON `point`/`kind`; force-equilibrium metric fix; Debug/Release/ASan 76/76 on CI run `38887606677`; commits `48ad305`, `b2a605f`, `62cd955` |
-| Phase 4.4 / 5.1 | NOT STARTED | Awaiting approval |
+| Phase 5.1 | COMPLETE (verified) | Beam end releases by static condensation; unstable-combination rejection; JSON `releases`; Debug/Release/ASan 83/83 on CI run `38894147560`; commits `4dee2b5`, `cbef2e8`, `41aec8a` |
+| Phase 4.4 | NOT STARTED | Awaiting approval |
 
 ## Known blocking issue (worked around, not root-caused)
 - CMake/vcpkg compiler detection fails with permission denied for `CMakeCXXCompilerId.exe`
@@ -185,6 +186,9 @@ status`); no data loss.
 - **Verified 2026-10-16 on CI** (run `38887606677`, commit `62cd955`):
   Debug **76/76**, Release **76/76**, AddressSanitizer **76/76** — the 61
   above + 15 `PointLoads`. Static analysis: 0 blocking.
+- **Verified 2026-10-16 on CI** (run `38894147560`, commit `41aec8a`):
+  Debug **83/83**, Release **83/83**, AddressSanitizer **83/83** — the 76
+  above + 7 `Releases`. Static analysis: 0 blocking.
 - Every new test is in a dedicated file; inventory audited before/after each
   milestone.
 
@@ -470,12 +474,49 @@ status`); no data loss.
   possible; CI is the only build.
 - Milestone status: **Phase 4.3 COMPLETE.**
 
+### 2026-10-16 — Phase 5.1: beam end releases
+- Approved: user "devam" on the recommended option (end releases).
+- `Beam3DConnection::releases` (12 member-local flags, default none, so
+  existing models/results are unchanged); `kopruq/elements/Releases.hpp`
+  does static condensation of K and the member loads' equivalent nodal
+  loads; recovery completes the released end's own displacement before
+  computing end forces, so k*u - f vanishes there exactly. Unstable
+  release combinations (rigid-body motion of the released DOFs with the
+  retained ones held, e.g. torsion or axial released at both ends) are
+  rejected via the eigenvalues of the diagonally scaled K_rr. JSON v1
+  extended additively (`beams[].releases.{start,end}`).
+- Files: `include/kopruq/elements/Releases.hpp` (new),
+  `include/kopruq/core/Model.hpp`, `include/kopruq/elements/Beam3D.hpp`
+  (`UnstableRelease`), `include/kopruq/assembly/MatrixAssembler.hpp`,
+  `include/kopruq/solvers/LinearStaticSolver.hpp`,
+  `include/kopruq/io/ModelJson.hpp`, `schemas/model.schema.json`,
+  `tests/unit/release_tests.cpp` (new, 7 tests),
+  `tests/unit/io_tests.cpp` (schema check covers `releases`),
+  `CMakeLists.txt`.
+- CI run `38892389294`: Release passed 83/83; Debug and ASan failed to
+  *build* `apps/cli/main.cpp` with MSVC C1128 ("number of sections
+  exceeded object file format limit"). Root cause: the JSON
+  reader/writer/CLI header stack is template-heavy enough that Debug and
+  RelWithDebInfo(ASan) object files exceed the format limit without
+  `/bigobj`; Release's optimizer folds enough sections away to pass
+  anyway. `kopruq_solver_tests` already carried `/bigobj` for the same
+  reason. Fix (`41aec8a`): `/bigobj` on `kopruq_solver_io` too (covers the
+  CLI and all io/point-load/release test executables). Not a numerical or
+  test-logic defect.
+- Debug / Release / ASan (run `38894147560`): 83/83 each; static analysis
+  0 blocking; benchmark residuals unchanged.
+- Milestone status: **Phase 5.1 COMPLETE.**
+
 ## Next autonomous action
-Awaiting user approval (mandatory checkpoint). Recommended next:
-1. **Phase 5.1 — beam end releases** (moment hinges, pinned ends; per end
-   and per rotational/translational DOF) by static condensation of the
-   element stiffness and of the fixed-end forces; independent references:
-   simply supported and propped beams built from released elements,
-   two-span beam with an internal hinge, released portal frame.
-2. Alternatively **Phase 4.4 — validated model in the C++ API** (the JSON
-   reader validates; direct C++ callers still pass unchecked models).
+Awaiting user approval (mandatory checkpoint). Recommended next: **Phase
+4.4 — validated model in the C++ API.** The JSON reader validates models
+thoroughly; direct C++ callers (the existing public API) still pass
+unchecked models straight into assembly/solve, where malformed input
+currently surfaces as whatever exception the element/assembly code happens
+to throw, not a structured, enumerable report. Proposed scope: a
+`Model::validate()` (or a free function) reusing the same checks as the
+JSON reader (duplicate/missing ids, invalid properties, released-DOF
+stability, degenerate geometry) and returning the same kind of
+path-qualified issue list, callable before `solveCases` with no change to
+the existing types. Alternative: skip this and move to Phase 6 (modal/
+buckling) or Phase 8 (bridge-specific loads/bearings) instead -- say which.

@@ -178,3 +178,12 @@ only), signed-integer ids rejected by the JSON reader (`24f1c65`), and the
 global force-equilibrium metric returning ~1 for moment-only loading
 (`62cd955`). Open: the per-element normalized force error has the same
 round-off/round-off form for elements carrying only moments.
+
+## Addendum — Phase 5.1 (2026-10-16)
+
+CI run `38894147560` (commit `41aec8a`): Debug/Release/ASan 83/83. Added
+beam end releases (moment hinges, pinned/released DOFs) by static
+condensation, with unstable-combination rejection and JSON support. One
+build-only defect found and fixed in this period: MSVC C1128 on Debug/ASan
+building the JSON/CLI header stack without `/bigobj` (`41aec8a`); no
+numerical or test-logic defect.

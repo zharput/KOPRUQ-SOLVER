@@ -121,9 +121,16 @@ class ModelReader {
     if (!std::isfinite(x)) { issue(key(p, k), "must be finite"); return false; }
     out = x; return true;
   }
+  // Positive integer value; nlohmann stores text-parsed integers as unsigned but C++-built ones as signed.
+  static bool positiveInteger(const json& v, std::uint64_t& out) {
+    if (v.is_number_unsigned()) { out = v.get<std::uint64_t>(); return out > 0; }
+    if (v.is_number_integer()) { std::int64_t s = v.get<std::int64_t>(); out = static_cast<std::uint64_t>(s); return s > 0; }
+    return false;
+  }
   bool idValue(const json& v, const std::string& p, Id& out) {
-    if (!v.is_number_unsigned() || v.get<std::uint64_t>() == 0) { issue(p, "must be a positive integer"); return false; }
-    out = v.get<Id>(); return true;
+    std::uint64_t x{};
+    if (!positiveInteger(v, x)) { issue(p, "must be a positive integer"); return false; }
+    out = static_cast<Id>(x); return true;
   }
   bool id(const json& j, const std::string& p, const char* k, Id& out) {
     const json* v = field(j, k);
@@ -162,8 +169,9 @@ class ModelReader {
     std::string schema;
     if (string(root, R, "schema", schema) && schema != model_schema_name)
       issue(key(R, "schema"), std::string("must be \"") + model_schema_name + "\"");
+    std::uint64_t version{};
     if (const json* v = field(root, "schema_version"))
-      if (!v->is_number_unsigned() || v->get<std::uint64_t>() != static_cast<std::uint64_t>(model_schema_version))
+      if (!positiveInteger(*v, version) || version != static_cast<std::uint64_t>(model_schema_version))
         issue(key(R, "schema_version"), "unsupported version; this solver reads version " + std::to_string(model_schema_version));
     if (const json* u = field(root, "units")) {
       const std::string P = key(R, "units");

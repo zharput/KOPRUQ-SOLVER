@@ -320,3 +320,18 @@ TEST(Cli, ExitCodesAndOutputs) {
   EXPECT_NE(err.find("analysis failed"), std::string::npos);
   std::filesystem::remove(unsupported);
 }
+
+TEST(ModelJson, AcceptsSignedPositiveIntegersBuiltInCxx) {
+  // Regression: integers parsed from text are unsigned in nlohmann::json, but
+  // values assigned from C++ ints are signed; both must be accepted as ids.
+  json doc = baseModel();
+  doc["schema_version"] = int{1};
+  doc["nodes"][0]["id"] = int{1}; doc["nodes"][1]["id"] = int{2};
+  doc["beams"][0]["nodes"] = json::array({int{1}, int{2}});
+  doc["beams"][0]["material"] = int{1};
+  doc["load_cases"][0]["member"][0]["element"] = int{1};
+  ASSERT_TRUE(doc["nodes"][0]["id"].is_number_integer() && !doc["nodes"][0]["id"].is_number_unsigned());
+  auto fromCxx = kopruq::io::readModel(doc);
+  auto fromText = kopruq::io::readModelText(baseModel().dump());
+  EXPECT_EQ(kopruq::io::writeModel(fromCxx), kopruq::io::writeModel(fromText));
+}

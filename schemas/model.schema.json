@@ -268,6 +268,12 @@
           "items": {
             "$ref": "#/$defs/member_load"
           }
+        },
+        "point": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/point_load"
+          }
         }
       },
       "required": [
@@ -342,6 +348,14 @@
           "type": "boolean",
           "default": false,
           "description": "Global loads only: per length projected on the plane normal to the load direction"
+        },
+        "kind": {
+          "enum": [
+            "force",
+            "moment"
+          ],
+          "default": "force",
+          "description": "moment: distributed moment about `direction` [kNm/m]; projected is not allowed"
         }
       },
       "required": [
@@ -387,6 +401,53 @@
       "required": [
         "case",
         "factor"
+      ],
+      "additionalProperties": false
+    },
+    "point_load": {
+      "type": "object",
+      "description": "Concentrated force [kN] or moment [kNm] on a member",
+      "properties": {
+        "element": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "axes": {
+          "enum": [
+            "local",
+            "global"
+          ]
+        },
+        "direction": {
+          "enum": [
+            "x",
+            "y",
+            "z"
+          ]
+        },
+        "value": {
+          "type": "number"
+        },
+        "position": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Fraction of member length from the first node"
+        },
+        "kind": {
+          "enum": [
+            "force",
+            "moment"
+          ],
+          "default": "force"
+        }
+      },
+      "required": [
+        "element",
+        "axes",
+        "direction",
+        "value",
+        "position"
       ],
       "additionalProperties": false
     }

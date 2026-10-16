@@ -50,36 +50,53 @@ static AppliedLoads assembleLoadCase(const Model&m,const DofManager&dm,const Loa
       if(w!=0)loads.push_back(MemberLoad{e.id,LoadAxes::Global,2,w,w,0,1});
     }
   }
-  if(loads.empty())return a;
+  if(loads.empty()&&lc.point.empty())return a;
   std::unordered_map<Id,const Beam3DConnection*> beams; beams.reserve(m.beams.size());
   for(const auto&e:m.beams)beams[e.id]=&e;
+  struct Frame{const Beam3DConnection*e;Beam3DGeometry g;Beam3DAxes ax;Eigen::Matrix3d R;Real L;};
+  auto frameOf=[&](Id element,const char*what){
+    auto it=beams.find(element);
+    if(it==beams.end())throw AssemblyError(AssemblyErrorCode::InvalidLoad,std::string(what)+" references missing element");
+    const auto&e=*it->second;
+    const Node*n1=detail::find_by_id(nodes,e.node1),*n2=detail::find_by_id(nodes,e.node2);
+    if(!n1||!n2)throw AssemblyError(AssemblyErrorCode::MissingNode,"element references missing node");
+    Frame f{&e,Beam3DGeometry{{n1->x,n1->y,n1->z},{n2->x,n2->y,n2->z},e.reference_y},{},{},0};
+    f.ax=Beam3D::axes(f.g);
+    f.R.row(0)=f.ax.x.transpose(); f.R.row(1)=f.ax.y.transpose(); f.R.row(2)=f.ax.z.transpose();
+    f.L=(f.g.node2-f.g.node1).norm();
+    return f;
+  };
+  auto accumulate=[&](const Frame&f,const detail::MemberLoadEffect&eff){
+    const auto&e=*f.e;
+    auto d=dm.element_dofs(e.node1,e.node2);
+    for(int b=0;b<4;++b){Eigen::Vector3d v=f.R.transpose()*eff.equivalent.segment<3>(3*b);for(int i=0;i<3;++i)a.F((Eigen::Index)d[3*b+i])+=v(i);}
+    Eigen::Vector3d fg=f.R.transpose()*eff.force, mg=f.R.transpose()*eff.moment_node1;
+    auto&el=a.elements[e.id];
+    el.equivalent_local+=eff.equivalent; el.force+=fg; el.moment_node1+=mg;
+    a.force+=fg; a.moment+=mg+f.g.node1.cross(fg);
+  };
   for(const auto&ld:loads){
-    auto it=beams.find(ld.element);
-    if(it==beams.end())throw AssemblyError(AssemblyErrorCode::InvalidLoad,"member load references missing element");
     if(ld.direction<0||ld.direction>2)throw AssemblyError(AssemblyErrorCode::InvalidLoad,"member load direction must be 0, 1 or 2");
     if(!std::isfinite(ld.w1)||!std::isfinite(ld.w2)||!std::isfinite(ld.start)||!std::isfinite(ld.end)||ld.start<0||ld.end>1||!(ld.start<ld.end))
       throw AssemblyError(AssemblyErrorCode::InvalidLoad,"member load intensity or segment is invalid");
     if(ld.projected&&ld.axes!=LoadAxes::Global)throw AssemblyError(AssemblyErrorCode::InvalidLoad,"projected member loads must be in global axes");
-    const auto&e=*it->second;
-    const Node*n1=detail::find_by_id(nodes,e.node1),*n2=detail::find_by_id(nodes,e.node2);
-    if(!n1||!n2)throw AssemblyError(AssemblyErrorCode::MissingNode,"element references missing node");
-    Beam3DGeometry g{{n1->x,n1->y,n1->z},{n2->x,n2->y,n2->z},e.reference_y};
-    auto ax=Beam3D::axes(g);
-    Eigen::Matrix3d R; R.row(0)=ax.x.transpose(); R.row(1)=ax.y.transpose(); R.row(2)=ax.z.transpose();
+    if(ld.projected&&ld.kind!=MemberLoadKind::Force)throw AssemblyError(AssemblyErrorCode::InvalidLoad,"projected member loads must be forces");
+    auto f=frameOf(ld.element,"member load");
     MemberLoad trueLength=ld;
     if(ld.projected){
       // Projection onto the plane normal to the load direction: L_p / L = sqrt(1 - (x . d)^2).
-      Real c=ax.x(ld.direction);
+      Real c=f.ax.x(ld.direction);
       Real ratio=std::sqrt(std::max(Real(0),1-c*c));
       trueLength.w1*=ratio; trueLength.w2*=ratio; trueLength.projected=false;
     }
-    auto eff=detail::memberLoadEffect(trueLength,R,(g.node2-g.node1).norm());
-    auto d=dm.element_dofs(e.node1,e.node2);
-    for(int b=0;b<4;++b){Eigen::Vector3d v=R.transpose()*eff.equivalent.segment<3>(3*b);for(int i=0;i<3;++i)a.F((Eigen::Index)d[3*b+i])+=v(i);}
-    Eigen::Vector3d fg=R.transpose()*eff.force, mg=R.transpose()*eff.moment_node1;
-    auto&el=a.elements[e.id];
-    el.equivalent_local+=eff.equivalent; el.force+=fg; el.moment_node1+=mg;
-    a.force+=fg; a.moment+=mg+g.node1.cross(fg);
+    accumulate(f,detail::memberLoadEffect(trueLength,f.R,f.L));
+  }
+  for(const auto&ld:lc.point){
+    if(ld.direction<0||ld.direction>2)throw AssemblyError(AssemblyErrorCode::InvalidLoad,"member point load direction must be 0, 1 or 2");
+    if(!std::isfinite(ld.value)||!std::isfinite(ld.position)||ld.position<0||ld.position>1)
+      throw AssemblyError(AssemblyErrorCode::InvalidLoad,"member point load value or position is invalid");
+    auto f=frameOf(ld.element,"member point load");
+    accumulate(f,detail::pointLoadEffect(ld,f.R,f.L));
   }
   return a;
 }
@@ -161,6 +178,7 @@ static MultiCaseSolution solveCases(const Model&m,const Restraints&rs,const std:
         uf+=f*out.cases[idx].free;
         for(auto l:cases[idx].nodal){l.values*=f;lc.nodal.push_back(l);}
         for(auto l:cases[idx].member){l.w1*=f;l.w2*=f;lc.member.push_back(l);}
+        for(auto l:cases[idx].point){l.value*=f;lc.point.push_back(l);}
         lc.self_weight+=f*cases[idx].self_weight;
       }
       if(failed){o.status=*failed;continue;}

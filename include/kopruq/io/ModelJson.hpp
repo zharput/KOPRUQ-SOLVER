@@ -35,9 +35,10 @@ inline const KeySpec material{{"id","elastic_modulus","poisson_ratio"},{"unit_we
 inline const KeySpec section{{"id","area","Iy","Iz","J"},{}};
 inline const KeySpec beam{{"id","nodes","material","section"},{"reference_y"}};
 inline const KeySpec support{{"node","restraints"},{}};
-inline const KeySpec load_case{{"name"},{"self_weight","nodal","member"}};
+inline const KeySpec load_case{{"name"},{"self_weight","nodal","member","point"}};
 inline const KeySpec nodal_load{{"node","values"},{}};
-inline const KeySpec member_load{{"element","axes","direction","w1"},{"w2","start","end","projected"}};
+inline const KeySpec member_load{{"element","axes","direction","w1"},{"w2","start","end","projected","kind"}};
+inline const KeySpec point_load{{"element","axes","direction","value","position"},{"kind"}};
 inline const KeySpec combination{{"name","terms"},{}};
 inline const KeySpec combination_term{{"case","factor"},{}};
 }
@@ -65,6 +66,7 @@ struct ModelInput {
 namespace detail {
 
 inline const char* axisName(int d) { return d==0 ? "x" : d==1 ? "y" : "z"; }
+inline const char* kindName(MemberLoadKind k) { return k==MemberLoadKind::Force ? "force" : "moment"; }
 
 class ModelReader {
  public:
@@ -334,6 +336,8 @@ class ModelReader {
         for (std::size_t k = 0; k < nl->size(); ++k) ok = readNodalLoad((*nl)[k], at(key(p, "nodal"), k), lc) && ok;
       if (const json* ml = array(c, p, "member"))
         for (std::size_t k = 0; k < ml->size(); ++k) ok = readMemberLoad((*ml)[k], at(key(p, "member"), k), lc) && ok;
+      if (const json* pl = array(c, p, "point"))
+        for (std::size_t k = 0; k < pl->size(); ++k) ok = readPointLoad((*pl)[k], at(key(p, "point"), k), lc) && ok;
       if (!ok) continue;
       caseIndex_[lc.name] = in.load_cases.size();
       in.load_cases.push_back(std::move(lc));
@@ -351,20 +355,34 @@ class ModelReader {
     return ok;
   }
 
+  // "axes", "direction" and the optional "kind" shared by member and point loads.
+  bool readAction(const json& j, const std::string& p, LoadAxes& axesOut, int& dirOut, MemberLoadKind& kindOut) {
+    bool ok = true;
+    std::string axes, dir, kind;
+    if (string(j, p, "axes", axes)) {
+      if (axes == "local") axesOut = LoadAxes::Local;
+      else if (axes == "global") axesOut = LoadAxes::Global;
+      else { issue(key(p, "axes"), "must be \"local\" or \"global\""); ok = false; }
+    } else ok = false;
+    if (string(j, p, "direction", dir)) {
+      if (dir == "x") dirOut = 0; else if (dir == "y") dirOut = 1; else if (dir == "z") dirOut = 2;
+      else { issue(key(p, "direction"), "must be \"x\", \"y\" or \"z\""); ok = false; }
+    } else ok = false;
+    if (field(j, "kind")) {
+      if (string(j, p, "kind", kind)) {
+        if (kind == "force") kindOut = MemberLoadKind::Force;
+        else if (kind == "moment") kindOut = MemberLoadKind::Moment;
+        else { issue(key(p, "kind"), "must be \"force\" or \"moment\""); ok = false; }
+      } else ok = false;
+    }
+    return ok;
+  }
+
   bool readMemberLoad(const json& j, const std::string& p, LoadCase& lc) {
     if (!object(j, p, model_keys::member_load)) return false;
     MemberLoad l;
     bool ok = id(j, p, "element", l.element);
-    std::string axes, dir;
-    if (string(j, p, "axes", axes)) {
-      if (axes == "local") l.axes = LoadAxes::Local;
-      else if (axes == "global") l.axes = LoadAxes::Global;
-      else { issue(key(p, "axes"), "must be \"local\" or \"global\""); ok = false; }
-    } else ok = false;
-    if (string(j, p, "direction", dir)) {
-      if (dir == "x") l.direction = 0; else if (dir == "y") l.direction = 1; else if (dir == "z") l.direction = 2;
-      else { issue(key(p, "direction"), "must be \"x\", \"y\" or \"z\""); ok = false; }
-    } else ok = false;
+    ok = readAction(j, p, l.axes, l.direction, l.kind) && ok;
     ok = number(j, p, "w1", l.w1) && ok;
     l.w2 = l.w1;
     if (field(j, "w2")) ok = number(j, p, "w2", l.w2) && ok;
@@ -375,7 +393,22 @@ class ModelReader {
     if (!beamIds_.count(l.element)) { issue(key(p, "element"), "references unknown beam " + std::to_string(l.element)); ok = false; }
     if (!(l.start >= 0 && l.end <= 1 && l.start < l.end)) { issue(p, "loaded segment must satisfy 0 <= start < end <= 1"); ok = false; }
     if (l.projected && l.axes != LoadAxes::Global) { issue(key(p, "projected"), "is only allowed with \"axes\": \"global\""); ok = false; }
+    if (l.projected && l.kind != MemberLoadKind::Force) { issue(key(p, "projected"), "is only allowed for \"kind\": \"force\""); ok = false; }
     if (ok) lc.member.push_back(l);
+    return ok;
+  }
+
+  bool readPointLoad(const json& j, const std::string& p, LoadCase& lc) {
+    if (!object(j, p, model_keys::point_load)) return false;
+    MemberPointLoad l;
+    bool ok = id(j, p, "element", l.element);
+    ok = readAction(j, p, l.axes, l.direction, l.kind) && ok;
+    ok = number(j, p, "value", l.value) && ok;
+    ok = number(j, p, "position", l.position) && ok;
+    if (!ok) return false;
+    if (!beamIds_.count(l.element)) { issue(key(p, "element"), "references unknown beam " + std::to_string(l.element)); ok = false; }
+    if (!(l.position >= 0 && l.position <= 1)) { issue(key(p, "position"), "must satisfy 0 <= position <= 1"); ok = false; }
+    if (ok) lc.point.push_back(l);
     return ok;
   }
 
@@ -448,13 +481,17 @@ inline json writeModel(const ModelInput& in) {
   for (const auto& [node, r] : in.restraints) j["supports"].push_back({{"node", node}, {"restraints", r}});
   j["load_cases"] = json::array();
   for (const auto& lc : in.load_cases) {
-    json c = {{"name", lc.name}, {"self_weight", lc.self_weight}, {"nodal", json::array()}, {"member", json::array()}};
+    json c = {{"name", lc.name}, {"self_weight", lc.self_weight}, {"nodal", json::array()}, {"member", json::array()}, {"point", json::array()}};
     for (const auto& l : lc.nodal)
       c["nodal"].push_back({{"node", l.node}, {"values", {l.values(0), l.values(1), l.values(2), l.values(3), l.values(4), l.values(5)}}});
     for (const auto& l : lc.member)
       c["member"].push_back({{"element", l.element}, {"axes", l.axes == LoadAxes::Local ? "local" : "global"},
                              {"direction", detail::axisName(l.direction)}, {"w1", l.w1}, {"w2", l.w2},
-                             {"start", l.start}, {"end", l.end}, {"projected", l.projected}});
+                             {"start", l.start}, {"end", l.end}, {"projected", l.projected}, {"kind", detail::kindName(l.kind)}});
+    for (const auto& l : lc.point)
+      c["point"].push_back({{"element", l.element}, {"axes", l.axes == LoadAxes::Local ? "local" : "global"},
+                            {"direction", detail::axisName(l.direction)}, {"kind", detail::kindName(l.kind)},
+                            {"value", l.value}, {"position", l.position}});
     j["load_cases"].push_back(c);
   }
   j["combinations"] = json::array();

@@ -1,0 +1,184 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kopruq.local/schemas/modal_results/1",
+  "title": "KOPRUQ-SOLVER modal analysis results, format version 1",
+  "description": "Written by kopruq::io::writeModalResults (include/kopruq/io/ModalResultsJson.hpp). Separate from kopruq-results (ResultsJson.hpp), which describes static load-case solutions. Deterministic: no timestamps, sorted keys, round-trip doubles.",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "const": "kopruq-modal-results"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "solver": {
+          "const": "KOPRUQ-SOLVER"
+        },
+        "solver_version": {
+          "type": "string"
+        },
+        "model_schema": {
+          "const": "kopruq-model"
+        },
+        "model_schema_version": {
+          "const": 1
+        },
+        "model_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "units": {
+          "type": "object",
+          "properties": {
+            "length": {
+              "const": "m"
+            },
+            "angle": {
+              "const": "rad"
+            },
+            "frequency": {
+              "const": "Hz"
+            },
+            "angular_frequency": {
+              "const": "rad/s"
+            }
+          },
+          "required": [
+            "length",
+            "angle",
+            "frequency",
+            "angular_frequency"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "solver",
+        "solver_version",
+        "model_schema",
+        "model_schema_version",
+        "model_sha256",
+        "units"
+      ],
+      "additionalProperties": false
+    },
+    "status": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "code": {
+          "enum": [
+            "Success",
+            "InvalidModel",
+            "NoRestraints",
+            "SingularSystem",
+            "NonFiniteSolution",
+            "NumericalFailure"
+          ]
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "success",
+        "code",
+        "message"
+      ],
+      "additionalProperties": false
+    },
+    "diagnostics": {
+      "type": "object",
+      "properties": {
+        "total_dofs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "free_dofs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "fixed_dofs": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "total_dofs",
+        "free_dofs",
+        "fixed_dofs"
+      ],
+      "additionalProperties": false
+    },
+    "modes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/mode"
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "metadata",
+    "status",
+    "diagnostics",
+    "modes"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "mode": {
+      "type": "object",
+      "properties": {
+        "index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "frequency_hz": {
+          "type": "number"
+        },
+        "angular_frequency_rad_s": {
+          "type": "number"
+        },
+        "mode_shape": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "shape": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 6,
+                "maxItems": 6
+              }
+            },
+            "required": [
+              "id",
+              "shape"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "index",
+        "frequency_hz",
+        "angular_frequency_rad_s",
+        "mode_shape"
+      ],
+      "additionalProperties": false,
+      "description": "Mass-normalized (phi^T*M_ff*phi = 1); empty modes array when status.success is false"
+    }
+  }
+}

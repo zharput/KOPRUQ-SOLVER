@@ -3,14 +3,8 @@
 > Initial status assembled from user-provided development reports, **not** independently re-executed in this document. Claude must inspect repository state and refresh evidence before changing a milestone to COMPLETE.
 
 ## Current priority
-**Phase 3.2R4 — Reaction, element-force and energy recovery requalification**
-(next unblocked task; R3 is verified complete). Note: `LinearStaticSolver`
-already performs reaction/element-force/equilibrium recovery as part of
-`solve()`, and R3's suite already independently checked reactions via global
-statics; R4 should focus on what R3 did not cover: energy consistency
-(`strain_energy`/`element_strain_energy`/`energy_error`), inclined (non-axis-
-aligned) element recovery, and multi-element portal-frame recovery checks,
-without re-deriving what R3 already verified.
+**Phase 3.2R5 — Performance, robustness and release gate** (next unblocked
+task; R4 is verified complete).
 
 ## Established reported history
 | Milestone | Status | Evidence / qualification |
@@ -21,7 +15,8 @@ without re-deriving what R3 already verified.
 | Phase 3.2R1 | COMPLETE (verified) | New Beam3D tests; Debug 7/7, Release 7/7; commit `907ea32` |
 | Phase 3.2R2 | COMPLETE (verified) | New assembly tests; Debug 12/12, Release 12/12; commits `07f7344`, `f050918` |
 | Phase 3.2R3 | COMPLETE (verified) | New linear static solver tests; Debug 22/22, Release 22/22 |
-| Phase 3.2R4–R5 | NOT STARTED | R4 next |
+| Phase 3.2R4 | COMPLETE (verified) | Implemented + requalified strain-energy recovery; Debug 26/26, Release 26/26; commit `643c829` + test commit below |
+| Phase 3.2R5 | NOT STARTED | R5 next |
 
 ## Known blocking issue (worked around, not root-caused)
 - CMake/vcpkg compiler detection fails with permission denied for `CMakeCXXCompilerId.exe`
@@ -71,10 +66,25 @@ without re-deriving what R3 already verified.
 - Milestone status: **COMPLETE**
 - Next unblocked roadmap task: Phase 3.2R4 — reaction, element-force and energy recovery requalification
 
+### 2026-10-16 — Phase 3.2R4 completion
+- Git HEAD / working tree: started at `63c97c8`; ended with all changes committed on `main`
+- Current task: requalify reaction/element-force/energy recovery, scoped to what R3 did not already cover
+- Commands executed: `cmake --build build/{debug,release}`, direct run of `kopruq_recovery_requalification_tests.exe`, `ctest` full suite in both configs, CLI smoke checks; code inspection (`grep` for `SimplicialLDLT`/`compute`/`solve` in `LinearStaticSolver.hpp`) to verify recovery does not repeat factorization
+- Source/test files changed: `include/kopruq/solvers/LinearStaticSolver.hpp` (production fix — implemented previously-dead `strain_energy`/`element_strain_energy`/`energy_error` fields), `tests/unit/recovery_requalification_tests.cpp` (new, 4 tests), `CMakeLists.txt` (wire new target into `gtest_discover_tests`)
+- Debug focused / full CTest: 4/4 new tests PASS standalone; 26/26 full suite PASS
+- Release focused / full CTest: 26/26 full suite PASS
+- Independent numerical reference and error: Clapeyron's-theorem external-work formulas for axial/combined-load cantilevers; an inclined (non-axis-aligned) 3-4-5 beam with a purely axial applied load, displacement/reaction/energy checked via vector geometry, not any production transform; a two-element portal frame with per-element local/global end forces recomputed via independently-written rotation/stiffness helpers. All energy-consistency checks landed at floating-point roundoff (< 1e-9–1e-10 relative), consistent with strain energy being an exact identity (UᵗKU = Σ element quadratic forms), not an approximate check.
+- Root cause of any failures: none at the test level — all 4 new tests passed on first run. One production gap found and fixed: `AnalysisResults`/`ElementResults` declared energy fields that `recover()` never populated (always zero); implemented per the roadmap's explicit "energy consistency" acceptance criterion.
+- Milestone status: **COMPLETE**
+- Next unblocked roadmap task: Phase 3.2R5 — performance, robustness and release gate
+
 ## Next autonomous action
-Proceed with Phase 3.2R4 (reaction/element-force/energy recovery
-requalification) per `docs/SOLVER_ROADMAP.md`, scoped to what R3 did not
-already cover: independent energy-consistency checks
-(`strain_energy`/`element_strain_energy`/`energy_error`), inclined
-(non-axis-aligned) element end-force recovery, and independent multi-element
-portal-frame recovery/equilibrium benchmarks with documented tolerances.
+Proceed with Phase 3.2R5 (performance, robustness and release gate) per
+`docs/SOLVER_ROADMAP.md`: reproducible benchmark models at increasing size,
+separately measured assembly/Kff-extraction/factorization/solve/recovery
+timings, confirmation that sparse complexity improvements do not compromise
+accuracy, full Debug/Release CTest, CLI smoke tests, a test-inventory audit,
+and a requalification report listing verified and unverified capabilities.
+Existing benchmark apps (`apps/benchmarks/solver_benchmark.cpp`,
+`apps/benchmarks/sparse_assembly_benchmark.cpp`) should be inspected first
+to see how much of R5 they already cover before adding new benchmark code.

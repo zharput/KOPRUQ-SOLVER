@@ -42,13 +42,23 @@ equilibrium across two distinct load cases. Tolerances are relative to
 displacement/reaction magnitude, `1e-8`–`1e-9`. Debug and Release full
 CTest 22/22 PASS.
 
-### R4 — Reaction, element-force and energy recovery requalification
-- Reactions only on restrained DOFs: R = KU - F; free DOF residuals separate.
-- Independent axial/transverse/inclined 3D reaction benchmarks.
-- Independent local/global element end-force checks, orientation and signs.
-- Force equilibrium, moment equilibrium about a declared origin, element equilibrium, energy consistency.
-- Recovery must not repeat solver factorization.
-- Independent multi-element portal-frame recovery tests and tolerance documentation.
+### R4 — Reaction, element-force and energy recovery requalification — COMPLETE (verified)
+`AnalysisResults`/`ElementResults` declared `strain_energy`,
+`element_strain_energy` and `energy_error` fields that `recover()` never
+assigned (always zero); implemented them (per-element 0.5·uᵗKu, summed, vs.
+external work 0.5·UᵗF, Clapeyron's theorem) — see commit `643c829`.
+Independent `tests/unit/recovery_requalification_tests.cpp` (4 tests):
+analytical single- and combined-load strain-energy consistency, an inclined
+(non-axis-aligned) element's end-force/reaction/energy recovery, and a
+two-element portal frame with independently recomputed per-element local/
+global end forces, per-element equilibrium, and total energy consistency —
+using fresh rotation/stiffness helpers that call no production assembly/
+element/solver code. "Recovery must not repeat solver factorization"
+verified by inspection: `recover()` contains no `SimplicialLDLT`
+construction, `compute()` or `solve()` call. Energy-consistency tolerances
+are at floating-point roundoff (`< 1e-9`–`1e-10` relative), since
+`UᵗKU = Σ(TᵤUᵤ)ᵗkₗ(TᵤUᵤ)` is an exact identity, not an approximation.
+Debug and Release full CTest 26/26 PASS.
 
 ### R5 — Performance, robustness and release gate
 - Reproducible benchmark models at increasing size (e.g. 100, 1,000, 10,000 elements) within practical memory/time limits.

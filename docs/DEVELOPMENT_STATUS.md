@@ -677,17 +677,46 @@ status`); no data loss.
 - Merged to `main` (fast-forward, `f66da33`).
 - Milestone status: **Stage 1 COMPLETE (verified).**
 
+### 2026-10-17 — Stage 2: release.yml for Windows EXE production
+- `release.yml` added: the full MSVC debug/release/asan/analyze matrix,
+  the CLI smoke test, the benchmark run and vcpkg applocal DLL packaging
+  carried over unchanged from the pre-split `ci.yml`; triggers only on
+  `workflow_dispatch` or a `v*.*.*` tag push. Added vcpkg tool caching
+  (same technique as Stage 1's Linux job).
+- `workflow_dispatch` cannot target a workflow that only exists on a
+  non-default branch (`POST .../dispatches` returned 404 against the
+  feature branch), so verification used a temporary branch-push trigger,
+  removed in a follow-up commit once confirmed working -- `main` never
+  carried the temporary trigger.
+- First run (`39037599675`): all 4 jobs green, 110/110 CTest in each of
+  the 3 test jobs, 0 blocking static-analysis findings. The uploaded
+  `kopruq-solver-windows-x64` artifact (3.2 MB) turned out to contain
+  every GoogleTest executable and `gtest*.dll` alongside the real
+  product, because `build/release/*.exe` matches everything the Release
+  build produces, not just the CLI and benchmarks.
+- Fixed (`42a4280`): narrowed the artifact's `path:` to the three actual
+  product binaries (`kopruq_solver_cli.exe`,
+  `kopruq_solver_benchmark.exe`, `kopruq_sparse_assembly_benchmark.exe`);
+  none need a DLL, since Eigen and nlohmann-json are header-only (the
+  DLLs in the first artifact belonged only to the test executables).
+  Re-run (`39038848289`): all 4 jobs green again; artifact now 449.8 KB,
+  verified (downloaded and listed) to contain exactly those three files.
+- Removed the temporary trigger (`e08ab68`) and merged to `main`
+  (fast-forward). Confirmed via `GET .../actions/workflows` that
+  `release.yml` is now registered and `active` on the default branch
+  (dispatchable going forward).
+- Milestone status: **Stage 2 COMPLETE (verified).**
+
 ## Next autonomous action
 Awaiting user approval (mandatory checkpoint; this task also has its own
-explicit per-stage approval gate). Stage 1 of the Actions optimization is
-complete and verified. Proposed next:
-1. **Stage 2**: add `release.yml` (Windows, manual dispatch / version tags
-   only) carrying the existing MSVC debug/release/asan/analyze matrix,
-   the CLI smoke test, benchmarks, and upload the built `.exe` files as a
-   downloadable artifact.
-2. **Stage 3**: trigger/permissions cleanup and a measured before/after
-   minute comparison using Stage 1+2's actual run data.
+explicit per-stage approval gate). Stages 1 and 2 of the Actions
+optimization are complete and verified. Proposed next:
+1. **Stage 3**: trigger/permissions review (confirm no further
+   push/pull_request duplication, `permissions: contents: read` is
+   sufficient in both workflows) and a measured, final before/after
+   minute comparison using the actual run data gathered across this
+   session.
 Separately, Phase 6.2 (response spectrum analysis) remains written but
 unverified on `ci/phase6.2-response-spectrum`; now that CI runners work
-again, it can be resumed -- before, after, or interleaved with Stage 2/3,
+again, it can be resumed -- before, after, or interleaved with Stage 3,
 whichever the user prefers.

@@ -20,6 +20,14 @@ on:
 permissions:
   contents: read
 
+# Queues (does not cancel) a second dispatch/tag for the same ref: unlike
+# ci.yml's routine runs, a half-finished release build being silently
+# cancelled is more surprising than useful, and releases are infrequent
+# enough that queuing is never a real wait.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build-test:
     name: ${{ matrix.preset }}

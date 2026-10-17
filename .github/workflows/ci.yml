@@ -19,6 +19,16 @@ on:
 permissions:
   contents: read
 
+# Cancels a still-running run for the same branch the moment a newer commit is
+# pushed to it, instead of letting a now-superseded run finish. Observed cost:
+# this session pushed many commits in quick succession to the same branch
+# while iterating, and every prior run kept consuming minutes to completion
+# unnecessarily. `github.workflow` keeps main's and a tag's queues separate
+# from a feature branch's.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-test:
     name: ${{ matrix.preset }}

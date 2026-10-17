@@ -1,15 +1,18 @@
 // Phase 6.2 — single-direction response spectrum analysis (SRSS).
 //
-// Independent references: the total-mass identity iota^T*M*iota = sum of
-// element masses (a conservation property of any correct consistent/lumped
-// mass matrix, re-derived here from rho*A*L directly, not from the
-// production mass matrix); mass participation summing to 1.0 when every
-// free-DOF mode is included; piecewise-linear spectrum interpolation
-// checked against hand values; SRSS re-aggregation from the per-mode
-// results already returned; and per-mode participation factors/peak
-// response checked against an independent dense eigensolve + independent
-// mass matrix (same style as modal_tests.cpp, not reusing ModalSolver's
-// or ResponseSpectrumSolver's internals).
+// Independent references: total_mass = iota_free^T * Mff * iota_free (free
+// DOFs only, re-derived here by assembling an independent global mass
+// matrix and partitioning out the restrained node, not by reusing the
+// production assembly/partition); mass participation summing to 1.0 when
+// every free-DOF mode is included (an exact completeness identity once
+// iota is restricted to the free DOFs -- see
+// include/kopruq/solvers/ResponseSpectrumSolver.hpp for why the restriction
+// is necessary); piecewise-linear spectrum interpolation checked against
+// hand values; SRSS re-aggregation from the per-mode results already
+// returned; and per-mode participation factors/peak response checked
+// against an independent dense eigensolve + independent mass matrix (same
+// style as modal_tests.cpp, not reusing ModalSolver's or
+// ResponseSpectrumSolver's internals).
 #include <gtest/gtest.h>
 #include <Eigen/Dense>
 #include <Eigen/Eigenvalues>
@@ -17,6 +20,7 @@
 #include "kopruq/solvers/ResponseSpectrumSolver.hpp"
 
 using Mat12 = Eigen::Matrix<double,12,12>;
+using Eigen::MatrixXd;
 
 namespace {
 
@@ -54,6 +58,17 @@ Mat12 independentLocalMass(double L) {
   return m;
 }
 
+// Independent global mass matrix for a straight n-element chain along local
+// x (local axes = global, since reference_y = (0,1,0) and the chain lies on
+// the global x-axis), by assembling n independent single-element blocks.
+MatrixXd independentGlobalMass(double totalLength, int n) {
+  const double Le = totalLength / n;
+  MatrixXd M = MatrixXd::Zero(6 * (n + 1), 6 * (n + 1));
+  Mat12 me = independentLocalMass(Le);
+  for (int e = 0; e < n; ++e) M.block(6 * e, 6 * e, 12, 12) += me;
+  return M;
+}
+
 } // namespace
 
 TEST(ResponseSpectrum, SpectrumInterpolationMatchesHandValues) {
@@ -69,7 +84,7 @@ TEST(ResponseSpectrum, SpectrumInterpolationMatchesHandValues) {
   EXPECT_THROW(kopruq::interpolateSpectrum(bad,0.3), std::invalid_argument);
 }
 
-TEST(ResponseSpectrum, TotalMassMatchesIndependentPhysicalTotal) {
+TEST(ResponseSpectrum, TotalMassMatchesIndependentFreeDofReduction) {
   double L=6.0; int n=3;
   auto m=cantilever(L,n);
   kopruq::ResponseSpectrumInput in; in.direction=1; in.num_modes=1;
@@ -77,8 +92,20 @@ TEST(ResponseSpectrum, TotalMassMatchesIndependentPhysicalTotal) {
   auto r=kopruq::ResponseSpectrumSolver::solve(m,fixedNode1(),in);
   // total_mass is computed before any mode loop can fail; even a trivial
   // (num_modes=1) run exposes it.
-  double expected=RHO_A*L; // n elements of length L/n, total length L
-  EXPECT_NEAR(r.total_mass, expected, 1e-9*expected);
+
+  // Independent: assemble the global mass matrix, drop node 1's 6 (restrained)
+  // DOFs, and compute iota_free^T * Mff * iota_free with iota_free = 1 at every
+  // free UY DOF (local index 1 of each 6-block), 0 elsewhere. This is strictly
+  // less than the n elements' total physical mass RHO_A*L, because the
+  // restrained node's own mass share (and its coupling to node 2) is excluded
+  // by construction -- see ResponseSpectrumSolver.hpp's formulation note.
+  MatrixXd Mff = independentGlobalMass(L, n).bottomRightCorner(6 * n, 6 * n);
+  Eigen::VectorXd iotaFree = Eigen::VectorXd::Zero(6 * n);
+  for (int i = 0; i < n; ++i) iotaFree(6 * i + 1) = 1.0;
+  double expected = iotaFree.dot(Mff * iotaFree);
+  EXPECT_GT(expected, 0.0);
+  EXPECT_LT(expected, RHO_A * L); // strictly less than the full physical mass
+  EXPECT_NEAR(r.total_mass, expected, 1e-9 * expected);
 }
 
 TEST(ResponseSpectrum, MassParticipationSumsToOneWithAllModes) {
@@ -103,13 +130,14 @@ TEST(ResponseSpectrum, SingleElementModeMatchesIndependentDenseComputation) {
   ASSERT_EQ(r.modes.size(),6u);
 
   // Independent: dense K,M (6x6 free system), generalized eigensolve, mass
-  // normalization, participation factor using the FULL 12-dof iota/M
-  // (ground motion also acts on the restrained node), then compare.
+  // normalization, participation factor using iota restricted to the FREE
+  // DOFs only (node 1's UY is restrained, so it is 0 there -- see
+  // ResponseSpectrumSolver.hpp's formulation note), then compare.
   Mat12 Kg=independentLocalK(L), Mg=independentLocalMass(L);
   Eigen::MatrixXd Kff=Kg.block(6,6,6,6), Mff=Mg.block(6,6,6,6);
   Eigen::GeneralizedSelfAdjointEigenSolver<Eigen::MatrixXd> ges(Kff,Mff);
   ASSERT_EQ(ges.info(),Eigen::Success);
-  Eigen::VectorXd iota12=Eigen::VectorXd::Zero(12); iota12(1)=1; iota12(7)=1; // UY at both nodes
+  Eigen::VectorXd iota12=Eigen::VectorXd::Zero(12); iota12(7)=1; // UY at node 2 (free) only
   Eigen::VectorXd Miota12=Mg*iota12;
 
   for (int i=0;i<6;++i) {

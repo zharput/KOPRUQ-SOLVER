@@ -33,11 +33,6 @@
 // point rigid link for spatially separated nodes; it models exactly what
 // its primary use case needs -- a bearing/isolator/soil spring at a single
 // point -- and nothing beyond that is claimed or supported.
-inline void checkSpringNodesCoincident(const Eigen::Vector3d& p1, const Eigen::Vector3d& p2) {
-  if (!(p1.allFinite() && p2.allFinite()) || (p2 - p1).norm() > 1e-9)
-    throw Beam3DError(Beam3DErrorCode::InvalidProperty,
-      "spring/link node1 and node2 must be at the same location (see SpringLink.hpp)");
-}
 #include "../core/Types.hpp"
 #include "Beam3D.hpp"
 #include <algorithm>
@@ -53,6 +48,12 @@ struct SpringConnection { Id id{}, node1{}, node2{}; Eigen::Vector3d local_x{1,0
 
 inline bool springStiffnessValid(const SpringStiffness& k) {
   return std::all_of(k.begin(), k.end(), [](Real v) { return std::isfinite(v) && v >= 0; });
+}
+
+inline void checkSpringNodesCoincident(const Eigen::Vector3d& p1, const Eigen::Vector3d& p2) {
+  if (!(p1.allFinite() && p2.allFinite()) || (p2 - p1).norm() > 1e-9)
+    throw Beam3DError(Beam3DErrorCode::InvalidProperty,
+      "spring/link node1 and node2 must be at the same location (see SpringLink.hpp)");
 }
 
 inline Beam3DAxes springAxes(const Eigen::Vector3d& localX, const Eigen::Vector3d& referenceY) {

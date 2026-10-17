@@ -102,6 +102,16 @@ linking, no executables).
   Phase 6.2's code sits on `ci/phase6.2-response-spectrum`, unmerged into
   `main`, pending a clean CI run.
 
+### Update 2026-10-17 -- persists on a new day, not a daily quota
+Retried with a fresh empty commit (`96447ee`) on 2026-10-17: run `39020322855`
+failed identically in all 4 jobs -- 2-second lifetime, `runner_id: 0`, zero
+steps. Since this is a new UTC day and the pattern is unchanged, it is not a
+daily-reset quota; most likely a monthly Actions spending/included-minutes
+limit that will not clear itself before the user acts (or the next billing
+cycle). Stopped retrying again; waiting for the user to check
+https://github.com/settings/billing (or the repo's organization billing
+page) before attempting CI again.
+
 ## Known blocking issue (worked around, not root-caused)
 - CMake/vcpkg compiler detection fails with permission denied for `CMakeCXXCompilerId.exe`
   when vcpkg's manifest step re-runs its own compiler detection during

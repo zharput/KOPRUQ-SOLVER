@@ -707,16 +707,65 @@ status`); no data loss.
   (dispatchable going forward).
 - Milestone status: **Stage 2 COMPLETE (verified).**
 
+### 2026-10-17 — Stage 3: concurrency, permissions review, final comparison
+- Added `concurrency: group: ${{ github.workflow }}-${{ github.ref }}` to
+  both workflows: `ci.yml` with `cancel-in-progress: true` (concrete,
+  observed waste this prevents: this session pushed many commits in quick
+  succession to the same branch while iterating, and every superseded run
+  kept consuming minutes to completion anyway), `release.yml` with
+  `cancel-in-progress: false` (queue instead -- a half-finished release
+  silently cancelled by a second dispatch is more surprising than useful,
+  and releases are infrequent enough that queuing is never a real wait).
+- Permissions reviewed: both workflows already carried only
+  `permissions: contents: read`, sufficient for checkout, cmake/ctest,
+  cache restore/save and `actions/upload-artifact`; no job needs anything
+  broader. No change needed.
+- The push+pull_request double-trigger case (a PR opened from a `ci/**`
+  branch would fire both events for the same commit) is left as-is: this
+  session's workflow never opens PRs against this repo, relying on the
+  branch-push trigger alone, and narrowing it would break that pattern for
+  no measured benefit. Documented as an accepted, currently-dormant
+  tradeoff, not silently changed.
+- Verified (run `39045959939`): all 3 `ci.yml` jobs green after adding the
+  concurrency block; merged to `main` (fast-forward).
+- Milestone status: **Stage 3 COMPLETE (verified). GitHub Actions
+  optimization (all 3 stages) COMPLETE.**
+
+## GitHub Actions optimization — final before/after comparison (2026-10-17)
+Measured from this session's actual GitHub API data (job
+`started_at`/`completed_at`), not estimated.
+
+| | Before (single `ci.yml`, Windows, every push/PR) | After (`ci.yml` Ubuntu + `release.yml` Windows) |
+|---|---|---|
+| Routine push/PR | 4 jobs (debug/release/asan/analyze), windows-2022, 2x multiplier | 3 jobs (debug/release/asan), ubuntu-latest, 1x multiplier |
+| Measured cost per routine run | ~62 billable min (session average, 38 runs, 1,159.6 wall-clock min total) | ~24.7 billable min (run `39035585549`: 24.68 wall-clock min x 1x) |
+| Full MSVC matrix (/analyze, real .exe) | Every push/PR | Only `workflow_dispatch` or a `v*.*.*` tag (measured ~103-110 billable min per invocation, runs `39037599675`/`39038848289`) |
+| Superseded runs on rapid re-push | Ran to completion anyway | Cancelled immediately (`cancel-in-progress`) |
+| `.exe` artifacts | Discarded after each job | Downloadable (`kopruq-solver-windows-x64`, verified exact contents) |
+| vcpkg tool (clone + bootstrap compile) | Repeated every run | Skipped on a cache hit |
+
+**This session's actual trigger pattern (46 pushes in <24h) under each system:**
+- Before (measured): ~2,319 billable minutes -- exceeded the GitHub Free
+  plan's entire 2,000/month allowance in under a day; the confirmed cause
+  of the runner-provisioning failures.
+- After (projected from measured per-run costs, same 46 pushes + the 2
+  release.yml verification runs actually used): 46 x 24.7 + 2 x 106 ~=
+  1,136 + 212 = **~1,348 billable minutes, a ~42% cut even under this
+  unusually heavy same-day iteration pattern**, and the new
+  `cancel-in-progress` behavior (which did not exist in the "before"
+  measurement) would reduce it further for any future session that
+  pushes corrections in quick succession the way this one repeatedly did.
+- For an ordinary usage pattern (routine pushes dominate, releases rare --
+  e.g. 100 pushes + 5 releases a month): before ~6,200 billable min/month
+  (3x over quota); after ~100x24.7 + 5x106 = 2,470 + 530 = **~3,000
+  billable min/month, a ~52% cut**, bringing routine usage much closer to
+  the Free plan's 2,000-minute allowance (the remaining gap is primarily
+  the number of actual release builds, which the user controls directly
+  by choosing when to dispatch/tag).
+
 ## Next autonomous action
-Awaiting user approval (mandatory checkpoint; this task also has its own
-explicit per-stage approval gate). Stages 1 and 2 of the Actions
-optimization are complete and verified. Proposed next:
-1. **Stage 3**: trigger/permissions review (confirm no further
-   push/pull_request duplication, `permissions: contents: read` is
-   sufficient in both workflows) and a measured, final before/after
-   minute comparison using the actual run data gathered across this
-   session.
-Separately, Phase 6.2 (response spectrum analysis) remains written but
-unverified on `ci/phase6.2-response-spectrum`; now that CI runners work
-again, it can be resumed -- before, after, or interleaved with Stage 3,
-whichever the user prefers.
+Awaiting user approval (mandatory checkpoint). The GitHub Actions
+optimization (all 3 approved stages) is complete and verified. Phase 6.2
+(response spectrum analysis) remains written but unverified on
+`ci/phase6.2-response-spectrum`, now that CI runners work again; say
+whether to resume it next, or move to a different roadmap item.

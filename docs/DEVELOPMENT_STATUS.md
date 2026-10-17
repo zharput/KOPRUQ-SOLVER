@@ -875,16 +875,43 @@ Measured from this session's actual GitHub API data (job
   attempt, 125/125 each. Merged to `main` (fast-forward).
 - Milestone status: **Phase 6.2b COMPLETE (verified).**
 
+### 2026-10-17 — Scope change: Phase 6.3, 7, 8 cancelled (user decision)
+- User instruction (verbatim intent): cancel Phase 7, Phase 8, and Phase
+  6.3 in `docs/SOLVER_ROADMAP.md`; these will not be implemented. Revise
+  the plan accordingly and rewrite the roadmap.
+- Cancelled, removed from the roadmap (not deferred):
+  - **Phase 6.3** -- linear buckling / P-Delta (geometric stiffness).
+  - **Phase 7** -- time-dependent and nonlinear analysis (time-history
+    integration/damping, geometric/material nonlinearity, incremental-
+    iterative convergence controls).
+  - **Phase 8** -- bridge engineering capabilities (construction stages,
+    prestressing/creep/shrinkage/temperature, bearings/soil springs,
+    moving loads/influence lines, bridge-specific load combinations).
+- Nothing already implemented depended on these phases (6.1/6.2/6.2b are
+  unaffected; no code references buckling, time-history, or any
+  bridge-specific module), so this is a pure scope reduction with no code
+  impact.
+- `docs/SOLVER_ROADMAP.md` rewritten: the former Phase 9 (high-performance
+  production solver), Phase 10 (KOPRUQ integration) and Phase 11
+  (AI-assisted optimization) are renumbered to Phase 7, 8 and 9
+  respectively, since nothing in them depended on the cancelled phases.
+  A "Scope change" note at the top of the roadmap records the decision
+  and points here for the full rationale.
+- The `Product objective` paragraph ("initially optimized for bridges")
+  was left unchanged -- the user cancelled specific roadmap phases, not
+  the mission statement; flag for a future explicit decision if that
+  statement should also be revised given Phase 8's cancellation.
+- Milestone status: **Scope change recorded and applied; no code
+  changed.**
+
 ## Next autonomous action
 Awaiting user approval (mandatory checkpoint). Phase 3.2, all of Phase 4
 (4.1-4.4), Phase 5.1, and all of Phase 6 done so far (6.1, 6.1b, 6.2, 6.2b)
-are complete and verified. Candidate next increments (say which, or
-propose a different scope):
+are complete and verified; Phase 6.3, 7 and 8 are cancelled. Candidate next
+increments (say which, or propose a different scope):
 1. **Phase 5.2 -- end springs and eccentric offsets**, generalizing 5.1.
-2. **Phase 6.3 -- linear buckling / P-Delta (geometric stiffness)**, the
-   remaining item in the roadmap's Phase 6.
-3. **Phase 8 -- bridge-specific loading** (moving loads/influence lines,
-   bearings, construction stages).
-4. Cut an actual `v0.1.0`-style release tag now, to verify `release.yml`'s
+2. **Phase 7 (renumbered) -- high-performance production solver**: sparse
+   direct/iterative strategy, optional SuiteSparse, profiling/parallelism.
+3. Cut an actual `v0.1.0`-style release tag now, to verify `release.yml`'s
    tag trigger end-to-end (it has only been verified via
    `workflow_dispatch`-equivalent branch pushes so far, never a real tag).

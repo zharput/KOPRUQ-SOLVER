@@ -14,6 +14,9 @@ per node.
   factorization; load combinations by superposition.
 - Results: displacements, support reactions, element local/global end
   forces, element and global equilibrium checks, strain energy, residuals.
+- Beam end releases (hinges) by static condensation. Modal (free-vibration)
+  analysis and single-direction response spectrum analysis (SRSS
+  combination; the spectrum shape is caller-supplied, not computed).
 - JSON model input and results output with path-qualified validation errors
   and reproducible metadata (`schemas/`, `examples/`).
 
@@ -24,6 +27,8 @@ and roadmap: `docs/DEVELOPMENT_STATUS.md`, `docs/SOLVER_ROADMAP.md`.
 
 ```
 kopruq_solver_cli solve examples/portal_frame.json -o results.json
+kopruq_solver_cli modal examples/portal_frame.json -n 6
+kopruq_solver_cli spectrum examples/portal_frame.json
 kopruq_solver_cli --version
 ```
 

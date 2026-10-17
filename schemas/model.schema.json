@@ -56,6 +56,12 @@
       "items": {
         "$ref": "#/$defs/combination"
       }
+    },
+    "response_spectra": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/response_spectrum_case"
+      }
     }
   },
   "required": [
@@ -492,6 +498,61 @@
         }
       },
       "required": [],
+      "additionalProperties": false
+    },
+    "response_spectrum_case": {
+      "type": "object",
+      "description": "A named modal/response-spectrum analysis request; the spectrum shape itself is caller-supplied, not computed by the solver.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "direction": {
+          "enum": [
+            "x",
+            "y",
+            "z"
+          ]
+        },
+        "num_modes": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 6
+        },
+        "spectrum": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "$ref": "#/$defs/spectrum_point"
+          }
+        }
+      },
+      "required": [
+        "name",
+        "direction",
+        "spectrum"
+      ],
+      "additionalProperties": false
+    },
+    "spectrum_point": {
+      "type": "object",
+      "properties": {
+        "period": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "seconds"
+        },
+        "sa": {
+          "type": "number",
+          "minimum": 0,
+          "description": "spectral acceleration, m/s^2"
+        }
+      },
+      "required": [
+        "period",
+        "sa"
+      ],
       "additionalProperties": false
     }
   }

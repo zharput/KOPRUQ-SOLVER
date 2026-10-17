@@ -1,6 +1,7 @@
 #pragma once
 // Command-line front end, kept separate from main() so it can be tested in-process.
 #include "ModalResultsJson.hpp"
+#include "ResponseSpectrumResultsJson.hpp"
 #include "ResultsJson.hpp"
 #include "Sha256.hpp"
 #include <fstream>
@@ -15,6 +16,8 @@ inline constexpr const char* cli_usage =
   "Usage: kopruq_solver_cli [--version|--help]\n"
   "       kopruq_solver_cli solve <model.json> [-o <results.json>]\n"
   "       kopruq_solver_cli modal <model.json> [-o <results.json>] [-n <num-modes>]\n"
+  "       kopruq_solver_cli spectrum <model.json> [-o <results.json>]\n"
+  "                         (runs every \"response_spectra\" entry defined in the model)\n"
   "\n"
   "Exit codes: 0 success, 1 analysis failed (results still written),\n"
   "            2 usage error, 3 invalid model, 4 file I/O error.\n";
@@ -89,6 +92,21 @@ inline int runModal(const std::vector<std::string>& args, std::ostream& out, std
   return 0;
 }
 
+inline int runSpectrum(const std::vector<std::string>& args, std::ostream& out, std::ostream& err) {
+  CommonArgs a; if (!parseArgs("spectrum", args, err, a)) return 2;
+  std::string text; ModelInput model; int code;
+  if (!readModelFile(a.modelPath, err, text, model, code)) return code;
+  std::vector<std::pair<std::string, ResponseSpectrumResults>> results;
+  results.reserve(model.response_spectra.size());
+  for (const auto& rc : model.response_spectra)
+    results.emplace_back(rc.name, ResponseSpectrumSolver::solve(model.model, model.restraints, rc.input));
+  const json document_json = writeResponseSpectrumResults(results, sha256Hex(text));
+  const std::string document = document_json.dump(2) + "\n";
+  if (int rc = writeDocument(a.outputPath, document, out, err)) return rc;
+  if (!document_json["status"]["success"].get<bool>()) { err << "analysis failed: " << document_json["status"]["message"].get<std::string>() << '\n'; return 1; }
+  return 0;
+}
+
 } // namespace detail
 
 inline int runCli(const std::vector<std::string>& args, std::ostream& out, std::ostream& err) {
@@ -96,6 +114,7 @@ inline int runCli(const std::vector<std::string>& args, std::ostream& out, std::
   if (command == "--version" || command == "version") { out << "KOPRUQ-SOLVER " << version << '\n'; return 0; }
   if (command == "--help" || command == "help") { out << cli_usage; return 0; }
   if (command == "solve") return detail::runSolve(args, out, err);
+  if (command == "spectrum") return detail::runSpectrum(args, out, err);
   if (command == "modal") return detail::runModal(args, out, err);
   err << "Unknown command: " << command << '\n'; return 2;
 }

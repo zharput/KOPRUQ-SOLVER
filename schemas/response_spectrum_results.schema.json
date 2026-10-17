@@ -1,0 +1,260 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kopruq.local/schemas/response_spectrum_results/1",
+  "title": "KOPRUQ-SOLVER response spectrum analysis results, format version 1",
+  "description": "Written by kopruq::io::writeResponseSpectrumResults (include/kopruq/io/ResponseSpectrumResultsJson.hpp). Separate from kopruq-results and kopruq-modal-results. Deterministic: no timestamps, sorted keys, round-trip doubles. Omits each mode's full per-node/per-element results (C++ API only); keeps the per-mode summary and the SRSS-combined peak values.",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "const": "kopruq-response-spectrum-results"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "solver": {
+          "const": "KOPRUQ-SOLVER"
+        },
+        "solver_version": {
+          "type": "string"
+        },
+        "model_schema": {
+          "const": "kopruq-model"
+        },
+        "model_schema_version": {
+          "const": 1
+        },
+        "model_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "units": {
+          "type": "object",
+          "properties": {
+            "length": {
+              "const": "m"
+            },
+            "force": {
+              "const": "kN"
+            },
+            "moment": {
+              "const": "kNm"
+            },
+            "angle": {
+              "const": "rad"
+            },
+            "frequency": {
+              "const": "Hz"
+            },
+            "angular_frequency": {
+              "const": "rad/s"
+            }
+          },
+          "required": [
+            "length",
+            "force",
+            "moment",
+            "angle",
+            "frequency",
+            "angular_frequency"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "solver",
+        "solver_version",
+        "model_schema",
+        "model_schema_version",
+        "model_sha256",
+        "units"
+      ],
+      "additionalProperties": false
+    },
+    "status": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "code": {
+          "enum": [
+            "Success",
+            "InvalidModel",
+            "NoRestraints",
+            "SingularSystem",
+            "NonFiniteSolution",
+            "NumericalFailure"
+          ]
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "success",
+        "code",
+        "message"
+      ],
+      "additionalProperties": false
+    },
+    "cases": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/case"
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "metadata",
+    "status",
+    "cases"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "case": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "status": {
+          "type": "object",
+          "properties": {
+            "success": {
+              "type": "boolean"
+            },
+            "code": {
+              "enum": [
+                "Success",
+                "InvalidModel",
+                "NoRestraints",
+                "SingularSystem",
+                "NonFiniteSolution",
+                "NumericalFailure"
+              ]
+            },
+            "message": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "success",
+            "code",
+            "message"
+          ],
+          "additionalProperties": false
+        },
+        "total_mass": {
+          "type": "number"
+        },
+        "total_mass_participation_ratio": {
+          "type": "number"
+        },
+        "modes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/mode_summary"
+          }
+        },
+        "combined_nodes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "displacement": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 6,
+                "maxItems": 6
+              },
+              "reaction": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 6,
+                "maxItems": 6
+              }
+            },
+            "required": [
+              "id",
+              "displacement",
+              "reaction"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "combined_elements": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "global_end_forces": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 12,
+                "maxItems": 12
+              }
+            },
+            "required": [
+              "id",
+              "global_end_forces"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "name",
+        "status"
+      ],
+      "additionalProperties": false,
+      "description": "total_mass, total_mass_participation_ratio, modes, combined_nodes and combined_elements are present only when status.success is true"
+    },
+    "mode_summary": {
+      "type": "object",
+      "properties": {
+        "period_s": {
+          "type": "number"
+        },
+        "frequency_hz": {
+          "type": "number"
+        },
+        "participation_factor": {
+          "type": "number"
+        },
+        "effective_mass": {
+          "type": "number"
+        },
+        "mass_participation_ratio": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "period_s",
+        "frequency_hz",
+        "participation_factor",
+        "effective_mass",
+        "mass_participation_ratio"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

@@ -7,6 +7,7 @@
 // silently fall back to defaults. Units are the solver's canonical units
 // (m, kN, rad); no unit conversion is performed.
 #include "../solvers/LinearStaticSolver.hpp"
+#include "../solvers/ResponseSpectrumSolver.hpp"
 #include <nlohmann/json.hpp>
 #include <algorithm>
 #include <cmath>
@@ -28,7 +29,7 @@ inline constexpr int model_schema_version = 1;
 // Keys accepted in each JSON object. io_tests checks these against schemas/model.schema.json.
 struct KeySpec { std::vector<std::string> required, optional; };
 namespace model_keys {
-inline const KeySpec top{{"schema","schema_version","nodes","materials","sections","beams","supports"},{"units","load_cases","combinations"}};
+inline const KeySpec top{{"schema","schema_version","nodes","materials","sections","beams","supports"},{"units","load_cases","combinations","response_spectra"}};
 inline const KeySpec units{{},{"length","force","angle"}};
 inline const KeySpec node{{"id","x","y","z"},{}};
 inline const KeySpec material{{"id","elastic_modulus","poisson_ratio"},{"unit_weight"}};
@@ -42,6 +43,8 @@ inline const KeySpec member_load{{"element","axes","direction","w1"},{"w2","star
 inline const KeySpec point_load{{"element","axes","direction","value","position"},{"kind"}};
 inline const KeySpec combination{{"name","terms"},{}};
 inline const KeySpec combination_term{{"case","factor"},{}};
+inline const KeySpec response_spectrum_case{{"name","direction","spectrum"},{"num_modes"}};
+inline const KeySpec spectrum_point{{"period","sa"},{}};
 }
 
 struct InputIssue { std::string path, message; };
@@ -57,11 +60,14 @@ class ModelInputError : public std::runtime_error {
   }
 };
 
+struct ResponseSpectrumCase { std::string name; ResponseSpectrumInput input; };
+
 struct ModelInput {
   Model model;
   LinearStaticSolver::Restraints restraints;
   std::vector<LoadCase> load_cases;
   std::vector<LoadCombination> combinations;
+  std::vector<ResponseSpectrumCase> response_spectra;
 };
 
 namespace detail {
@@ -85,6 +91,7 @@ class ModelReader {
     readSupports(root, R, in);
     readLoadCases(root, R, in);
     readCombinations(root, R, in);
+    readResponseSpectra(root, R, in);
     return in;
   }
 
@@ -472,6 +479,57 @@ class ModelReader {
       if (ok) in.combinations.push_back(std::move(cb));
     }
   }
+
+  void readResponseSpectra(const json& root, const std::string& R, ModelInput& in) {
+    const json* a = array(root, R, "response_spectra");
+    if (!a) return;
+    std::set<std::string> names;
+    for (std::size_t i = 0; i < a->size(); ++i) {
+      const std::string p = at(key(R, "response_spectra"), i);
+      const json& c = (*a)[i];
+      if (!object(c, p, model_keys::response_spectrum_case)) continue;
+      ResponseSpectrumCase rc;
+      bool ok = true;
+      if (string(c, p, "name", rc.name)) {
+        if (rc.name.empty()) { issue(key(p, "name"), "must not be empty"); ok = false; }
+        else if (!names.insert(rc.name).second) { issue(key(p, "name"), "duplicate response spectrum name \"" + rc.name + "\""); ok = false; }
+      } else ok = false;
+      std::string dir;
+      if (string(c, p, "direction", dir)) {
+        if (dir == "x") rc.input.direction = 0; else if (dir == "y") rc.input.direction = 1; else if (dir == "z") rc.input.direction = 2;
+        else { issue(key(p, "direction"), "must be \"x\", \"y\" or \"z\""); ok = false; }
+      } else ok = false;
+      rc.input.num_modes = 6;
+      if (field(c, "num_modes")) {
+        Real nm{};
+        if (number(c, p, "num_modes", nm)) {
+          if (!(nm >= 1) || nm != static_cast<int>(nm)) { issue(key(p, "num_modes"), "must be a positive integer"); ok = false; }
+          else rc.input.num_modes = static_cast<int>(nm);
+        } else ok = false;
+      }
+      if (const json* sp = field(c, "spectrum")) {
+        if (!sp->is_array() || sp->size() < 2) { issue(key(p, "spectrum"), "must be an array of at least 2 points"); ok = false; }
+        else {
+          for (std::size_t k = 0; k < sp->size(); ++k) ok = readSpectrumPoint((*sp)[k], at(key(p, "spectrum"), k), rc.input) && ok;
+          for (std::size_t k = 1; ok && k < rc.input.spectrum.size(); ++k)
+            if (!(rc.input.spectrum[k].period_s > rc.input.spectrum[k - 1].period_s)) { issue(key(p, "spectrum"), "periods must be strictly increasing"); ok = false; }
+        }
+      } else ok = false;
+      if (ok) in.response_spectra.push_back(std::move(rc));
+    }
+  }
+
+  bool readSpectrumPoint(const json& j, const std::string& p, ResponseSpectrumInput& input) {
+    if (!object(j, p, model_keys::spectrum_point)) return false;
+    Real period{}, sa{};
+    bool ok = number(j, p, "period", period);
+    ok = number(j, p, "sa", sa) && ok;
+    if (!ok) return false;
+    if (!(period > 0)) { issue(key(p, "period"), "must be greater than 0"); ok = false; }
+    if (!(sa >= 0)) { issue(key(p, "sa"), "must be >= 0"); ok = false; }
+    if (ok) input.spectrum.push_back({period, sa});
+    return ok;
+  }
 };
 
 } // namespace detail
@@ -529,6 +587,12 @@ inline json writeModel(const ModelInput& in) {
     json c = {{"name", cb.name}, {"terms", json::array()}};
     for (const auto& [idx, f] : cb.terms) c["terms"].push_back({{"case", in.load_cases.at(idx).name}, {"factor", f}});
     j["combinations"].push_back(c);
+  }
+  j["response_spectra"] = json::array();
+  for (const auto& rc : in.response_spectra) {
+    json c = {{"name", rc.name}, {"direction", detail::axisName(rc.input.direction)}, {"num_modes", rc.input.num_modes}, {"spectrum", json::array()}};
+    for (const auto& pt : rc.input.spectrum) c["spectrum"].push_back({{"period", pt.period_s}, {"sa", pt.spectral_acceleration}});
+    j["response_spectra"].push_back(c);
   }
   return j;
 }

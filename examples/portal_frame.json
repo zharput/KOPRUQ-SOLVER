@@ -33,5 +33,10 @@
   "combinations": [
     {"name": "ULS1", "terms": [{"case": "G", "factor": 1.35}, {"case": "Q", "factor": 1.5}]},
     {"name": "ULS2", "terms": [{"case": "G", "factor": 1.0}, {"case": "W", "factor": 1.5}, {"case": "Q", "factor": 1.05}]}
+  ],
+  "response_spectra": [
+    {"name": "EQX", "direction": "x", "num_modes": 8,
+     "spectrum": [{"period": 0.001, "sa": 1.0}, {"period": 0.15, "sa": 2.5}, {"period": 0.6, "sa": 2.5},
+                  {"period": 2.0, "sa": 0.75}, {"period": 100.0, "sa": 0.05}]}
   ]
 }

@@ -117,7 +117,13 @@ loads, unstable-combination rejection, JSON `releases`. Debug/Release/ASan
 condensation for released ends, free-DOF generalized eigenproblem, mass-
 normalized mode shapes. Debug/Release/ASan 104/104.
 - ~~Eigenvalue/modal analysis~~ with mass matrix validation, mode normalization, rigid-body modes.
-- Response spectrum and modal combination methods with code-specific configuration isolated from solver kernel.
+**6.2 single-direction response spectrum analysis — COMPLETE (verified,
+CI run `39051080335`, commits `b207adf`, `5807f51`):** `ResponseSpectrumSolver`
+on top of 6.1's modes; caller-supplied spectrum points only (spectrum shape
+itself stays outside the solver kernel); SRSS modal combination; CQC and
+multi-direction combination rules not yet implemented. 116/116 on
+`ubuntu-latest` (gcc-debug/release/asan).
+- ~~Response spectrum and modal combination methods~~ with code-specific configuration isolated from solver kernel.
 - Linear buckling and P–Delta/geometric stiffness as separate verified capabilities.
 
 ### Phase 7 — Time-dependent and nonlinear analysis

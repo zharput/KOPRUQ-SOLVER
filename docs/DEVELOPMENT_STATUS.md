@@ -810,9 +810,59 @@ Measured from this session's actual GitHub API data (job
   the number of actual release builds, which the user controls directly
   by choosing when to dispatch/tag).
 
+### 2026-10-17 — Phase 6.2 verified and merged (resumed after the CI work)
+- Merged `main` into `ci/phase6.2-response-spectrum` to pick up the new
+  Ubuntu/Windows CI split; pushed, and `ci.yml` ran on `ubuntu-latest` for
+  the first time this branch's code had ever actually completed a run
+  (every earlier attempt failed before reaching any test: first on the
+  spectrum-range bug fixed on 2026-10-16, then on the account-wide Actions
+  billing blocker).
+- Result: 115/116 passed; `ResponseSpectrum.MassParticipationSumsToOne-
+  WithAllModes` failed identically in all 3 jobs (deterministic, not a
+  sanitizer/platform issue). Root cause: a genuine formulation gap, not a
+  portability one -- `iota` was 1 at every translational DOF *including
+  restrained ones*, so `Gamma_i = phi_i^T*M*iota` picked up a mass-
+  coupling term through the restrained DOFs that no finite set of
+  free-DOF modes can ever fully capture; `mass_participation_ratio`
+  summed to ~0.9265, not 1.0, even with every free-DOF mode included.
+- Fixed (`b207adf`): `iota` is now 1 only at free translational DOFs
+  matching `direction` (checked via DOF index mod 6), 0 at rotations and
+  restrained DOFs -- matching the modal participating-mass convention
+  most structural software reports (SAP2000, ETABS). `total_mass` is now
+  the free DOFs' own mass in that direction, not the whole structure's
+  physical mass (the restrained supports' mass share is excluded by
+  construction, which is the point of the fix). Updated
+  `ResponseSpectrumSolver.hpp`'s formulation comment accordingly.
+- Test-side (`5807f51`): `TotalMassMatchesIndependentPhysicalTotal`
+  renamed to `TotalMassMatchesIndependentFreeDofReduction` and rewritten
+  to independently assemble the global mass matrix, drop the restrained
+  node, and compute `iota_free^T*Mff*iota_free` (asserted strictly less
+  than the full physical mass); `SingleElementModeMatchesIndependent-
+  DenseComputation`'s `iota` corrected to the free node only.
+- Re-run (`39051080335`): **116/116 passed in all 3 jobs** (`gcc-debug`,
+  `gcc-release`, `gcc-asan`). Merged to `main` (fast-forward).
+- Note on verification going forward: per the new CI architecture (Stages
+  1-3), Ubuntu `ci.yml` is now the routine verification evidence for every
+  change, including this one; the full Windows MSVC matrix in
+  `release.yml` is reserved for actual release events (manual dispatch or
+  a version tag), not run per merge, by design -- this merge intentionally
+  does not have a corresponding Windows run, consistent with the
+  cost-reduction goal just completed.
+- Milestone status: **Phase 6.2 COMPLETE (verified).**
+
 ## Next autonomous action
 Awaiting user approval (mandatory checkpoint). The GitHub Actions
-optimization (all 3 approved stages) is complete and verified. Phase 6.2
-(response spectrum analysis) remains written but unverified on
-`ci/phase6.2-response-spectrum`, now that CI runners work again; say
-whether to resume it next, or move to a different roadmap item.
+optimization (all 3 approved stages) and Phase 6.2 are both complete and
+verified. Phase 3.2, all of Phase 4 (4.1-4.4), Phase 5.1, and Phase 6
+(6.1, 6.1b, 6.2) are now complete. Candidate next increments (say which, or
+propose a different scope):
+1. **Phase 6.2b -- JSON/CLI support for response spectrum analysis**,
+   mirroring 6.1b's pattern (closes the gap this phase just created).
+2. **Phase 5.2 -- end springs and eccentric offsets**, generalizing 5.1.
+3. **Phase 6.3 -- linear buckling / P-Delta (geometric stiffness)**, the
+   remaining item in the roadmap's Phase 6.
+4. **Phase 8 -- bridge-specific loading** (moving loads/influence lines,
+   bearings, construction stages).
+5. Cut an actual `v0.1.0`-style release tag now, to verify `release.yml`'s
+   tag trigger end-to-end (it has only been verified via
+   `workflow_dispatch`-equivalent branch pushes so far, never a real tag).

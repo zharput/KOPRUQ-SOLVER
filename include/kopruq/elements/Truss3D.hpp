@@ -31,11 +31,23 @@
 
 namespace kopruq {
 
-// Release pattern that reduces a Beam3D to a pin-ended 3D truss member:
-// RX, RY, RZ released at both ends; UX, UY, UZ retained at both ends.
+// Release pattern that reduces a Beam3D to a pin-ended 3D truss member.
+// RY, RZ (bending) are released at both ends, which is what drops every
+// transverse/bending stiffness term to zero (see file header). RX
+// (torsion) is released at node2 only, not both ends: releasing it at
+// either end alone already drives the retained torsional stiffness to
+// exactly zero too (the beam's torsion block is rank-1, k*[[1,-1],[-1,1]],
+// so condensing out one of its two DOFs always zeroes the other), but
+// releasing it at BOTH ends creates a genuine, separate zero-energy
+// mechanism -- free relative spin about the member's own axis, decoupled
+// from everything else -- which Releases.hpp's stability check correctly
+// rejects as unstable. The asymmetric choice gets the same zero torsional
+// stiffness without tripping that (correct) safety check. Either way, a
+// node connected only by trusses still has no rotational stiffness source
+// and must have its RX/RY/RZ restrained, exactly as documented below.
 inline Releases trussReleases() {
   Releases r{};
-  for (int i : {3, 4, 5, 9, 10, 11}) r[i] = true;
+  for (int i : {4, 5, 9, 10, 11}) r[i] = true;
   return r;
 }
 

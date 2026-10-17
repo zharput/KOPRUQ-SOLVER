@@ -3,6 +3,7 @@
 #include "../assembly/MatrixAssembler.hpp"
 #include "../loads/Loads.hpp"
 #include "../elements/Releases.hpp"
+#include "../elements/Offsets.hpp"
 #include "../results/AnalysisResults.hpp"
 #include <Eigen/SparseCholesky>
 #include <map>
@@ -63,7 +64,7 @@ static AppliedLoads assembleLoadCase(const Model&m,const DofManager&dm,const Loa
     const auto&e=*it->second;
     const Node*n1=detail::find_by_id(nodes,e.node1),*n2=detail::find_by_id(nodes,e.node2);
     if(!n1||!n2)throw AssemblyError(AssemblyErrorCode::MissingNode,"element references missing node");
-    Frame f{&e,Beam3DGeometry{{n1->x,n1->y,n1->z},{n2->x,n2->y,n2->z},e.reference_y},{},{},0,anyReleased(e.releases),{}};
+    Frame f{&e,Beam3DGeometry{Eigen::Vector3d(n1->x,n1->y,n1->z)+e.offset1,Eigen::Vector3d(n2->x,n2->y,n2->z)+e.offset2,e.reference_y},{},{},0,anyReleased(e.releases),{}};
     f.ax=Beam3D::axes(f.g);
     f.R.row(0)=f.ax.x.transpose(); f.R.row(1)=f.ax.y.transpose(); f.R.row(2)=f.ax.z.transpose();
     f.L=(f.g.node2-f.g.node1).norm();
@@ -79,7 +80,10 @@ static AppliedLoads assembleLoadCase(const Model&m,const DofManager&dm,const Loa
     const auto&e=*f.e;
     auto d=dm.element_dofs(e.node1,e.node2);
     const detail::Vec12 fc=f.released?condensedLoad(f.kl,e.releases,eff.equivalent):eff.equivalent;
-    for(int b=0;b<4;++b){Eigen::Vector3d v=f.R.transpose()*fc.segment<3>(3*b);for(int i=0;i<3;++i)a.F((Eigen::Index)d[3*b+i])+=v(i);}
+    Beam3DVector pointLoad;
+    for(int b=0;b<4;++b) pointLoad.segment<3>(3*b)=f.R.transpose()*fc.segment<3>(3*b);
+    Beam3DVector nodeLoad=offsetTransform(e.offset1,e.offset2).transpose()*pointLoad;
+    for(int i=0;i<12;++i)a.F((Eigen::Index)d[i])+=nodeLoad(i);
     Eigen::Vector3d fg=f.R.transpose()*eff.force, mg=f.R.transpose()*eff.moment_node1;
     auto&el=a.elements[e.id];
     el.equivalent_local+=eff.equivalent; el.force+=fg; el.moment_node1+=mg;
@@ -118,10 +122,10 @@ static AnalysisResults recoverAssembled(const Model&m,const Restraints&rs,const 
   std::map<Id,const Material*>ma;for(const auto&x:m.materials)ma[x.id]=&x;std::map<Id,const Section*>se;for(const auto&x:m.sections)se[x.id]=&x;
   for(const auto&e:m.beams){
     const Node*a=detail::find_by_id(nodes,e.node1),*b=detail::find_by_id(nodes,e.node2);auto&p=*ma[e.material];auto&s=*se[e.section];
-    Beam3DGeometry g{{a->x,a->y,a->z},{b->x,b->y,b->z},e.reference_y};Beam3DProperties bp{p.elastic_modulus,p.elastic_modulus/(2*(1+p.poisson_ratio)),s.area,s.Iy,s.Iz,s.J};
+    Beam3DGeometry g{Eigen::Vector3d(a->x,a->y,a->z)+e.offset1,Eigen::Vector3d(b->x,b->y,b->z)+e.offset2,e.reference_y};Beam3DProperties bp{p.elastic_modulus,p.elastic_modulus/(2*(1+p.poisson_ratio)),s.area,s.Iy,s.Iz,s.J};
     auto T=Beam3D::transformation(Beam3D::axes(g));auto kl=Beam3D::localStiffness((g.node2-g.node1).norm(),bp);auto d=dm.element_dofs(e.node1,e.node2);
     auto li=ap.elements.find(e.id);const ElementLoad*el=li==ap.elements.end()?nullptr:&li->second;
-    Eigen::Matrix<Real,12,1>u,ul,kul,fl,fg;for(int i=0;i<12;++i)u(i)=U((Eigen::Index)d[i]);ul=T*u;
+    Eigen::Matrix<Real,12,1>u,upoint,ul,kul,fl,fg;for(int i=0;i<12;++i)u(i)=U((Eigen::Index)d[i]);upoint=offsetTransform(e.offset1,e.offset2)*u;ul=T*upoint;
     Real energy;
     if(anyReleased(e.releases)){
       // Released DOFs: use the element's own end displacements, u_r = K_rr^-1 (f_r - K_ra u_a); their end forces vanish.

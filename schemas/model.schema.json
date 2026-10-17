@@ -228,6 +228,26 @@
         },
         "releases": {
           "$ref": "#/$defs/releases"
+        },
+        "offset1": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3,
+          "default": [0, 0, 0],
+          "description": "Rigid end offset at node1, global axes: vector from node1 to the member's actual end point"
+        },
+        "offset2": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3,
+          "default": [0, 0, 0],
+          "description": "Rigid end offset at node2, global axes: vector from node2 to the member's actual end point"
         }
       },
       "required": [

@@ -114,8 +114,10 @@ class ModelValidator {
       if (!sectionIds_.count(e.section)) { issue(p + ".section", "references unknown section " + std::to_string(e.section)); valid = false; }
       else sec = sections_.at(e.section);
       if (!finite(e.reference_y)) { issue(p + ".reference_y", "must be finite"); valid = false; }
+      if (!finite(e.offset1)) { issue(p + ".offset1", "must be finite"); valid = false; }
+      if (!finite(e.offset2)) { issue(p + ".offset2", "must be finite"); valid = false; }
       if (!valid) continue;
-      Beam3DGeometry g{coords_.at(e.node1), coords_.at(e.node2), e.reference_y};
+      Beam3DGeometry g{coords_.at(e.node1) + e.offset1, coords_.at(e.node2) + e.offset2, e.reference_y};
       try { Beam3D::axes(g); }
       catch (const std::exception& ex) { issue(p, std::string("invalid geometry: ") + ex.what()); continue; }
       if (anyReleased(e.releases)) {

@@ -35,7 +35,7 @@ inline const KeySpec units{{},{"length","force","angle"}};
 inline const KeySpec node{{"id","x","y","z"},{}};
 inline const KeySpec material{{"id","elastic_modulus","poisson_ratio"},{"unit_weight"}};
 inline const KeySpec section{{"id","area","Iy","Iz","J"},{}};
-inline const KeySpec beam{{"id","nodes","material","section"},{"reference_y","releases"}};
+inline const KeySpec beam{{"id","nodes","material","section"},{"reference_y","releases","offset1","offset2"}};
 // A truss is read as a Beam3DConnection with every rotational DOF released (kopruq/elements/Truss3D.hpp);
 // reference_y/releases are not accepted here since the truss's orientation and release pattern are implicit.
 inline const KeySpec truss{{"id","nodes","material","section"},{}};
@@ -294,6 +294,14 @@ class ModelReader {
         if (numbers(b, p, "reference_y", 3, r)) e.reference_y = Eigen::Vector3d(r[0], r[1], r[2]); else ok = false;
       }
       if (const json* rl = field(b, "releases")) ok = readReleases(*rl, key(p, "releases"), e.releases) && ok;
+      if (field(b, "offset1")) {
+        std::vector<Real> r;
+        if (numbers(b, p, "offset1", 3, r)) e.offset1 = Eigen::Vector3d(r[0], r[1], r[2]); else ok = false;
+      }
+      if (field(b, "offset2")) {
+        std::vector<Real> r;
+        if (numbers(b, p, "offset2", 3, r)) e.offset2 = Eigen::Vector3d(r[0], r[1], r[2]); else ok = false;
+      }
       if (!ok) continue;
       bool valid = true;
       for (int k = 0; k < 2; ++k) {
@@ -304,13 +312,13 @@ class ModelReader {
       if (!materialIds_.count(e.material)) { issue(key(p, "material"), "references unknown material " + std::to_string(e.material)); valid = false; }
       if (!sectionIds_.count(e.section)) { issue(key(p, "section"), "references unknown section " + std::to_string(e.section)); valid = false; }
       if (valid) {
-        try { Beam3D::axes(Beam3DGeometry{coords_[e.node1], coords_[e.node2], e.reference_y}); }
+        try { Beam3D::axes(Beam3DGeometry{coords_[e.node1] + e.offset1, coords_[e.node2] + e.offset2, e.reference_y}); }
         catch (const std::exception& ex) { issue(p, std::string("invalid geometry: ") + ex.what()); valid = false; }
       }
       if (valid && anyReleased(e.releases)) {
         const Material& mat = materials_.at(e.material); const Section& sec = sections_.at(e.section);
         Beam3DProperties bp{mat.elastic_modulus, mat.elastic_modulus / (2 * (1 + mat.poisson_ratio)), sec.area, sec.Iy, sec.Iz, sec.J};
-        try { condensedStiffness(Beam3D::localStiffness((coords_[e.node2] - coords_[e.node1]).norm(), bp), e.releases); }
+        try { condensedStiffness(Beam3D::localStiffness(((coords_[e.node2] + e.offset2) - (coords_[e.node1] + e.offset1)).norm(), bp), e.releases); }
         catch (const std::exception& ex) { issue(key(p, "releases"), ex.what()); valid = false; }
       }
       if (!valid) continue;
@@ -602,7 +610,9 @@ inline json writeModel(const ModelInput& in) {
     j["beams"].push_back({{"id", e.id}, {"nodes", {e.node1, e.node2}}, {"material", e.material}, {"section", e.section},
                           {"reference_y", {e.reference_y.x(), e.reference_y.y(), e.reference_y.z()}},
                           {"releases", {{"start", std::array<bool, 6>{e.releases[0], e.releases[1], e.releases[2], e.releases[3], e.releases[4], e.releases[5]}},
-                                        {"end", std::array<bool, 6>{e.releases[6], e.releases[7], e.releases[8], e.releases[9], e.releases[10], e.releases[11]}}}}});
+                                        {"end", std::array<bool, 6>{e.releases[6], e.releases[7], e.releases[8], e.releases[9], e.releases[10], e.releases[11]}}}},
+                          {"offset1", {e.offset1.x(), e.offset1.y(), e.offset1.z()}},
+                          {"offset2", {e.offset2.x(), e.offset2.y(), e.offset2.z()}}});
   j["supports"] = json::array();
   for (const auto& [node, r] : in.restraints) j["supports"].push_back({{"node", node}, {"restraints", r}});
   j["load_cases"] = json::array();

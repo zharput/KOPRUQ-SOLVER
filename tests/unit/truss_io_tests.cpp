@@ -39,8 +39,8 @@ TEST(TrussIo, ParsesIntoReleasedBeamConnection) {
   ])"));
   ASSERT_EQ(in.model.beams.size(), 2u);
   for (const auto& e : in.model.beams) {
-    for (int i : {3,4,5,9,10,11}) EXPECT_TRUE(e.releases[i]) << "index " << i;
-    for (int i : {0,1,2,6,7,8}) EXPECT_FALSE(e.releases[i]) << "index " << i;
+    for (int i : {4,5,9,10,11}) EXPECT_TRUE(e.releases[i]) << "index " << i;
+    for (int i : {0,1,2,3,6,7,8}) EXPECT_FALSE(e.releases[i]) << "index " << i;
   }
 }
 

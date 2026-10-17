@@ -83,7 +83,10 @@ jobs:
           cli=build/linux-release/kopruq_solver_cli
           "$cli" --version
           "$cli" --help
-          "$cli" bogus; code=$?
+          # bash's default `-e` aborts the step on the first nonzero exit, so the
+          # intentionally-failing call must be isolated from it via `||`, not `;`.
+          code=0
+          "$cli" bogus || code=$?
           if [ "$code" -ne 2 ]; then echo "unknown command: expected exit 2, got $code"; exit 1; fi
 
       - name: Benchmarks

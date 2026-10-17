@@ -850,19 +850,41 @@ Measured from this session's actual GitHub API data (job
   cost-reduction goal just completed.
 - Milestone status: **Phase 6.2 COMPLETE (verified).**
 
+### 2026-10-17 — Phase 6.2b: JSON/CLI support for response spectrum analysis
+- Approved: user "devam" without picking among five proposed options;
+  chose the smallest one (closing the gap 6.2 just created, same pattern
+  as 6.1 -> 6.1b) per the "decide and report" rule.
+- Model JSON v1 gains an optional, additive "response_spectra" array:
+  named requests (direction, optional num_modes, a spectrum of
+  {period, sa} points) round-tripping through the same ResponseSpectrumInput
+  the C++ API takes. New, separate "kopruq-response-spectrum-results" v1
+  format (not folded into kopruq-results or kopruq-modal-results): per-mode
+  summary + SRSS-combined peak response, omitting each mode's full
+  per-node/per-element AnalysisResults (C++ API only) to keep the document
+  a practical size. New CLI "spectrum <model.json> [-o <out>]" command.
+  examples/portal_frame.json gained a representative "EQX" case.
+- Files: `include/kopruq/io/ModelJson.hpp`,
+  `include/kopruq/io/ResponseSpectrumResultsJson.hpp` (new),
+  `include/kopruq/io/Cli.hpp`, `schemas/model.schema.json`,
+  `schemas/response_spectrum_results.schema.json` (new),
+  `examples/portal_frame.json`, `README.md`,
+  `tests/unit/spectrum_io_tests.cpp` (new, 9 tests),
+  `tests/unit/io_tests.cpp` (schema check covers the 2 new definitions),
+  `CMakeLists.txt` (+1 CTest CLI run).
+- `ubuntu-latest` (run `39055492002`): all 3 jobs green on the first
+  attempt, 125/125 each. Merged to `main` (fast-forward).
+- Milestone status: **Phase 6.2b COMPLETE (verified).**
+
 ## Next autonomous action
-Awaiting user approval (mandatory checkpoint). The GitHub Actions
-optimization (all 3 approved stages) and Phase 6.2 are both complete and
-verified. Phase 3.2, all of Phase 4 (4.1-4.4), Phase 5.1, and Phase 6
-(6.1, 6.1b, 6.2) are now complete. Candidate next increments (say which, or
+Awaiting user approval (mandatory checkpoint). Phase 3.2, all of Phase 4
+(4.1-4.4), Phase 5.1, and all of Phase 6 done so far (6.1, 6.1b, 6.2, 6.2b)
+are complete and verified. Candidate next increments (say which, or
 propose a different scope):
-1. **Phase 6.2b -- JSON/CLI support for response spectrum analysis**,
-   mirroring 6.1b's pattern (closes the gap this phase just created).
-2. **Phase 5.2 -- end springs and eccentric offsets**, generalizing 5.1.
-3. **Phase 6.3 -- linear buckling / P-Delta (geometric stiffness)**, the
+1. **Phase 5.2 -- end springs and eccentric offsets**, generalizing 5.1.
+2. **Phase 6.3 -- linear buckling / P-Delta (geometric stiffness)**, the
    remaining item in the roadmap's Phase 6.
-4. **Phase 8 -- bridge-specific loading** (moving loads/influence lines,
+3. **Phase 8 -- bridge-specific loading** (moving loads/influence lines,
    bearings, construction stages).
-5. Cut an actual `v0.1.0`-style release tag now, to verify `release.yml`'s
+4. Cut an actual `v0.1.0`-style release tag now, to verify `release.yml`'s
    tag trigger end-to-end (it has only been verified via
    `workflow_dispatch`-equivalent branch pushes so far, never a real tag).

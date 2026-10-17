@@ -122,7 +122,10 @@ CI run `39051080335`, commits `b207adf`, `5807f51`):** `ResponseSpectrumSolver`
 on top of 6.1's modes; caller-supplied spectrum points only (spectrum shape
 itself stays outside the solver kernel); SRSS modal combination; CQC and
 multi-direction combination rules not yet implemented. 116/116 on
-`ubuntu-latest` (gcc-debug/release/asan).
+`ubuntu-latest` (gcc-debug/release/asan). **6.2b JSON/CLI support —
+COMPLETE (verified, run `39055492002`, commits `3073eb6`, `7831ddd`):**
+model `response_spectra` array, `kopruq-response-spectrum-results` v1,
+CLI `spectrum` command. 125/125.
 - ~~Response spectrum and modal combination methods~~ with code-specific configuration isolated from solver kernel.
 - Linear buckling and P–Delta/geometric stiffness as separate verified capabilities.
 

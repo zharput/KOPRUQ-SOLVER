@@ -16,6 +16,7 @@ on:
   workflow_dispatch:
   push:
     tags: ["v*.*.*"]
+    branches: ["ci/optimize-stage2-release"] # TEMPORARY: testing only, removed before merge to main
 
 permissions:
   contents: read

@@ -21,6 +21,23 @@
 // massless and only nodal loads act on its nodes (both already-verified,
 // unmodified mechanisms -- MatrixAssembler::assembleMass and
 // LinearStaticSolver::assembleLoads).
+//
+// node1 and node2 MUST be at the same location. This decoupled, per-DOF
+// formulation has no lever-arm coupling between a node's translational
+// springs and the other node's position; under a rigid-body rotation about
+// any point other than the (shared) node location, it is only rigid-body
+// consistent (zero force) when the nodes coincide -- if they did not, a
+// rigid rotation of the whole model would produce spurious internal force,
+// breaking global force/moment equilibrium (caught empirically by this
+// element's own equilibrium-residual tests). This is not a general two-
+// point rigid link for spatially separated nodes; it models exactly what
+// its primary use case needs -- a bearing/isolator/soil spring at a single
+// point -- and nothing beyond that is claimed or supported.
+inline void checkSpringNodesCoincident(const Eigen::Vector3d& p1, const Eigen::Vector3d& p2) {
+  if (!(p1.allFinite() && p2.allFinite()) || (p2 - p1).norm() > 1e-9)
+    throw Beam3DError(Beam3DErrorCode::InvalidProperty,
+      "spring/link node1 and node2 must be at the same location (see SpringLink.hpp)");
+}
 #include "../core/Types.hpp"
 #include "Beam3D.hpp"
 #include <algorithm>

@@ -403,6 +403,10 @@ class ModelReader {
       if (valid && e.node1 == e.node2) { issue(key(p, "nodes"), "must reference two different nodes"); valid = false; }
       if (!springStiffnessValid(e.stiffness)) { issue(key(p, "stiffness"), "must be finite and non-negative"); valid = false; }
       if (valid) {
+        try { checkSpringNodesCoincident(coords_[e.node1], coords_[e.node2]); }
+        catch (const std::exception& ex) { issue(p, ex.what()); valid = false; }
+      }
+      if (valid) {
         try { springAxes(e.local_x, e.reference_y); }
         catch (const std::exception& ex) { issue(p, std::string("invalid orientation: ") + ex.what()); valid = false; }
       }

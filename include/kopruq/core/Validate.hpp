@@ -144,6 +144,8 @@ class ModelValidator {
       if (!finite(e.reference_y)) { issue(p + ".reference_y", "must be finite"); valid = false; }
       if (!springStiffnessValid(e.stiffness)) { issue(p + ".stiffness", "must be finite and non-negative"); valid = false; }
       if (!valid) continue;
+      try { checkSpringNodesCoincident(coords_.at(e.node1), coords_.at(e.node2)); }
+      catch (const std::exception& ex) { issue(p, ex.what()); }
       try { springAxes(e.local_x, e.reference_y); }
       catch (const std::exception& ex) { issue(p, std::string("invalid orientation: ") + ex.what()); }
     }

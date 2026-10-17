@@ -15,6 +15,12 @@
 //  4. TiltedLoadedSpringSatisfiesEquilibrium: an arbitrarily oriented,
 //     mixed-stiffness spring under a general nodal load, checked against
 //     the model's own already-verified equilibrium/energy residuals.
+//
+// All test springs connect COINCIDENT nodes: this element's per-DOF
+// decoupled formulation represents a bearing/isolator at one point, and is
+// only rigid-body consistent for coincident nodes (see SpringLink.hpp's
+// header comment) -- a non-coincident spring is rejected by
+// checkSpringNodesCoincident(), independently exercised in spring_io_tests.cpp.
 #include <gtest/gtest.h>
 #include <Eigen/Dense>
 #include <cmath>
@@ -36,7 +42,7 @@ void rel(double actual, double expected, const char* what, double tol = 1e-9) {
 TEST(Spring, AxisAlignedStiffnessMatchesDenseFormula) {
   kopruq::SpringStiffness k{100, 200, 300, 10, 20, 30};
   Model m;
-  m.nodes = {{1, 0, 0, 0}, {2, 1, 0, 0}}; // positions irrelevant to orientation here
+  m.nodes = {{1, 0, 0, 0}, {2, 0, 0, 0}}; // coincident; orientation is independent of node geometry
   SpringConnection e{1, 1, 2, {1,0,0}, {0,1,0}, k};
   m.springs = {e};
   auto Kd = Eigen::MatrixXd(kopruq::MatrixAssembler::assemble(m));
@@ -60,7 +66,7 @@ TEST(Spring, ZeroLengthLinkIsWellDefined) {
 TEST(Spring, SimpleAxialSpringMatchesHandAnalysis) {
   constexpr double KX = 1234.5, F = 10.0;
   Model m;
-  m.nodes = {{1, 0, 0, 0}, {2, 1, 0, 0}};
+  m.nodes = {{1, 0, 0, 0}, {2, 0, 0, 0}};
   kopruq::SpringStiffness k{KX, 0, 0, 0, 0, 0};
   m.springs = {SpringConnection{1, 1, 2, {1,0,0}, {0,1,0}, k}};
   std::map<Id,std::array<bool,6>> rs = {{1, {true,true,true,true,true,true}}, {2, {false,true,true,true,true,true}}};
@@ -73,7 +79,7 @@ TEST(Spring, SimpleAxialSpringMatchesHandAnalysis) {
 
 TEST(Spring, TiltedLoadedSpringSatisfiesEquilibrium) {
   Model m;
-  m.nodes = {{1, 0, 0, 0}, {2, 3, 1, 2}};
+  m.nodes = {{1, 5, 2, -1}, {2, 5, 2, -1}}; // coincident; tilted stiffness ORIENTATION, not node offset
   kopruq::SpringStiffness k{800, 300, 150, 40, 25, 60};
   m.springs = {SpringConnection{1, 1, 2, {1, 0.3, -0.5}, {0, 1, 0.2}, k}};
   std::map<Id,std::array<bool,6>> rs = {{1, {true,true,true,true,true,true}}};

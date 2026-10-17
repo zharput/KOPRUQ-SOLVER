@@ -1,7 +1,8 @@
 // Phase 5 — JSON model input for the "springs" array (kopruq-model v1).
 // Numerical correctness is independently verified in spring_tests.cpp; this
 // file checks the reader wiring: successful parse, end-to-end solve parity
-// with the direct C++ API, and rejection of invalid input.
+// with the direct C++ API, and rejection of invalid input (including the
+// coincident-nodes requirement -- SpringLink.hpp's checkSpringNodesCoincident).
 #include <gtest/gtest.h>
 #include "kopruq/io/ModelJson.hpp"
 
@@ -12,7 +13,7 @@ namespace {
 std::string baseJson(const char* springs) {
   return std::string(R"({
     "schema":"kopruq-model","schema_version":1,
-    "nodes":[{"id":1,"x":0,"y":0,"z":0},{"id":2,"x":1,"y":0,"z":0}],
+    "nodes":[{"id":1,"x":0,"y":0,"z":0},{"id":2,"x":0,"y":0,"z":0}],
     "materials":[], "sections":[], "beams":[],
     "springs":)") + springs + R"(,
     "supports":[{"node":1,"restraints":[true,true,true,true,true,true]},
@@ -52,6 +53,17 @@ TEST(SpringIo, RejectsSameNodeTwiceForNodes) {
 
 TEST(SpringIo, RejectsMissingStiffness) {
   EXPECT_THROW(readModelText(baseJson(R"([{"id":1,"nodes":[1,2]}])")), ModelInputError);
+}
+
+TEST(SpringIo, RejectsNonCoincidentNodes) {
+  std::string text = R"({
+    "schema":"kopruq-model","schema_version":1,
+    "nodes":[{"id":1,"x":0,"y":0,"z":0},{"id":2,"x":1,"y":0,"z":0}],
+    "materials":[], "sections":[], "beams":[],
+    "springs":[{"id":1,"nodes":[1,2],"stiffness":[1000,0,0,0,0,0]}],
+    "supports":[{"node":1,"restraints":[true,true,true,true,true,true]}]
+  })";
+  EXPECT_THROW(readModelText(text), ModelInputError);
 }
 
 TEST(SpringIo, RejectsParallelLocalXAndReferenceY) {

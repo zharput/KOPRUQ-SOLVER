@@ -9,6 +9,7 @@
 #include "../solvers/LinearStaticSolver.hpp"
 #include "../solvers/ResponseSpectrumSolver.hpp"
 #include "../elements/Truss3D.hpp"
+#include "../elements/SpringLink.hpp"
 #include <nlohmann/json.hpp>
 #include <algorithm>
 #include <cmath>
@@ -30,7 +31,7 @@ inline constexpr int model_schema_version = 1;
 // Keys accepted in each JSON object. io_tests checks these against schemas/model.schema.json.
 struct KeySpec { std::vector<std::string> required, optional; };
 namespace model_keys {
-inline const KeySpec top{{"schema","schema_version","nodes","materials","sections","beams","supports"},{"units","trusses","load_cases","combinations","response_spectra"}};
+inline const KeySpec top{{"schema","schema_version","nodes","materials","sections","beams","supports"},{"units","trusses","springs","load_cases","combinations","response_spectra"}};
 inline const KeySpec units{{},{"length","force","angle"}};
 inline const KeySpec node{{"id","x","y","z"},{}};
 inline const KeySpec material{{"id","elastic_modulus","poisson_ratio"},{"unit_weight"}};
@@ -39,6 +40,7 @@ inline const KeySpec beam{{"id","nodes","material","section"},{"reference_y","re
 // A truss is read as a Beam3DConnection with every rotational DOF released (kopruq/elements/Truss3D.hpp);
 // reference_y/releases are not accepted here since the truss's orientation and release pattern are implicit.
 inline const KeySpec truss{{"id","nodes","material","section"},{}};
+inline const KeySpec spring{{"id","nodes","stiffness"},{"local_x","reference_y"}};
 inline const KeySpec releases{{},{"start","end"}};
 inline const KeySpec support{{"node","restraints"},{}};
 inline const KeySpec load_case{{"name"},{"self_weight","nodal","member","point"}};
@@ -93,6 +95,7 @@ class ModelReader {
     readSections(root, R, in);
     readBeams(root, R, in);
     readTrusses(root, R, in);
+    readSprings(root, R, in);
     readSupports(root, R, in);
     readLoadCases(root, R, in);
     readCombinations(root, R, in);
@@ -101,7 +104,7 @@ class ModelReader {
   }
 
  private:
-  std::set<Id> nodeIds_, materialIds_, sectionIds_, beamIds_;
+  std::set<Id> nodeIds_, materialIds_, sectionIds_, beamIds_, springIds_;
   std::unordered_map<Id, Eigen::Vector3d> coords_;
   std::unordered_map<Id, Material> materials_;
   std::unordered_map<Id, Section> sections_;
@@ -360,6 +363,55 @@ class ModelReader {
     }
   }
 
+  void readSprings(const json& root, const std::string& R, ModelInput& in) {
+    const json* a = array(root, R, "springs");
+    if (!a) return;
+    for (std::size_t i = 0; i < a->size(); ++i) {
+      const std::string p = at(key(R, "springs"), i);
+      const json& b = (*a)[i];
+      if (!object(b, p, model_keys::spring)) continue;
+      SpringConnection e;
+      bool ok = id(b, p, "id", e.id);
+      if (const json* ns = field(b, "nodes")) {
+        if (!ns->is_array() || ns->size() != 2) { issue(key(p, "nodes"), "must be an array of 2 node ids"); ok = false; }
+        else {
+          ok = idValue((*ns)[0], at(key(p, "nodes"), 0), e.node1) && ok;
+          ok = idValue((*ns)[1], at(key(p, "nodes"), 1), e.node2) && ok;
+        }
+      }
+      if (field(b, "local_x")) {
+        std::vector<Real> r;
+        if (numbers(b, p, "local_x", 3, r)) e.local_x = Eigen::Vector3d(r[0], r[1], r[2]); else ok = false;
+      }
+      if (field(b, "reference_y")) {
+        std::vector<Real> r;
+        if (numbers(b, p, "reference_y", 3, r)) e.reference_y = Eigen::Vector3d(r[0], r[1], r[2]); else ok = false;
+      }
+      if (const json* st = field(b, "stiffness")) {
+        if (!st->is_array() || st->size() != 6) { issue(key(p, "stiffness"), "must be an array of 6 numbers (kx,ky,kz,krx,kry,krz)"); ok = false; }
+        else for (std::size_t k = 0; k < 6; ++k) {
+          if (!(*st)[k].is_number()) { issue(at(key(p, "stiffness"), k), "must be a number"); ok = false; }
+          else e.stiffness[k] = (*st)[k].get<Real>();
+        }
+      } else ok = false; // missing required key already reported by object()
+      if (!ok) continue;
+      bool valid = true;
+      for (int k = 0; k < 2; ++k) {
+        Id n = k == 0 ? e.node1 : e.node2;
+        if (!nodeIds_.count(n)) { issue(at(key(p, "nodes"), k), "references unknown node " + std::to_string(n)); valid = false; }
+      }
+      if (valid && e.node1 == e.node2) { issue(key(p, "nodes"), "must reference two different nodes"); valid = false; }
+      if (!springStiffnessValid(e.stiffness)) { issue(key(p, "stiffness"), "must be finite and non-negative"); valid = false; }
+      if (valid) {
+        try { springAxes(e.local_x, e.reference_y); }
+        catch (const std::exception& ex) { issue(p, std::string("invalid orientation: ") + ex.what()); valid = false; }
+      }
+      if (!valid) continue;
+      if (!springIds_.insert(e.id).second) { issue(key(p, "id"), "duplicate spring id " + std::to_string(e.id)); continue; }
+      in.model.springs.push_back(e);
+    }
+  }
+
   bool readReleases(const json& j, const std::string& p, Releases& out) {
     if (!object(j, p, model_keys::releases)) return false;
     bool ok = true;
@@ -613,6 +665,12 @@ inline json writeModel(const ModelInput& in) {
                                         {"end", std::array<bool, 6>{e.releases[6], e.releases[7], e.releases[8], e.releases[9], e.releases[10], e.releases[11]}}}},
                           {"offset1", {e.offset1.x(), e.offset1.y(), e.offset1.z()}},
                           {"offset2", {e.offset2.x(), e.offset2.y(), e.offset2.z()}}});
+  j["springs"] = json::array();
+  for (const auto& e : in.model.springs)
+    j["springs"].push_back({{"id", e.id}, {"nodes", {e.node1, e.node2}},
+                            {"local_x", {e.local_x.x(), e.local_x.y(), e.local_x.z()}},
+                            {"reference_y", {e.reference_y.x(), e.reference_y.y(), e.reference_y.z()}},
+                            {"stiffness", {e.stiffness[0], e.stiffness[1], e.stiffness[2], e.stiffness[3], e.stiffness[4], e.stiffness[5]}}});
   j["supports"] = json::array();
   for (const auto& [node, r] : in.restraints) j["supports"].push_back({{"node", node}, {"restraints", r}});
   j["load_cases"] = json::array();

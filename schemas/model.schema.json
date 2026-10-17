@@ -46,6 +46,13 @@
       },
       "description": "Pin-ended axial-only members; read as beams with every rotational DOF released (see Truss3D.hpp)."
     },
+    "springs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/spring"
+      },
+      "description": "Discrete two-node spring/link elements (bearings, isolators, soil springs); see SpringLink.hpp."
+    },
     "supports": {
       "type": "array",
       "items": {
@@ -289,6 +296,61 @@
         "nodes",
         "material",
         "section"
+      ],
+      "additionalProperties": false
+    },
+    "spring": {
+      "type": "object",
+      "description": "Two-node discrete spring/link: six independent linear springs, one per local DOF (UX,UY,UZ,RX,RY,RZ). node1/node2 may coincide (zero-length link); orientation is given directly via local_x/reference_y rather than derived from the nodes.",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "local_x": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3,
+          "default": [1, 0, 0],
+          "description": "Spring local x direction, global axes"
+        },
+        "reference_y": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3,
+          "default": [0, 1, 0],
+          "description": "Defines local y: its component normal to local_x"
+        },
+        "stiffness": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0
+          },
+          "minItems": 6,
+          "maxItems": 6,
+          "description": "kx,ky,kz [kN/m], krx,kry,krz [kNm/rad], local axes"
+        }
+      },
+      "required": [
+        "id",
+        "nodes",
+        "stiffness"
       ],
       "additionalProperties": false
     },

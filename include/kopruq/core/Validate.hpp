@@ -14,6 +14,7 @@
 #include "Model.hpp"
 #include "../elements/Beam3D.hpp"
 #include "../elements/Releases.hpp"
+#include "../elements/SpringLink.hpp"
 #include "../loads/Loads.hpp"
 #include <cmath>
 #include <map>
@@ -50,6 +51,7 @@ class ModelValidator {
     materials(m);
     sections(m);
     beams(m);
+    springs(m);
     restraints(m, rs);
     for (std::size_t i = 0; i < cases.size(); ++i) loadCase(m, cases[i], "load_cases[" + std::to_string(i) + "]");
     combinations(cases, combos);
@@ -125,6 +127,25 @@ class ModelValidator {
         try { condensedStiffness(Beam3D::localStiffness((g.node2 - g.node1).norm(), bp), e.releases); }
         catch (const std::exception& ex) { issue(p + ".releases", ex.what()); }
       }
+    }
+  }
+  void springs(const Model& m) {
+    std::set<Id> springIds;
+    for (std::size_t i = 0; i < m.springs.size(); ++i) {
+      const auto& e = m.springs[i];
+      const std::string p = "springs[" + std::to_string(i) + "]";
+      if (e.id == 0) { issue(p + ".id", "must be nonzero"); continue; }
+      if (!springIds.insert(e.id).second) { issue(p + ".id", "duplicate spring id " + std::to_string(e.id)); continue; }
+      bool valid = true;
+      if (!coords_.count(e.node1)) { issue(p + ".node1", "references unknown node " + std::to_string(e.node1)); valid = false; }
+      if (!coords_.count(e.node2)) { issue(p + ".node2", "references unknown node " + std::to_string(e.node2)); valid = false; }
+      if (valid && e.node1 == e.node2) { issue(p, "node1 and node2 must be different"); valid = false; }
+      if (!finite(e.local_x)) { issue(p + ".local_x", "must be finite"); valid = false; }
+      if (!finite(e.reference_y)) { issue(p + ".reference_y", "must be finite"); valid = false; }
+      if (!springStiffnessValid(e.stiffness)) { issue(p + ".stiffness", "must be finite and non-negative"); valid = false; }
+      if (!valid) continue;
+      try { springAxes(e.local_x, e.reference_y); }
+      catch (const std::exception& ex) { issue(p, std::string("invalid orientation: ") + ex.what()); }
     }
   }
   void restraints(const Model&, const Restraints& rs) {

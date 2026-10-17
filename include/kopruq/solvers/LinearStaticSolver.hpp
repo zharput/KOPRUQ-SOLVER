@@ -4,6 +4,7 @@
 #include "../loads/Loads.hpp"
 #include "../elements/Releases.hpp"
 #include "../elements/Offsets.hpp"
+#include "../elements/SpringLink.hpp"
 #include "../results/AnalysisResults.hpp"
 #include <Eigen/SparseCholesky>
 #include <map>
@@ -117,7 +118,7 @@ static AppliedLoads assembleLoadCase(const Model&m,const DofManager&dm,const Loa
 
 // Results for a displacement field U under an assembled load case; K is the full (unreduced) stiffness matrix.
 static AnalysisResults recoverAssembled(const Model&m,const Restraints&rs,const DofManager&dm,const Eigen::SparseMatrix<Real>&K,const AppliedLoads&ap,const Eigen::VectorXd&U){
-  Eigen::VectorXd q=K*U-ap.F;AnalysisResults o;auto nodes=detail::index_by_id(m.nodes);o.nodes.reserve(m.nodes.size());o.elements.reserve(m.beams.size());Real sfb=0,sfs=0,smb=0,sms=0;
+  Eigen::VectorXd q=K*U-ap.F;AnalysisResults o;auto nodes=detail::index_by_id(m.nodes);o.nodes.reserve(m.nodes.size());o.elements.reserve(m.beams.size());o.springs.reserve(m.springs.size());Real sfb=0,sfs=0,smb=0,sms=0;bool firstEl=true;
   for(const auto&n:m.nodes){NodeResults z;z.node_id=n.id;auto d=dm.node_dofs(n.id);auto it=rs.find(n.id);z.restrained=it!=rs.end()?it->second:std::array<bool,6>{};for(int i=0;i<6;++i){z.displacement[i]=U((Eigen::Index)d[i]);z.reaction[i]=z.restrained[i]?q((Eigen::Index)d[i]):0;}o.nodes.push_back(z);}
   std::map<Id,const Material*>ma;for(const auto&x:m.materials)ma[x.id]=&x;std::map<Id,const Section*>se;for(const auto&x:m.sections)se[x.id]=&x;
   for(const auto&e:m.beams){
@@ -144,9 +145,25 @@ static AnalysisResults recoverAssembled(const Model&m,const Restraints&rs,const 
     er.force_balance=f1+f2+lf;er.moment_balance=m1+m2+r.cross(f2)+lm;er.force_balance_norm=er.force_balance.norm();er.moment_balance_norm=er.moment_balance.norm();
     Real fs=f1.norm()+f2.norm()+lf.norm(),ms=m1.norm()+m2.norm()+r.norm()*(f1.norm()+f2.norm())+lm.norm();
     er.normalized_force_error=fs>0?er.force_balance_norm/fs:0;er.normalized_moment_error=ms>0?er.moment_balance_norm/ms:0;sfb+=er.force_balance_norm;sfs+=fs;smb+=er.moment_balance_norm;sms+=ms;
-    if(o.elements.empty()||er.normalized_force_error>o.max_element_force_error){o.max_element_force_error=er.normalized_force_error;o.max_force_element_id=e.id;}
-    if(o.elements.empty()||er.normalized_moment_error>o.max_element_moment_error){o.max_element_moment_error=er.normalized_moment_error;o.max_moment_element_id=e.id;}
+    if(firstEl||er.normalized_force_error>o.max_element_force_error){o.max_element_force_error=er.normalized_force_error;o.max_force_element_id=e.id;}
+    if(firstEl||er.normalized_moment_error>o.max_element_moment_error){o.max_element_moment_error=er.normalized_moment_error;o.max_moment_element_id=e.id;}
+    firstEl=false;
     o.elements.push_back(er);
+  }
+  for(const auto&e:m.springs){
+    const Node*a=detail::find_by_id(nodes,e.node1),*b=detail::find_by_id(nodes,e.node2);
+    auto ax=springAxes(e.local_x,e.reference_y);auto T=Beam3D::transformation(ax);auto kl=springLocalStiffness(e.stiffness);auto d=dm.element_dofs(e.node1,e.node2);
+    Eigen::Matrix<Real,12,1>u,ul,fl,fg;for(int i=0;i<12;++i)u(i)=U((Eigen::Index)d[i]);ul=T*u;fl=kl*ul;fg=T.transpose()*fl;
+    Real energy=0.5*ul.dot(fl);
+    ElementResults er;er.element_id=e.id;for(int i=0;i<12;++i){er.local_end_force[i]=fl(i);er.global_end_force[i]=fg(i);}er.strain_energy=energy;o.element_strain_energy+=er.strain_energy;
+    Eigen::Vector3d f1=fg.template head<3>(),f2=fg.template segment<3>(6),m1=fg.template segment<3>(3),m2=fg.template segment<3>(9),r=Eigen::Vector3d(b->x,b->y,b->z)-Eigen::Vector3d(a->x,a->y,a->z);
+    er.force_balance=f1+f2;er.moment_balance=m1+m2+r.cross(f2);er.force_balance_norm=er.force_balance.norm();er.moment_balance_norm=er.moment_balance.norm();
+    Real fs=f1.norm()+f2.norm(),ms=m1.norm()+m2.norm()+r.norm()*(f1.norm()+f2.norm());
+    er.normalized_force_error=fs>0?er.force_balance_norm/fs:0;er.normalized_moment_error=ms>0?er.moment_balance_norm/ms:0;sfb+=er.force_balance_norm;sfs+=fs;smb+=er.moment_balance_norm;sms+=ms;
+    if(firstEl||er.normalized_force_error>o.max_element_force_error){o.max_element_force_error=er.normalized_force_error;o.max_force_element_id=e.id;}
+    if(firstEl||er.normalized_moment_error>o.max_element_moment_error){o.max_element_moment_error=er.normalized_moment_error;o.max_moment_element_id=e.id;}
+    firstEl=false;
+    o.springs.push_back(er);
   }
   o.element_equilibrium_error=sfs>0?sfb/sfs:0;o.element_moment_equilibrium_error=sms>0?smb/sms:0;
   Eigen::Vector3d af=ap.force,ar=Eigen::Vector3d::Zero(),am=ap.moment,arm=Eigen::Vector3d::Zero();

@@ -616,14 +616,65 @@ status`); no data loss.
   the new command, including a default `-n` and an override.
 - Milestone status: **Phase 6.1b COMPLETE.**
 
+### 2026-10-17 — GitHub Actions blocker and optimization (Stage 1 of 3)
+- After Phase 6.1b, Phase 6.2 (response spectrum analysis) was started on
+  `ci/phase6.2-response-spectrum` (code + 6 tests written, one test-side
+  spectrum-range bug found and fixed). From 2026-10-16 ~14:00 UTC onward,
+  every CI run on that branch failed within ~2 seconds in every job, with
+  `runner_id: 0` and zero steps -- no runner was ever assigned, no build or
+  test ever ran. A rerun and a fresh run from an empty commit failed
+  identically; the pattern persisted into 2026-10-17. Phase 6.2 remains
+  **unverified and unmerged** on that branch; Phases up to 6.1b are
+  unaffected.
+- The user then asked for a GitHub Actions optimization for both KOPRUQ
+  (which has no `.github/workflows` at all -- nothing to optimize there)
+  and KOPRUQ-SOLVER: move Windows-independent verification to
+  `ubuntu-latest`, gate Windows `.exe` production to manual dispatch /
+  version tags, add caching, minimal `permissions`, and upload the real
+  `.exe` artifacts, without breaking the working build. Plan presented and
+  approved; working in 3 approved stages, reporting and waiting for
+  approval between each.
+- Measured actual cost from this session's own CI history via the GitHub
+  API (job `started_at`/`completed_at` across 38 parseable runs): 1,159.6
+  wall-clock minutes; at the Windows 2x multiplier, **~2,319 billable
+  minutes in under 24 hours** -- exceeding the GitHub Free plan's entire
+  2,000-minute monthly allowance in one session. This is the confirmed
+  root cause of the runner-provisioning failures.
+- Stage 1 (branch `ci/optimize-stage1-ubuntu`, commit `1fce4b4`): new
+  `gcc-debug`/`gcc-release`/`gcc-asan` CMake presets; `ci.yml` rewritten
+  for `ubuntu-latest` (apt-installed Ninja, Linux vcpkg bootstrap, same
+  CLI smoke test/benchmarks against the Linux Release build); added
+  caching of the vcpkg tool itself (previously only the built-package
+  cache was cached). Source code was checked first and has no Windows/MSVC
+  dependency (no `_MSC_VER`/`Windows.h`/`__declspec`; `CMakeLists.txt`
+  already has a non-MSVC branch).
+- Its first run (`39029543763`) failed identically to the Windows runs:
+  all 3 jobs, 2-second lifetime, `runner_id: 0`, zero steps. **This
+  confirms the blocker is an account-wide Actions spending/included-minutes
+  limit shared across OS types, not a Windows-only quota** -- moving to
+  Ubuntu does not by itself restore CI. Consequently, **whether this
+  codebase actually compiles under GCC/Clang is still unverified**; Stage
+  1's code is pushed but unmerged, pending the user clearing the billing
+  limit.
+- Milestone status: **Stage 1 BLOCKED on account billing, not on the
+  workflow or the code.**
+
 ## Next autonomous action
-Awaiting user approval (mandatory checkpoint). Phase 3.2, all of Phase 4
-(4.1-4.4), Phase 5.1 and Phase 6.1/6.1b are complete and verified. Candidate
-next increments:
-1. **Phase 5.2 -- end springs and eccentric offsets**, generalizing 5.1.
-2. **Phase 6.2 -- response spectrum analysis**, building on 6.1's modes
-   (modal combination rules, code-specific spectra kept outside the
-   solver kernel per the roadmap).
-3. **Phase 8 -- bridge-specific loading** (moving loads/influence lines,
-   bearings, construction stages).
-Say which, or propose a different scope.
+Paused for the user: GitHub Actions is returning no runner for this
+account/repo at all (any OS), consistent with an Actions spending or
+included-minutes limit being exhausted. Needed before any further CI
+work: check https://github.com/settings/billing (or the owning
+organization's billing page) and raise/reset the spending limit or wait
+for the next monthly cycle. Once runners are available again:
+1. Finish verifying Stage 1 (confirm the Ubuntu build/tests actually pass;
+   fix anything GCC/Clang-specific that turns up) before merging.
+2. Stage 2: add `release.yml` (Windows, manual dispatch / version tags
+   only) carrying the existing MSVC debug/release/asan/analyze matrix,
+   the CLI smoke test, benchmarks, and upload the built `.exe` files as a
+   downloadable artifact.
+3. Stage 3: trigger/permissions cleanup and a measured before/after
+   minute comparison using Stage 1+2's actual run data.
+Separately, Phase 6.2 (response spectrum analysis) remains written but
+unverified on `ci/phase6.2-response-spectrum`; resume verifying it once
+CI is available again, or decide whether to fold it in before or after
+the Actions optimization finishes.

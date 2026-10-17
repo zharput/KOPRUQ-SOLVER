@@ -126,16 +126,20 @@ jobs:
           & build/release/kopruq_solver_benchmark.exe | Tee-Object -FilePath benchmark-solver.txt
           if ($LASTEXITCODE -ne 0) { throw "solver benchmark exit $LASTEXITCODE" }
 
-      # The actual shippable Windows binaries, unmodified from what the Release build
-      # already produces (including the DLLs vcpkg applocal copies alongside them).
+      # The actual shippable product: the CLI and the two benchmark executables, unmodified
+      # from what the Release build already produces. Deliberately excludes the GoogleTest
+      # test executables (and their gtest*.dll) that also land in build/release/ -- those are
+      # verification artifacts, not part of the product. None of the three need a DLL: Eigen
+      # and nlohmann-json are header-only, so vcpkg applocal has nothing to copy for them.
       - name: Upload Windows executables
         if: matrix.preset == 'ninja-release'
         uses: actions/upload-artifact@v4
         with:
           name: kopruq-solver-windows-x64
           path: |
-            build/release/*.exe
-            build/release/*.dll
+            build/release/kopruq_solver_cli.exe
+            build/release/kopruq_solver_benchmark.exe
+            build/release/kopruq_sparse_assembly_benchmark.exe
           if-no-files-found: error
 
       - name: Upload test and benchmark results

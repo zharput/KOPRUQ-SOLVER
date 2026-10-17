@@ -1,0 +1,163 @@
+# Windows .exe production and the MSVC-specific verification that only
+# makes sense on the real toolchain (/analyze, MSVC AddressSanitizer, the
+# actual Windows binaries). Deliberately NOT run on every push: see
+# docs/DEVELOPMENT_STATUS.md for why (every-push Windows CI exhausted the
+# GitHub Free plan's monthly Actions-minute allowance in under a day).
+# Routine Debug/Release/ASan verification on every push lives in ci.yml, on
+# ubuntu-latest, at 1x the per-minute cost of a Windows runner.
+#
+# Build commands, flags, CMake presets and packaging (vcpkg applocal DLL
+# copying into build/release) are unchanged from before this split; this
+# workflow only changes *when* the Windows job runs and adds artifact
+# upload for the built .exe files.
+name: Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+
+# Queues (does not cancel) a second dispatch/tag for the same ref: unlike
+# ci.yml's routine runs, a half-finished release build being silently
+# cancelled is more surprising than useful, and releases are infrequent
+# enough that queuing is never a real wait.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-test:
+    name: ${{ matrix.preset }}
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        # ninja-asan: full CTest under MSVC AddressSanitizer.
+        # ninja-analyze: MSVC /analyze build of project code (no tests); fails on any
+        # finding except GoogleTest's C6326 macro false positive in tests\.
+        preset: [ninja-debug, ninja-release, ninja-asan, ninja-analyze]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: MSVC developer environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Set vcpkg paths
+        shell: pwsh
+        run: |
+          $ws = $env:GITHUB_WORKSPACE -replace '\\','/'
+          "VCPKG_ROOT=$ws/vcpkg" >> $env:GITHUB_ENV
+          "VCPKG_DEFAULT_BINARY_CACHE=$ws/vcpkg-bincache" >> $env:GITHUB_ENV
+
+      # Caches the vcpkg tool itself (its git clone + compiled bootstrap executable),
+      # separate from the built-package cache below -- on a hit this skips a full
+      # clone and bootstrap compile entirely. Same technique as ci.yml's Linux job.
+      - name: Restore vcpkg tool cache
+        uses: actions/cache@v4
+        with:
+          path: vcpkg
+          key: vcpkg-tool-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}
+
+      - name: Restore vcpkg binary cache
+        uses: actions/cache@v4
+        with:
+          path: vcpkg-bincache
+          key: vcpkg-${{ runner.os }}-${{ matrix.preset }}-${{ hashFiles('vcpkg.json') }}
+
+      - name: Bootstrap vcpkg at the manifest baseline
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force vcpkg-bincache | Out-Null
+          if (-not (Test-Path vcpkg/vcpkg.exe)) {
+            git clone --quiet https://github.com/microsoft/vcpkg.git vcpkg
+            $baseline = (Get-Content vcpkg.json -Raw | ConvertFrom-Json).'builtin-baseline'
+            git -C vcpkg checkout --quiet $baseline
+            ./vcpkg/bootstrap-vcpkg.bat -disableMetrics
+          }
+
+      - name: Configure
+        run: cmake --preset ${{ matrix.preset }}
+
+      - name: Build
+        if: matrix.preset != 'ninja-analyze'
+        run: cmake --build --preset ${{ matrix.preset }}
+
+      - name: Build with static analysis
+        if: matrix.preset == 'ninja-analyze'
+        shell: pwsh
+        run: |
+          cmake --build --preset ninja-analyze 2>&1 | Tee-Object -FilePath analyze-build.log
+          if ($LASTEXITCODE -ne 0) { throw "analyze build exit $LASTEXITCODE" }
+          $hits = Select-String -Path analyze-build.log -Pattern 'warning C(6|26|28|33)\d{3}' |
+                  ForEach-Object { $_.Line.Trim() } | Sort-Object -Unique
+          "STATIC-ANALYSIS unique warnings: $($hits.Count)"
+          $hits | ForEach-Object { "STATIC-ANALYSIS $_" }
+          $hits | Set-Content analyze-warnings.txt
+          # Known false positive: GoogleTest assertion macros expand to
+          # `switch (0) case 0: default:`, which /analyze reports as C6326 on
+          # every assertion line. Only that code, only in tests\, is tolerated;
+          # it stays visible above. Any other finding fails the job.
+          $blocking = $hits | Where-Object { -not ($_ -match '\\tests\\' -and $_ -match 'warning C6326') }
+          "STATIC-ANALYSIS blocking findings: $(@($blocking).Count)"
+          if (@($blocking).Count -gt 0) { $blocking; throw "static analysis findings" }
+
+      - name: Test inventory
+        if: matrix.preset != 'ninja-analyze'
+        run: ctest --preset ${{ matrix.preset }} -N
+
+      - name: Test
+        if: matrix.preset != 'ninja-analyze'
+        run: ctest --preset ${{ matrix.preset }} --output-junit ctest-junit.xml
+
+      - name: CLI smoke test
+        if: matrix.preset == 'ninja-release'
+        shell: pwsh
+        run: |
+          $cli = "build/release/kopruq_solver_cli.exe"
+          & $cli --version; if ($LASTEXITCODE -ne 0) { throw "--version exit $LASTEXITCODE" }
+          & $cli --help;    if ($LASTEXITCODE -ne 0) { throw "--help exit $LASTEXITCODE" }
+          & $cli bogus;     if ($LASTEXITCODE -ne 2) { throw "unknown command: expected exit 2, got $LASTEXITCODE" }
+          $global:LASTEXITCODE = 0
+
+      - name: Benchmarks
+        if: matrix.preset == 'ninja-release'
+        shell: pwsh
+        run: |
+          & build/release/kopruq_sparse_assembly_benchmark.exe | Tee-Object -FilePath benchmark-sparse-assembly.txt
+          if ($LASTEXITCODE -ne 0) { throw "sparse assembly benchmark exit $LASTEXITCODE" }
+          & build/release/kopruq_solver_benchmark.exe | Tee-Object -FilePath benchmark-solver.txt
+          if ($LASTEXITCODE -ne 0) { throw "solver benchmark exit $LASTEXITCODE" }
+
+      # The actual shippable product: the CLI and the two benchmark executables, unmodified
+      # from what the Release build already produces. Deliberately excludes the GoogleTest
+      # test executables (and their gtest*.dll) that also land in build/release/ -- those are
+      # verification artifacts, not part of the product. None of the three need a DLL: Eigen
+      # and nlohmann-json are header-only, so vcpkg applocal has nothing to copy for them.
+      - name: Upload Windows executables
+        if: matrix.preset == 'ninja-release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: kopruq-solver-windows-x64
+          path: |
+            build/release/kopruq_solver_cli.exe
+            build/release/kopruq_solver_benchmark.exe
+            build/release/kopruq_sparse_assembly_benchmark.exe
+          if-no-files-found: error
+
+      - name: Upload test and benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-${{ matrix.preset }}
+          path: |
+            build/*/ctest-junit.xml
+            build/*/Testing/Temporary/LastTest.log
+            benchmark-*.txt
+            analyze-*.txt
+            analyze-*.log
+          if-no-files-found: ignore

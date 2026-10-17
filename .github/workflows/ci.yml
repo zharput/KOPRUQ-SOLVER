@@ -1,6 +1,13 @@
-# Builds and tests KOPRUQ-SOLVER in Debug and Release on a GitHub-hosted
-# Windows runner with the same MSVC + Ninja + vcpkg toolchain and CMake
-# presets used locally. Compiled binaries never touch the developer machine.
+# Fast, cheap correctness verification on every push/PR, on a Linux runner
+# (1x Actions-minute multiplier vs. 2x for Windows). The project has no
+# Windows-specific source code (verified: no _MSC_VER/Windows.h/__declspec),
+# so GCC/Clang on Ubuntu exercises the same C++20 source and GTest suites as
+# the Windows build. MSVC-specific checks (the real Windows .exe, /analyze,
+# the CLI smoke test and benchmarks against that real binary) live in
+# release.yml instead, gated to manual dispatch / version tags, not every
+# push -- see docs/DEVELOPMENT_STATUS.md for why (Windows-runner minutes
+# exhausted the GitHub Free plan's monthly allowance within one day of
+# every-push Windows CI).
 name: CI
 
 on:
@@ -12,31 +19,45 @@ on:
 permissions:
   contents: read
 
+# Cancels a still-running run for the same branch the moment a newer commit is
+# pushed to it, instead of letting a now-superseded run finish. Observed cost:
+# this session pushed many commits in quick succession to the same branch
+# while iterating, and every prior run kept consuming minutes to completion
+# unnecessarily. `github.workflow` keeps main's and a tag's queues separate
+# from a feature branch's.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-test:
     name: ${{ matrix.preset }}
-    runs-on: windows-2022
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        # ninja-asan: full CTest under MSVC AddressSanitizer.
-        # ninja-analyze: MSVC /analyze build of project code (no tests); fails on any
-        # finding except GoogleTest's C6326 macro false positive in tests\.
-        preset: [ninja-debug, ninja-release, ninja-asan, ninja-analyze]
+        # gcc-asan: full CTest under GCC/Clang AddressSanitizer + UndefinedBehaviorSanitizer.
+        preset: [gcc-debug, gcc-release, gcc-asan]
     steps:
       - uses: actions/checkout@v4
 
-      - name: MSVC developer environment
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x64
+      - name: Install Ninja
+        run: sudo apt-get update -y && sudo apt-get install -y ninja-build
 
       - name: Set vcpkg paths
-        shell: pwsh
         run: |
-          $ws = $env:GITHUB_WORKSPACE -replace '\\','/'
-          "VCPKG_ROOT=$ws/vcpkg" >> $env:GITHUB_ENV
-          "VCPKG_DEFAULT_BINARY_CACHE=$ws/vcpkg-bincache" >> $env:GITHUB_ENV
+          echo "VCPKG_ROOT=$GITHUB_WORKSPACE/vcpkg" >> "$GITHUB_ENV"
+          echo "VCPKG_DEFAULT_BINARY_CACHE=$GITHUB_WORKSPACE/vcpkg-bincache" >> "$GITHUB_ENV"
+
+      # Caches the vcpkg tool itself (its git clone + compiled bootstrap executable),
+      # separate from the built-package cache below -- on a hit this skips a full
+      # clone and bootstrap compile entirely. Keyed on vcpkg.json so it is invalidated
+      # exactly when the pinned baseline changes.
+      - name: Restore vcpkg tool cache
+        uses: actions/cache@v4
+        with:
+          path: vcpkg
+          key: vcpkg-tool-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}
 
       - name: Restore vcpkg binary cache
         uses: actions/cache@v4
@@ -45,66 +66,44 @@ jobs:
           key: vcpkg-${{ runner.os }}-${{ matrix.preset }}-${{ hashFiles('vcpkg.json') }}
 
       - name: Bootstrap vcpkg at the manifest baseline
-        shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force vcpkg-bincache | Out-Null
-          git clone --quiet https://github.com/microsoft/vcpkg.git vcpkg
-          $baseline = (Get-Content vcpkg.json -Raw | ConvertFrom-Json).'builtin-baseline'
-          git -C vcpkg checkout --quiet $baseline
-          ./vcpkg/bootstrap-vcpkg.bat -disableMetrics
+          mkdir -p vcpkg-bincache
+          if [ ! -x vcpkg/vcpkg ]; then
+            git clone --quiet https://github.com/microsoft/vcpkg.git vcpkg
+            baseline=$(jq -r '."builtin-baseline"' vcpkg.json)
+            git -C vcpkg checkout --quiet "$baseline"
+            ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
+          fi
 
       - name: Configure
         run: cmake --preset ${{ matrix.preset }}
 
       - name: Build
-        if: matrix.preset != 'ninja-analyze'
         run: cmake --build --preset ${{ matrix.preset }}
 
-      - name: Build with static analysis
-        if: matrix.preset == 'ninja-analyze'
-        shell: pwsh
-        run: |
-          cmake --build --preset ninja-analyze 2>&1 | Tee-Object -FilePath analyze-build.log
-          if ($LASTEXITCODE -ne 0) { throw "analyze build exit $LASTEXITCODE" }
-          $hits = Select-String -Path analyze-build.log -Pattern 'warning C(6|26|28|33)\d{3}' |
-                  ForEach-Object { $_.Line.Trim() } | Sort-Object -Unique
-          "STATIC-ANALYSIS unique warnings: $($hits.Count)"
-          $hits | ForEach-Object { "STATIC-ANALYSIS $_" }
-          $hits | Set-Content analyze-warnings.txt
-          # Known false positive: GoogleTest assertion macros expand to
-          # `switch (0) case 0: default:`, which /analyze reports as C6326 on
-          # every assertion line. Only that code, only in tests\, is tolerated;
-          # it stays visible above. Any other finding fails the job.
-          $blocking = $hits | Where-Object { -not ($_ -match '\\tests\\' -and $_ -match 'warning C6326') }
-          "STATIC-ANALYSIS blocking findings: $(@($blocking).Count)"
-          if (@($blocking).Count -gt 0) { $blocking; throw "static analysis findings" }
-
       - name: Test inventory
-        if: matrix.preset != 'ninja-analyze'
         run: ctest --preset ${{ matrix.preset }} -N
 
       - name: Test
-        if: matrix.preset != 'ninja-analyze'
         run: ctest --preset ${{ matrix.preset }} --output-junit ctest-junit.xml
 
       - name: CLI smoke test
-        if: matrix.preset == 'ninja-release'
-        shell: pwsh
+        if: matrix.preset == 'gcc-release'
         run: |
-          $cli = "build/release/kopruq_solver_cli.exe"
-          & $cli --version; if ($LASTEXITCODE -ne 0) { throw "--version exit $LASTEXITCODE" }
-          & $cli --help;    if ($LASTEXITCODE -ne 0) { throw "--help exit $LASTEXITCODE" }
-          & $cli bogus;     if ($LASTEXITCODE -ne 2) { throw "unknown command: expected exit 2, got $LASTEXITCODE" }
-          $global:LASTEXITCODE = 0
+          cli=build/linux-release/kopruq_solver_cli
+          "$cli" --version
+          "$cli" --help
+          # bash's default `-e` aborts the step on the first nonzero exit, so the
+          # intentionally-failing call must be isolated from it via `||`, not `;`.
+          code=0
+          "$cli" bogus || code=$?
+          if [ "$code" -ne 2 ]; then echo "unknown command: expected exit 2, got $code"; exit 1; fi
 
       - name: Benchmarks
-        if: matrix.preset == 'ninja-release'
-        shell: pwsh
+        if: matrix.preset == 'gcc-release'
         run: |
-          & build/release/kopruq_sparse_assembly_benchmark.exe | Tee-Object -FilePath benchmark-sparse-assembly.txt
-          if ($LASTEXITCODE -ne 0) { throw "sparse assembly benchmark exit $LASTEXITCODE" }
-          & build/release/kopruq_solver_benchmark.exe | Tee-Object -FilePath benchmark-solver.txt
-          if ($LASTEXITCODE -ne 0) { throw "solver benchmark exit $LASTEXITCODE" }
+          build/linux-release/kopruq_sparse_assembly_benchmark | tee benchmark-sparse-assembly.txt
+          build/linux-release/kopruq_solver_benchmark | tee benchmark-solver.txt
 
       - name: Upload test and benchmark results
         if: always()
@@ -115,6 +114,4 @@ jobs:
             build/*/ctest-junit.xml
             build/*/Testing/Temporary/LastTest.log
             benchmark-*.txt
-            analyze-*.txt
-            analyze-*.log
           if-no-files-found: ignore

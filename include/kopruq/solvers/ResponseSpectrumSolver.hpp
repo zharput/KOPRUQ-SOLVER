@@ -6,14 +6,27 @@
 // the roadmap's "code-specific configuration isolated from solver kernel".
 //
 // Formulation (standard modal RSA, base excitation in global axis `direction`):
-// - iota: unit ground displacement in `direction` at every translational DOF
-//   (0 at rotations), over the FULL (unreduced) DOF set, including restrained
-//   DOFs -- the ground moves the supports too.
-// - Participation factor Gamma_i = phi_i^T * M * iota (M full, mass-normalized
-//   phi_i from ModalSolver, so the (phi_i^T M phi_i) denominator is 1).
-// - Effective modal mass = Gamma_i^2; total_mass = iota^T M iota (an exact
-//   property of any consistent or lumped mass matrix for a pure rigid
-//   translation, independent of how many modes are requested).
+// - iota: unit ground displacement in `direction` at every FREE translational
+//   DOF (0 at rotations and at restrained DOFs), matching the modal/
+//   participating-mass convention most structural software reports (SAP2000,
+//   ETABS): the free-DOF mode shapes phi_i are a *complete* Mff-orthonormal
+//   basis of the free-DOF space, so Gamma_i = phi_i^T * M * iota and
+//   total_mass = iota^T * M * iota satisfy sum_i Gamma_i^2 = total_mass
+//   *exactly* when every free-DOF mode is included -- this is why iota must
+//   be zero at restrained DOFs. (Setting iota to 1 there too, as a literal
+//   "the ground moves the supports" base-excitation vector would, is also a
+//   textbook-valid formulation, but it introduces a mass-coupling term
+//   between the restrained and free DOFs through which no finite set of free-
+//   DOF modes can ever capture 100% of "total_mass" -- found via the first
+//   full test run, which could not previously execute past an unrelated CI
+//   blocker; see docs/DEVELOPMENT_STATUS.md.)
+// - Participation factor Gamma_i = phi_i^T * M * iota (M full; iota is zero
+//   outside the free DOFs, so this equals phi_i_free^T * Mff * iota_free).
+//   phi_i is mass-normalized by ModalSolver (phi_i^T Mff phi_i = 1).
+// - Effective modal mass = Gamma_i^2; total_mass = iota^T M iota = the total
+//   mass of the free DOFs alone in this direction (not the whole structure's
+//   mass, since the restrained supports' own mass cannot move and is
+//   excluded by construction).
 // - Peak modal response: equivalent static force F_i = Gamma_i*Sa(T_i)*M*phi_i,
 //   recovered via the already-verified LinearStaticSolver::recover() with
 //   U_i = Gamma_i*Sa(T_i)/omega_i^2*phi_i and nodal loads F_i (both consistent
@@ -76,12 +89,17 @@ class ResponseSpectrumSolver { public:
 
       DofManager dm(m);
       Eigen::SparseMatrix<Real> Mfull = MatrixAssembler::assembleMass(m);
-      Eigen::VectorXd iota = Eigen::VectorXd::Zero(static_cast<Eigen::Index>(dm.dof_count()));
-      for (const auto& n : m.nodes) iota(static_cast<Eigen::Index>(dm.node_dofs(n.id)[static_cast<std::size_t>(input.direction)])) = 1.0;
-      Eigen::VectorXd Miota = Mfull * iota;
-      out.total_mass = iota.dot(Miota);
 
       auto all = rs; for (const auto& n : m.nodes) if (!all.count(n.id)) all[n.id] = {};
+      auto free = MatrixAssembler::classify(dm, all).free;
+
+      // iota: 1 at every FREE translational DOF matching `direction` (DOF index mod 6:
+      // 0=UX, 1=UY, 2=UZ), 0 everywhere else, including restrained DOFs -- see the
+      // formulation note above.
+      Eigen::VectorXd iota = Eigen::VectorXd::Zero(static_cast<Eigen::Index>(dm.dof_count()));
+      for (auto idx : free) if (idx % 6 == static_cast<std::size_t>(input.direction)) iota(static_cast<Eigen::Index>(idx)) = 1.0;
+      Eigen::VectorXd Miota = Mfull * iota;
+      out.total_mass = iota.dot(Miota);
 
       std::map<Id,std::array<Real,6>> dispSq, reacSq;
       std::map<Id,std::array<Real,12>> forceSq;

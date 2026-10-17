@@ -1,3 +1,64 @@
 #pragma once
-#include "../core/Element.hpp"
-namespace kopruq { class Truss3D final : public Element { public: explicit Truss3D(Id value): value_(value) {} Id id() const override { return value_; } private: Id value_; }; }
+// 3D pin-ended truss member, implemented as a Beam3D specialization rather
+// than a separate stiffness/mass/load/recovery code path.
+//
+// A beam with all rotational DOFs released at both ends (RX, RY, RZ at
+// node1 and node2) has, after static condensation (Releases.hpp), a local
+// stiffness matrix whose only nonzero entries are the axial terms
+// (+-EA/L); every bending/shear/torsion term vanishes exactly, because with
+// both end moments zero the member carries no transverse end force
+// (V = (M1+M2)/L = 0). Transformed to global axes this is bit-for-bit the
+// classical 3D truss stiffness (EA/L)*[[c c^T, -c c^T],[-c c^T, c c^T]]
+// with c the member's unit direction vector -- independent of the choice
+// of reference_y, since the retained (translational) stiffness never
+// depends on the member's rotated local y/z axes once all rotations are
+// released. This file only picks a valid reference_y (any vector not
+// parallel to the member) and the release pattern; Beam3D/Releases/
+// MatrixAssembler/LinearStaticSolver carry the already-verified numerics
+// unchanged.
+//
+// Mass for a truss member follows the same Guyan (static) condensation of
+// the beam's consistent mass matrix used for every other released-end beam
+// (MassMatrix.hpp, Releases.hpp) rather than the textbook isotropic rod
+// mass matrix rho*A*L/6*[[2I,I],[I,2I]]; this is a documented, intentional
+// consequence of reusing the existing, already-verified release
+// methodology instead of adding a second, independently-tested mass
+// formulation for one element type.
+#include "../core/Model.hpp"
+#include "Beam3D.hpp"
+#include "Releases.hpp"
+#include <cmath>
+
+namespace kopruq {
+
+// Release pattern that reduces a Beam3D to a pin-ended 3D truss member:
+// RX, RY, RZ released at both ends; UX, UY, UZ retained at both ends.
+inline Releases trussReleases() {
+  Releases r{};
+  for (int i : {3, 4, 5, 9, 10, 11}) r[i] = true;
+  return r;
+}
+
+// Any unit vector not parallel to `direction`, for use as reference_y on a
+// truss member where the actual local y/z orientation is immaterial (every
+// bending/torsion term is released away). Picks global Z unless the member
+// is itself nearly parallel to Z, in which case it picks global Y.
+inline Eigen::Vector3d trussReference(const Eigen::Vector3d& direction) {
+  Eigen::Vector3d d = direction.normalized();
+  Eigen::Vector3d z(0, 0, 1);
+  if (std::abs(d.dot(z)) > 1 - 1e-6) return Eigen::Vector3d(0, 1, 0);
+  return z;
+}
+
+// Convenience constructor for direct C++ callers (mirrors the JSON reader's
+// "trusses" array): a Beam3DConnection with the truss release pattern and
+// an automatically chosen reference_y.
+inline Beam3DConnection makeTrussConnection(Id id, Id node1, Id node2, Id material, Id section, const Eigen::Vector3d& node1Coords, const Eigen::Vector3d& node2Coords) {
+  Beam3DConnection e;
+  e.id = id; e.node1 = node1; e.node2 = node2; e.material = material; e.section = section;
+  e.reference_y = trussReference(node2Coords - node1Coords);
+  e.releases = trussReleases();
+  return e;
+}
+
+} // namespace kopruq

@@ -8,6 +8,7 @@
 // (m, kN, rad); no unit conversion is performed.
 #include "../solvers/LinearStaticSolver.hpp"
 #include "../solvers/ResponseSpectrumSolver.hpp"
+#include "../elements/Truss3D.hpp"
 #include <nlohmann/json.hpp>
 #include <algorithm>
 #include <cmath>
@@ -29,12 +30,15 @@ inline constexpr int model_schema_version = 1;
 // Keys accepted in each JSON object. io_tests checks these against schemas/model.schema.json.
 struct KeySpec { std::vector<std::string> required, optional; };
 namespace model_keys {
-inline const KeySpec top{{"schema","schema_version","nodes","materials","sections","beams","supports"},{"units","load_cases","combinations","response_spectra"}};
+inline const KeySpec top{{"schema","schema_version","nodes","materials","sections","beams","supports"},{"units","trusses","load_cases","combinations","response_spectra"}};
 inline const KeySpec units{{},{"length","force","angle"}};
 inline const KeySpec node{{"id","x","y","z"},{}};
 inline const KeySpec material{{"id","elastic_modulus","poisson_ratio"},{"unit_weight"}};
 inline const KeySpec section{{"id","area","Iy","Iz","J"},{}};
 inline const KeySpec beam{{"id","nodes","material","section"},{"reference_y","releases"}};
+// A truss is read as a Beam3DConnection with every rotational DOF released (kopruq/elements/Truss3D.hpp);
+// reference_y/releases are not accepted here since the truss's orientation and release pattern are implicit.
+inline const KeySpec truss{{"id","nodes","material","section"},{}};
 inline const KeySpec releases{{},{"start","end"}};
 inline const KeySpec support{{"node","restraints"},{}};
 inline const KeySpec load_case{{"name"},{"self_weight","nodal","member","point"}};
@@ -88,6 +92,7 @@ class ModelReader {
     readMaterials(root, R, in);
     readSections(root, R, in);
     readBeams(root, R, in);
+    readTrusses(root, R, in);
     readSupports(root, R, in);
     readLoadCases(root, R, in);
     readCombinations(root, R, in);
@@ -311,6 +316,39 @@ class ModelReader {
       if (!valid) continue;
       if (!beamIds_.insert(e.id).second) { issue(key(p, "id"), "duplicate beam id " + std::to_string(e.id)); continue; }
       in.model.beams.push_back(e);
+    }
+  }
+
+  void readTrusses(const json& root, const std::string& R, ModelInput& in) {
+    const json* a = array(root, R, "trusses");
+    if (!a) return;
+    for (std::size_t i = 0; i < a->size(); ++i) {
+      const std::string p = at(key(R, "trusses"), i);
+      const json& b = (*a)[i];
+      if (!object(b, p, model_keys::truss)) continue;
+      Id eid{}, n1{}, n2{}, mat{}, sec{};
+      bool ok = id(b, p, "id", eid);
+      if (const json* ns = field(b, "nodes")) {
+        if (!ns->is_array() || ns->size() != 2) { issue(key(p, "nodes"), "must be an array of 2 node ids"); ok = false; }
+        else {
+          ok = idValue((*ns)[0], at(key(p, "nodes"), 0), n1) && ok;
+          ok = idValue((*ns)[1], at(key(p, "nodes"), 1), n2) && ok;
+        }
+      }
+      ok = id(b, p, "material", mat) && ok;
+      ok = id(b, p, "section", sec) && ok;
+      if (!ok) continue;
+      bool valid = true;
+      for (int k = 0; k < 2; ++k) {
+        Id n = k == 0 ? n1 : n2;
+        if (!nodeIds_.count(n)) { issue(at(key(p, "nodes"), k), "references unknown node " + std::to_string(n)); valid = false; }
+      }
+      if (valid && n1 == n2) { issue(key(p, "nodes"), "must reference two different nodes"); valid = false; }
+      if (!materialIds_.count(mat)) { issue(key(p, "material"), "references unknown material " + std::to_string(mat)); valid = false; }
+      if (!sectionIds_.count(sec)) { issue(key(p, "section"), "references unknown section " + std::to_string(sec)); valid = false; }
+      if (!valid) continue;
+      if (!beamIds_.insert(eid).second) { issue(key(p, "id"), "duplicate beam/truss id " + std::to_string(eid)); continue; }
+      in.model.beams.push_back(makeTrussConnection(eid, n1, n2, mat, sec, coords_[n1], coords_[n2]));
     }
   }
 

@@ -39,6 +39,13 @@
         "$ref": "#/$defs/beam"
       }
     },
+    "trusses": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/truss"
+      },
+      "description": "Pin-ended axial-only members; read as beams with every rotational DOF released (see Truss3D.hpp)."
+    },
     "supports": {
       "type": "array",
       "items": {
@@ -221,6 +228,40 @@
         },
         "releases": {
           "$ref": "#/$defs/releases"
+        }
+      },
+      "required": [
+        "id",
+        "nodes",
+        "material",
+        "section"
+      ],
+      "additionalProperties": false
+    },
+    "truss": {
+      "type": "object",
+      "description": "Pin-ended 3D truss member: axial stiffness only, no bending/shear/torsion. reference_y and releases are not accepted since orientation does not affect a truss's stiffness.",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "material": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "section": {
+          "type": "integer",
+          "minimum": 1
         }
       },
       "required": [

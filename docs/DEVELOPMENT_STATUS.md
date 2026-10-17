@@ -656,25 +656,38 @@ status`); no data loss.
   codebase actually compiles under GCC/Clang is still unverified**; Stage
   1's code is pushed but unmerged, pending the user clearing the billing
   limit.
-- Milestone status: **Stage 1 BLOCKED on account billing, not on the
-  workflow or the code.**
+- **Update 2026-10-17, after user confirmation**: runners became available
+  again (account-wide blocker cleared). Retried: `gcc-debug` and `gcc-asan`
+  passed outright on the first attempt (110/110 CTest each), confirming
+  the codebase compiles and runs cleanly under GCC/Clang -- no portability
+  defect anywhere. `gcc-release` failed only in the CLI smoke-test step:
+  `"$cli" bogus; code=$?` runs under bash's default `-e` (errexit), which
+  aborts the step on the command's nonzero exit (2, exactly as designed)
+  before `code=$?` is ever reached -- a workflow-script bug carried over
+  from porting the Windows PowerShell version (pwsh `run:` steps are not
+  errexit by default, so the same pattern worked there). Fixed by isolating
+  the intentionally-failing call with `||` instead of `;` (commit
+  `f66da33`). Re-run (`39035585549`): all 3 jobs green, 110/110 each.
+- Measured real cost (run `39035585549`): `gcc-release` 5.05 min,
+  `gcc-debug` 4.80 min, `gcc-asan` 14.83 min wall-clock = 24.68 total
+  minutes; at Ubuntu's 1x multiplier, **~24.7 billable minutes per run**,
+  vs. the old 4-job Windows run's ~62 billable minutes -- already a ~60%
+  cut with only 3 of 4 jobs moved (the 4th, `/analyze`, moves to the rare
+  release workflow in Stage 2, which is most of the remaining gap).
+- Merged to `main` (fast-forward, `f66da33`).
+- Milestone status: **Stage 1 COMPLETE (verified).**
 
 ## Next autonomous action
-Paused for the user: GitHub Actions is returning no runner for this
-account/repo at all (any OS), consistent with an Actions spending or
-included-minutes limit being exhausted. Needed before any further CI
-work: check https://github.com/settings/billing (or the owning
-organization's billing page) and raise/reset the spending limit or wait
-for the next monthly cycle. Once runners are available again:
-1. Finish verifying Stage 1 (confirm the Ubuntu build/tests actually pass;
-   fix anything GCC/Clang-specific that turns up) before merging.
-2. Stage 2: add `release.yml` (Windows, manual dispatch / version tags
+Awaiting user approval (mandatory checkpoint; this task also has its own
+explicit per-stage approval gate). Stage 1 of the Actions optimization is
+complete and verified. Proposed next:
+1. **Stage 2**: add `release.yml` (Windows, manual dispatch / version tags
    only) carrying the existing MSVC debug/release/asan/analyze matrix,
    the CLI smoke test, benchmarks, and upload the built `.exe` files as a
    downloadable artifact.
-3. Stage 3: trigger/permissions cleanup and a measured before/after
+2. **Stage 3**: trigger/permissions cleanup and a measured before/after
    minute comparison using Stage 1+2's actual run data.
 Separately, Phase 6.2 (response spectrum analysis) remains written but
-unverified on `ci/phase6.2-response-spectrum`; resume verifying it once
-CI is available again, or decide whether to fold it in before or after
-the Actions optimization finishes.
+unverified on `ci/phase6.2-response-spectrum`; now that CI runners work
+again, it can be resumed -- before, after, or interleaved with Stage 2/3,
+whichever the user prefers.

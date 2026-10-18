@@ -104,10 +104,45 @@ versioning and structured errors (4.2).
 `4dee2b5`, `cbef2e8`, `41aec8a`):** static condensation of K and member
 loads, unstable-combination rejection, JSON `releases`.
 
+**5.2 truss elements — COMPLETE (verified, CI run `39069625215`, commits
+`2228863`, `a1e8212`):** `Truss3D.hpp` -- a pin-ended 3D truss member
+implemented as a Beam3D with every rotational DOF released (RY,RZ at both
+ends, RX at node2 only -- releasing RX at both ends creates a separate,
+genuine zero-energy spin mechanism, caught by CI and fixed), reusing the
+already-verified static-condensation machinery from 5.1 rather than a
+second stiffness/mass/load/recovery path. JSON `trusses` array.
+
+**5.3 rigid end offsets (eccentric connections) — COMPLETE (verified, CI
+run `39069625215`, commit `a1e8212`):** `Offsets.hpp` -- a rigid-body
+kinematic transform (`K_node = G^T K_point G`, same for M and member
+loads) mapping a member's offset end point to its node; zero offsets are
+an exact no-op. JSON `offset1`/`offset2` on beams.
+
+**5.4 spring/link elements, including bearing and rotational-spring models
+— COMPLETE (verified, CI run `39069625215`, commits `9126760`, `189df29`,
+`7a6fb83`):** `SpringLink.hpp` -- a two-node, six-independent-DOF discrete
+spring (kx,ky,kz,krx,kry,krz, no coupling between them), covering bearings,
+isolators and soil springs. **Formulation limit, found by CI and now
+enforced, not worked around:** node1 and node2 must be at the same
+location -- the decoupled per-DOF stiffness has no lever-arm coupling
+between a node's translational springs and the other node's position, so
+it is only rigid-body consistent (passes the equilibrium-residual check
+used throughout this codebase) when the nodes coincide. This is not a
+general two-point rigid link for spatially separated nodes; a spring/link
+always was, and remains, a single-point bearing/isolator/soil-spring
+model. JSON `springs` array.
+
 Not started, still in scope:
-- Rotational springs, eccentric offsets, rigid links and constraints with independent benchmarks.
-- Truss elements, spring/link elements, bearing models; numerical stability and mechanisms.
-- Timoshenko beam option if engineering requirements justify it; explicit formulation comparison.
+- General rigid links / multi-point constraints (e.g. a rigid diaphragm
+  tying several nodes' in-plane DOFs together) -- a different mechanism
+  from 5.3's two-node eccentric offset; would need DofManager-level
+  dependent-DOF elimination or Lagrange multipliers. Deferred, not
+  attempted in this work period.
+- Timoshenko beam option: evaluated and deferred, not implemented -- no
+  stated engineering requirement, and shear-deformation theory would touch
+  Beam3D.hpp, the most heavily independently-verified core element (R1).
+  Revisit only if a specific requirement justifies the formulation change
+  and the added verification burden.
 
 ### Phase 6 — Advanced linear analyses
 **6.1 modal analysis — COMPLETE (verified, CI run `38902536528`, commits

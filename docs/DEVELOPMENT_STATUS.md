@@ -23,14 +23,16 @@ record the current policy in this document too:
   restrictive approval-gated rule governs.
 
 ## Current priority
-**Phase 6.2 — response spectrum analysis — BLOCKED (GitHub Actions runner
-provisioning, not code).** Code and tests are written, compiled successfully
-earlier in this same CI pipeline, and the one test-side issue found (spectrum
-range too narrow for the model's actual periods) was already fixed and
-pushed. Every run since then fails in ~2 seconds with no runner assigned
-(`runner_id: 0`, empty steps, no logs) -- see "Known blocking issue" below.
-Phases 4.1-4.4, 5.1, 6.1, 6.1b remain complete and verified; nothing about
-them is affected.
+**Phase 5 — COMPLETE as scoped (verified, CI run `39069625215`, 149/149
+Debug/Release/ASan).** Truss elements (5.2), rigid end offsets (5.3) and
+spring/link elements including bearings (5.4) implemented; general
+multi-point rigid links and the Timoshenko beam option are deferred, not
+attempted (see `docs/SOLVER_ROADMAP.md`). Phase 6 (6.1, 6.1b, 6.2, 6.2b)
+remains complete and unaffected; 6.3 is cancelled per the user's 2026-10-17
+scope decision. This work was done under the user's explicit standing
+authorization to complete Phase 5 and Phase 6 without an approval
+checkpoint between them, stopping before Phase 7 (see "Next autonomous
+action").
 
 **Phase 3.2 requalification — COMPLETE (verified on CI, run `38872157394`,
 commit `1ed5ae4`).** Next: Phase 4, which has **not started** — its first
@@ -904,14 +906,85 @@ Measured from this session's actual GitHub API data (job
 - Milestone status: **Scope change recorded and applied; no code
   changed.**
 
+### 2026-10-17/18 — Phase 5 completion: truss, rigid offsets, spring/link elements
+User instruction (verbatim intent): complete Phase 5, then Phase 6, without
+asking for approval between them; stop before Phase 7.
+
+- **5.2 truss elements** (`include/kopruq/elements/Truss3D.hpp`): a
+  pin-ended 3D truss implemented as a Beam3D with every rotational DOF
+  released, reusing 5.1's static condensation rather than a new
+  stiffness/mass/load/recovery path. First attempt released RX at both
+  ends; CI (run `39060519026`) caught `Beam3DErrorCode::UnstableRelease`
+  -- releasing torsion at both ends creates a genuine, separate zero-energy
+  spin mechanism (decoupled from everything else), which Releases.hpp's
+  stability check correctly rejects. Fixed by releasing RX at node2 only
+  (commit `a1e8212`): releasing either single end already drives the
+  retained torsional stiffness to exactly zero (the torsion block is
+  rank-1), so the fix changes nothing mechanically, only avoids the
+  both-ends-free degeneracy. Independent verification: dense comparison to
+  the classical EA/L*c c^T truss stiffness formula; a statically
+  determinate two-bar A-frame matched against hand statics (method of
+  joints) and the unit-load/virtual-work theorem, cross-checked against
+  elongation-derived axial force.
+- **5.3 rigid end offsets** (`include/kopruq/elements/Offsets.hpp`): a
+  rigid-body kinematic transform G (u_point = u_node + theta_node x e)
+  composed around the existing offset-point stiffness/mass/loads
+  (K_node = G^T K_point G); zero offsets are an exact no-op, verified by a
+  bit-identical regression test against the pre-existing beam path.
+  Independent verification: rigid-body kinematics of G itself; G^T K G
+  composed in the test from Beam3D::globalStiffness (an already-verified
+  primitive) vs. the production-assembled matrix; equilibrium/energy
+  residuals for a loaded, offset cantilever.
+- **5.4 spring/link elements** (`include/kopruq/elements/SpringLink.hpp`):
+  a two-node, six-independent-DOF discrete spring (no coupling between
+  DOFs, unlike a beam), covering bearings/isolators/soil springs. CI (run
+  `39068274432`) caught a genuine formulation defect: with non-coincident
+  nodes, the decoupled per-DOF stiffness has no lever-arm coupling to the
+  node separation, so it lacks a rigid-body null space under rotation --
+  `Spring.TiltedLoadedSpringSatisfiesEquilibrium`'s moment_equilibrium_error
+  was 0.86, not near-zero. Fixed (commit `189df29`) by requiring node1/node2
+  to be at the same location (`checkSpringNodesCoincident`, enforced in
+  assembly, `Validate.hpp` and the JSON reader) rather than generalizing the
+  element -- the documented primary use (a single-point bearing/isolator)
+  was always coincident-node, so nothing that ever worked regresses. A
+  second CI failure (run `39069440192`) was a pure editing mistake --
+  the new function landed outside its namespace/includes -- fixed in commit
+  `7a6fb83` with no logic change.
+- Independently derived expected results used statics, virtual-work and
+  plain rigid-body kinematics throughout; none were computed by calling
+  the production code under test. Both CI-caught issues were genuine
+  formulation/mechanism defects this session's own equilibrium-residual
+  tests were specifically designed to catch, not test-authoring mistakes --
+  recorded here rather than glossed over.
+- Final verification: CI run `39069625215`, commits `2228863`, `a1e8212`,
+  `9126760`, `189df29`, `7a6fb83`. Debug/Release/ASan: **149/149 PASS**
+  (up from 133 before this session's work; 16 new tests across
+  `truss_tests.cpp`, `truss_io_tests.cpp`, `offset_tests.cpp`,
+  `spring_tests.cpp`, `spring_io_tests.cpp`).
+- Deferred, not attempted: general multi-point rigid links/constraints
+  (different mechanism from 5.3's two-node offset; needs DofManager-level
+  dependent-DOF elimination or Lagrange multipliers); the Timoshenko beam
+  option (no stated requirement; would touch the most heavily-verified
+  core element, Beam3D.hpp).
+- Milestone status: **Phase 5 COMPLETE as scoped. Phase 6 already complete
+  (6.1, 6.1b, 6.2, 6.2b; 6.3 cancelled) -- confirmed, no further action
+  needed there.** Stopping before Phase 7 per the user's explicit
+  instruction.
+
 ## Next autonomous action
-Awaiting user approval (mandatory checkpoint). Phase 3.2, all of Phase 4
-(4.1-4.4), Phase 5.1, and all of Phase 6 done so far (6.1, 6.1b, 6.2, 6.2b)
-are complete and verified; Phase 6.3, 7 and 8 are cancelled. Candidate next
-increments (say which, or propose a different scope):
-1. **Phase 5.2 -- end springs and eccentric offsets**, generalizing 5.1.
-2. **Phase 7 (renumbered) -- high-performance production solver**: sparse
+**Stopped at the Phase 7 boundary per the user's explicit instruction**
+("complete Phase 5, then Phase 6, without asking approval between them;
+stop at Phase 7"). Phase 3.2, Phase 4 (4.1-4.4), Phase 5 (5.1-5.4) and
+Phase 6 (6.1, 6.1b, 6.2, 6.2b; 6.3 cancelled) are all complete and
+verified -- CI run `39069625215`, 149/149 Debug/Release/ASan. This is a
+mandatory approval checkpoint: awaiting explicit user approval before any
+Phase 7 work begins. Candidate next increments (say which, or propose a
+different scope):
+1. **Phase 7 -- high-performance production solver**: sparse
    direct/iterative strategy, optional SuiteSparse, profiling/parallelism.
+2. General multi-point rigid links/constraints and/or the Timoshenko beam
+   option, deferred from Phase 5 (see the 2026-10-17/18 session entry
+   above for why), if the user wants them added to scope.
 3. Cut an actual `v0.1.0`-style release tag now, to verify `release.yml`'s
    tag trigger end-to-end (it has only been verified via
    `workflow_dispatch`-equivalent branch pushes so far, never a real tag).

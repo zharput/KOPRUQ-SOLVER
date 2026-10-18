@@ -188,6 +188,64 @@ listed; no further items planned unless the user adds scope.
 *(renumbered from the former Phase 9; the former Phase 7-8 are cancelled, see "Scope change" above)*
 - Sparse direct/iterative solver strategy, optional SuiteSparse integration, profiling and parallelism where justified.
 - Stable API, reproducibility, scalability and packaging.
+Not started.
+
+## Scope addition — 2026-10-18 (user decision): Phases 7A-7F, MIDAS NX JSON import
+User instruction: make KOPRUQ-SOLVER able to import a real MIDAS Civil NX JSON export
+(`xmidas/deneme1.json`), reconstruct the model internally, analyze it with KOPRUQ-SOLVER's own
+solver (never MIDAS or OpenSees as a computational dependency), and export JSON results,
+independently verified against analytical references first and MIDAS's own results where
+available. Phases 7A-7F below sit after Phase 7 and before Phase 8/9, which remain deferred
+pending explicit approval as before. First execution (2026-10-18) was audit-only, per the user's
+explicit instruction not to begin implementing 7B yet: `docs/MIDAS_JSON_DATA_AUDIT.md` and
+`docs/SOLVER_CAPABILITY_MATRIX.md` record the findings; nothing in 7B-7F has been implemented.
+
+### Phase 7A — Solver capability and MIDAS JSON audit — COMPLETE (this execution, 2026-10-18)
+Deliverables: `docs/MIDAS_JSON_DATA_AUDIT.md` (full inventory of `xmidas/deneme1.json`: 106
+nodes, 94 beam elements, 2 materials, 5 sections, 9 supports, 4 elastic links, 5 rigid links, 5
+load cases, 40 member loads, 40 element-temperature records, 1 modal case, 2 response-spectrum
+cases); `docs/SOLVER_CAPABILITY_MATRIX.md` (capability-by-capability gap analysis). Key findings,
+in blocking-severity order: (1) material elastic modulus/Poisson/unit-weight are not in the
+export, only a design-code grade name — needs a cited code formula or explicit rejection; (2)
+section area/Iy/Iz/J are not in the export, only a shape code + raw dimensions — needs a
+section-shape property library for the 3 shapes actually used (`SB`,`B`,`SR`); (3) the sample's
+4 elastic links (`ELNK`) connect non-coincident nodes, which Phase 5.4's `SpringLink` deliberately
+rejects (a real formulation limit, not a missing-data gap) — needs either extending the element
+or explicit rejection of those records; (4) the sample's rigid links (`RIGD`, maps directly onto
+Phase 5.5's `RigidLink`) coexist with modal/response-spectrum requests that `ModalSolver`/
+`ResponseSpectrumSolver` currently reject outright when `rigid_links` is non-empty; (5) element
+temperature loads (`ETMP`/case `TU`) are not implemented in any phase. Official MIDAS
+documentation pages (API manual, Export-to-JSON) returned HTTP 403 (authenticated portal);
+findings are from direct inspection of the real export, not assumed from inaccessible docs.
+
+### Phase 7B — MIDAS JSON importer and internal model reconstruction
+Not started; blocked on explicit approval to proceed, and on resolving 7A's material/section
+gaps (a dedicated code-formula material table and a section-shape property library), plus a
+decision on the non-coincident `ELNK` records and the rigid-links/dynamics restriction. Scope:
+a MIDAS-specific adapter producing KOPRUQ-SOLVER's existing internal `Model`/`LoadCase` types,
+preserving original MIDAS IDs, canonical units (m, kN, kNm, kN/m², rad), explicit failure
+(not silent defaults) for anything unresolved.
+
+### Phase 7C — Standalone EXE analysis (MIDAS-format CLI input)
+Not started; depends on 7B. `--format midas-nx-json` CLI option alongside the existing native
+JSON path; existing CLI behavior preserved.
+
+### Phase 7D — JSON results export (MIDAS-import-oriented results schema)
+Not started; depends on 7B/7C. Likely largely satisfied by extending the existing
+`kopruq-results`/`kopruq-modal-results`/`kopruq-response-spectrum-results` schemas rather than a
+new one, pending review once 7B's model shape is known.
+
+### Phase 7E — MIDAS NX results comparison
+Not started; depends on 7B-7D. Reference data available so far: MIDAS's own modal frequencies
+for all 20 modes, readable directly from `xmidas/deneme1_Eigenvalue.out` (plain text). No
+readable numeric static or response-spectrum results were found in the sibling `.out`/`.log`
+files (they are run logs only); the corresponding `.rst`/`.mec`/`.nfxp` files are binary MIDAS
+formats not parsed in this audit. Full static/spectrum comparison may need an additional results
+export from MIDAS in a parseable format, or MIDAS API access — to be confirmed, not assumed,
+before claiming MIDAS numerical validation is complete.
+
+### Phase 7F — Final standalone release
+Not started; depends on 7A-7E.
 
 ### Phase 8 — KOPRUQ integration (EXPLICIT APPROVAL REQUIRED)
 *(renumbered from the former Phase 10)*

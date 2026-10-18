@@ -23,8 +23,16 @@ record the current policy in this document too:
   restrictive approval-gated rule governs.
 
 ## Current priority
-**Phase 5 — COMPLETE IN FULL, 5.1-5.6 (verified, CI run `39104401638`,
-167/167 Debug/Release/ASan).** Truss elements (5.2), rigid end offsets
+**Phase 7A — MIDAS NX JSON import audit — COMPLETE (this execution,
+2026-10-18, audit only, no code changed).** `docs/MIDAS_JSON_DATA_AUDIT.md`
+and `docs/SOLVER_CAPABILITY_MATRIX.md` record a full inventory of the real
+`xmidas/deneme1.json` export and a capability-by-capability gap analysis
+against the current solver. Per the user's explicit instruction, Phase 7B
+(the actual importer) has **not** been started; this was audit and
+roadmap-update only, and ends at a mandatory approval checkpoint.
+
+Phase 5 — COMPLETE IN FULL, 5.1-5.6 (verified, CI run `39104401638`,
+167/167 Debug/Release/ASan). Truss elements (5.2), rigid end offsets
 (5.3), spring/link elements including bearings (5.4), general rigid
 links/multi-point constraints (5.5) and the Timoshenko beam option (5.6)
 are all implemented. 5.5 and 5.6 were initially deferred as out of scope
@@ -1017,21 +1025,62 @@ after reviewing the prior progress report.
   deferred items.** Stopping again before Phase 7 per the still-standing
   instruction from the 2026-10-17 approval checkpoint.
 
+### 2026-10-18 — Phase 7A: MIDAS NX JSON import audit (first execution, audit only)
+User instruction (verbatim intent): make KOPRUQ-SOLVER able to import a real MIDAS Civil NX JSON
+export, analyze it with KOPRUQ-SOLVER's own solver, and export JSON results, independently
+verified against analytical references first and MIDAS's own results where available. Added
+Phases 7A-7F to the roadmap, kept Phase 8/9 deferred as before. First execution explicitly
+scoped to audit + roadmap update only, ending at a mandatory approval checkpoint before any
+Phase 7B implementation.
+
+- Inspected `xmidas/deneme1.json` directly (PowerShell `ConvertFrom-Json`; no Python available
+  in this environment). Full findings: `docs/MIDAS_JSON_DATA_AUDIT.md`. Summary: 106 nodes, 94
+  beam elements, 2 materials, 5 sections, 9 fully-fixed supports, 4 elastic links, 5 rigid links,
+  5 load cases (self-weight, 3 superimposed dead load stages, 1 temperature), 40 member loads, 40
+  element-temperature records, 1 modal case (Lanczos/20 modes), 2 response-spectrum cases
+  (Eurocode 8 elastic spectrum, CQC). This is a full MIDAS database dump (150+ categories), not a
+  minimal structural subset -- most categories are empty for this model.
+- Official MIDAS documentation (`support.midasuser.com` API manual and Export-to-JSON pages)
+  returned HTTP 403 (authenticated support portal) -- not used, per the task's own fallback
+  instruction. One public page (concrete material modulus formula) was reachable via search and
+  corroborates finding (1) below.
+- Five real gaps found, in blocking-severity order: (1) material elastic modulus/Poisson/unit
+  weight are not in the export -- only a design-code grade name (`C35/45` etc.) and
+  characteristic strength; MIDAS derives `E` internally via a code formula. (2) section area/
+  Iy/Iz/J are not in the export -- only a shape code (`SB`,`B`,`SR`) and raw dimensions; needs a
+  section-shape property library. (3) the sample's 4 elastic links connect **non-coincident**
+  nodes, which Phase 5.4's `SpringLink` deliberately rejects (a real formulation limit found and
+  enforced by CI during that phase, not an oversight) -- this specific model cannot be imported
+  onto `SpringLink` as it stands. (4) the sample's rigid links coexist with modal/response-
+  spectrum requests, but `ModalSolver`/`ResponseSpectrumSolver` (Phase 5.5) explicitly reject any
+  model with rigid links. (5) element-temperature loads (`ETMP`/case `TU`) have no implementation
+  in any phase. `docs/SOLVER_CAPABILITY_MATRIX.md` lays out every capability the sample touches
+  against current solver status.
+- MIDAS's own modal frequencies (all 20 modes) are readable directly from
+  `xmidas/deneme1_Eigenvalue.out` (plain text) -- useful, ready-made independent reference data
+  for a future Phase 7E comparison. No numeric static/spectrum results were found in readable
+  form; those live in binary `.rst`/`.mec`/`.nfxp` files, not parsed in this audit.
+- `docs/SOLVER_ROADMAP.md` updated with Phases 7A (COMPLETE, this execution) through 7F (not
+  started), inserted after Phase 7 (production solver, also not started) and before Phase 8/9
+  (still deferred, unchanged).
+- Milestone status: **Phase 7A COMPLETE. No code changed. Mandatory approval checkpoint: Phase
+  7B (the actual importer) requires explicit user approval before starting**, per the user's own
+  instruction for this execution.
+
 ## Next autonomous action
-**Stopped at the Phase 7 boundary per the user's explicit instruction**
-("complete Phase 5, then Phase 6, without asking approval between them;
-stop at Phase 7"), reaffirmed after the user's 2026-10-18 follow-up asked
-only to finish Phase 5's remaining deferred items (now done), not to
-proceed into Phase 7. Phase 3.2, Phase 4 (4.1-4.4), Phase 5 (5.1-5.6, now
-complete in full) and Phase 6 (6.1, 6.1b, 6.2, 6.2b; 6.3 cancelled) are
-all complete and verified -- CI run `39104401638`, 167/167
-Debug/Release/ASan. This is a mandatory approval checkpoint: awaiting
-explicit user approval before any Phase 7 work begins. Candidate next
-increments (say which, or propose a different scope):
-1. **Phase 7 -- high-performance production solver**: sparse
-   direct/iterative strategy, optional SuiteSparse, profiling/parallelism.
-2. Extend rigid-link support to ModalSolver/ResponseSpectrumSolver
-   (currently explicitly rejected there, static-analysis-only for now).
-3. Cut an actual `v0.1.0`-style release tag now, to verify `release.yml`'s
-   tag trigger end-to-end (it has only been verified via
-   `workflow_dispatch`-equivalent branch pushes so far, never a real tag).
+**Stopped at a mandatory approval checkpoint after Phase 7A** (MIDAS JSON audit), per the user's
+explicit instruction for this execution ("do not begin implementing Phase 7B during this first
+execution"). Phase 3.2, Phase 4, Phase 5 (5.1-5.6, complete in full) and Phase 6 (6.1, 6.1b, 6.2,
+6.2b; 6.3 cancelled) remain complete and verified -- CI run `39104401638`, 167/167
+Debug/Release/ASan; nothing in this audit changed any of that. Candidate next steps (say which,
+or propose a different scope):
+1. **Phase 7B -- MIDAS JSON importer**: requires first resolving (or explicitly deciding how to
+   handle) the five gaps in `docs/MIDAS_JSON_DATA_AUDIT.md` -- material-grade-to-E formula,
+   section-shape property library, non-coincident `ELNK` records, rigid-links-vs-dynamics
+   restriction, and `ETMP` thermal loads being unimplemented.
+2. **Phase 7 (production solver, unrelated to MIDAS import)**: sparse direct/iterative strategy,
+   optional SuiteSparse, profiling/parallelism -- still not started, still available as an
+   alternative next step.
+3. Extend rigid-link support to ModalSolver/ResponseSpectrumSolver (needed either way before this
+   particular MIDAS sample's dynamic cases can run).
+4. Cut an actual `v0.1.0`-style release tag now, to verify `release.yml`'s tag trigger end-to-end.

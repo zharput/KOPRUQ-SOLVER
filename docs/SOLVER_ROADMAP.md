@@ -132,17 +132,31 @@ general two-point rigid link for spatially separated nodes; a spring/link
 always was, and remains, a single-point bearing/isolator/soil-spring
 model. JSON `springs` array.
 
-Not started, still in scope:
-- General rigid links / multi-point constraints (e.g. a rigid diaphragm
-  tying several nodes' in-plane DOFs together) -- a different mechanism
-  from 5.3's two-node eccentric offset; would need DofManager-level
-  dependent-DOF elimination or Lagrange multipliers. Deferred, not
-  attempted in this work period.
-- Timoshenko beam option: evaluated and deferred, not implemented -- no
-  stated engineering requirement, and shear-deformation theory would touch
-  Beam3D.hpp, the most heavily independently-verified core element (R1).
-  Revisit only if a specific requirement justifies the formulation change
-  and the added verification burden.
+**5.5 general rigid links / multi-point constraints — COMPLETE (verified,
+CI run `39104401638`, commit `18b6a70`):** `RigidLink.hpp` -- a slave
+node's 6 DOFs entirely determined by a master's via rigid-body kinematics
+(one master, many possible slaves, e.g. a rigid diaphragm), implemented as
+a global DOF-elimination layer wrapped around the existing, unmodified
+assembled K/F/U, with an isolated code path
+(`LinearStaticSolver::solveCasesWithRigidLinks`) so a model without
+rigid links is provably unaffected. Static analysis only -- ModalSolver
+and ResponseSpectrumSolver explicitly reject a model that has any, rather
+than silently ignoring the constraint. JSON `rigid_links` array.
+
+**5.6 Timoshenko beam option — COMPLETE (verified, CI run `39104401638`,
+commits `edc0e6d`, `a2f5290`):** optional effective shear areas
+`Section::Asy`/`Asz` (0 = rigid in shear, the prior Euler-Bernoulli
+behavior, recovered exactly); `Beam3D::localStiffness` applies the
+standard Timoshenko (1+Phi) correction. The mass matrix deliberately keeps
+its Euler-Bernoulli shape functions regardless (documented simplification,
+not an oversight) -- modal/response-spectrum results for a Timoshenko
+beam use this slightly approximate mass alongside the exact Timoshenko
+stiffness.
+
+Phase 5 is now complete in full: 5.1-5.6, with no remaining deferred
+items. (5.5/5.6 were completed per explicit user instruction on
+2026-10-18 after being initially deferred as out of the original work
+period's scope.)
 
 ### Phase 6 — Advanced linear analyses
 **6.1 modal analysis — COMPLETE (verified, CI run `38902536528`, commits

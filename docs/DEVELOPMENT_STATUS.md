@@ -23,16 +23,16 @@ record the current policy in this document too:
   restrictive approval-gated rule governs.
 
 ## Current priority
-**Phase 5 — COMPLETE as scoped (verified, CI run `39069625215`, 149/149
-Debug/Release/ASan).** Truss elements (5.2), rigid end offsets (5.3) and
-spring/link elements including bearings (5.4) implemented; general
-multi-point rigid links and the Timoshenko beam option are deferred, not
-attempted (see `docs/SOLVER_ROADMAP.md`). Phase 6 (6.1, 6.1b, 6.2, 6.2b)
-remains complete and unaffected; 6.3 is cancelled per the user's 2026-10-17
-scope decision. This work was done under the user's explicit standing
-authorization to complete Phase 5 and Phase 6 without an approval
-checkpoint between them, stopping before Phase 7 (see "Next autonomous
-action").
+**Phase 5 — COMPLETE IN FULL, 5.1-5.6 (verified, CI run `39104401638`,
+167/167 Debug/Release/ASan).** Truss elements (5.2), rigid end offsets
+(5.3), spring/link elements including bearings (5.4), general rigid
+links/multi-point constraints (5.5) and the Timoshenko beam option (5.6)
+are all implemented. 5.5 and 5.6 were initially deferred as out of scope
+for the 2026-10-17 work period, then explicitly requested and completed on
+2026-10-18 per the user's follow-up instruction. Phase 6 (6.1, 6.1b, 6.2,
+6.2b) remains complete and unaffected; 6.3 is cancelled per the user's
+2026-10-17 scope decision. See "Next autonomous action" for the current
+approval checkpoint (stopped before Phase 7).
 
 **Phase 3.2 requalification — COMPLETE (verified on CI, run `38872157394`,
 commit `1ed5ae4`).** Next: Phase 4, which has **not started** — its first
@@ -971,20 +971,67 @@ asking for approval between them; stop before Phase 7.
   needed there.** Stopping before Phase 7 per the user's explicit
   instruction.
 
+### 2026-10-18 — Phase 5 completion: rigid links (5.5) and Timoshenko beam (5.6)
+User instruction (verbatim intent): complete the items deferred from
+Phase 5 -- general rigid links and the Timoshenko beam option -- in full,
+after reviewing the prior progress report.
+
+- **5.6 Timoshenko beam**: `Section::Asy`/`Asz` (effective shear area,
+  default 0 = rigid in shear). `Beam3D::localStiffness` now computes
+  ay/by/cy/dy (and az/bz/cz/dz) with the standard (1+Phi) correction,
+  Phi = 12EI/(GAs L^2); every call site building `Beam3DProperties` from a
+  `Section` updated to pass Asy/Asz through (otherwise the correction
+  would silently never apply). Mass matrix intentionally left
+  Euler-Bernoulli (documented limitation, not an oversight).
+  Independent verification: Asy=Asz=0 reproduces the plain
+  Euler-Bernoulli formulas bit-for-bit; a cantilever tip deflection/
+  rotation under a transverse point load matches the closed-form
+  Timoshenko solution w=PL^3/(3EI)+PL/(GAs), theta=PL^2/(2EI) (theta
+  independent of shear, as theory predicts). **Test-authoring bug caught
+  by CI** (run `39103459292`): the point load's `position` was 0.0 (node1,
+  the fixed end) instead of 1.0 (node2, the free tip), so every case
+  measured a zero-displacement no-op; fixed in commit `a2f5290`, no
+  production code touched.
+- **5.5 general rigid links**: `RigidLink.hpp`, a slave node's 6 DOFs
+  entirely determined by a master's via rigid-body kinematics (one master,
+  many slaves possible), implemented as a DOF-elimination layer wrapped
+  around the existing, unmodified assembled K/F/U
+  (K_reduced=T^T K T, etc.). To keep the overwhelmingly common
+  no-rigid-links case at zero risk, `LinearStaticSolver::solveCases` has
+  an early branch to a separate `solveCasesWithRigidLinks` function
+  (a parallel implementation, not conditionals threaded through the
+  original) when `m.rigid_links` is non-empty. `ModalSolver`/
+  `ResponseSpectrumSolver` explicitly reject models with rigid links
+  (not yet supported there) rather than silently ignoring the constraint.
+  Independent verification: the reduction matrix's kinematics checked
+  directly against the cross-product definition; a cantilever with a
+  rigid arm past its tip, loaded at the arm's end, checked against the
+  closed-form cantilever-under-combined-force-and-moment solution (the
+  equivalent load from elementary statics) and, separately, against the
+  rigid-body kinematic relationship itself.
+- Final verification: CI run `39104401638`, commits `edc0e6d`, `a2f5290`,
+  `18b6a70`. Debug/Release/ASan: **167/167 PASS** (up from 149; 18 new
+  tests across `timoshenko_tests.cpp`, `timoshenko_io_tests.cpp`,
+  `rigid_link_tests.cpp`, `rigid_link_io_tests.cpp`).
+- Milestone status: **Phase 5 COMPLETE IN FULL (5.1-5.6), no remaining
+  deferred items.** Stopping again before Phase 7 per the still-standing
+  instruction from the 2026-10-17 approval checkpoint.
+
 ## Next autonomous action
 **Stopped at the Phase 7 boundary per the user's explicit instruction**
 ("complete Phase 5, then Phase 6, without asking approval between them;
-stop at Phase 7"). Phase 3.2, Phase 4 (4.1-4.4), Phase 5 (5.1-5.4) and
-Phase 6 (6.1, 6.1b, 6.2, 6.2b; 6.3 cancelled) are all complete and
-verified -- CI run `39069625215`, 149/149 Debug/Release/ASan. This is a
-mandatory approval checkpoint: awaiting explicit user approval before any
-Phase 7 work begins. Candidate next increments (say which, or propose a
-different scope):
+stop at Phase 7"), reaffirmed after the user's 2026-10-18 follow-up asked
+only to finish Phase 5's remaining deferred items (now done), not to
+proceed into Phase 7. Phase 3.2, Phase 4 (4.1-4.4), Phase 5 (5.1-5.6, now
+complete in full) and Phase 6 (6.1, 6.1b, 6.2, 6.2b; 6.3 cancelled) are
+all complete and verified -- CI run `39104401638`, 167/167
+Debug/Release/ASan. This is a mandatory approval checkpoint: awaiting
+explicit user approval before any Phase 7 work begins. Candidate next
+increments (say which, or propose a different scope):
 1. **Phase 7 -- high-performance production solver**: sparse
    direct/iterative strategy, optional SuiteSparse, profiling/parallelism.
-2. General multi-point rigid links/constraints and/or the Timoshenko beam
-   option, deferred from Phase 5 (see the 2026-10-17/18 session entry
-   above for why), if the user wants them added to scope.
+2. Extend rigid-link support to ModalSolver/ResponseSpectrumSolver
+   (currently explicitly rejected there, static-analysis-only for now).
 3. Cut an actual `v0.1.0`-style release tag now, to verify `release.yml`'s
    tag trigger end-to-end (it has only been verified via
    `workflow_dispatch`-equivalent branch pushes so far, never a real tag).

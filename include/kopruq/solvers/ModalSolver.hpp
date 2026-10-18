@@ -20,6 +20,11 @@ class ModalSolver { public:
     try {
       DofManager dm(m);
       out.total_dofs = dm.dof_count();
+      // Rigid links (Model::rigid_links) are a DOF-elimination layer implemented only for
+      // LinearStaticSolver::solveCases so far; this solver assembles K/M over every DOF
+      // including slave DOFs with no knowledge of the constraint, which would be wrong, not
+      // merely incomplete. Reject explicitly rather than silently ignoring the constraint.
+      if (!m.rigid_links.empty()) { out.status = {false, "rigid links are not yet supported for modal analysis", SolverStatusCode::InvalidModel}; return out; }
       if (rs.empty()) { out.status = {false, "no restraints", SolverStatusCode::NoRestraints}; return out; }
       auto all = rs; for (const auto& n : m.nodes) if (!all.count(n.id)) all[n.id] = {};
       auto b = MatrixAssembler::classify(dm, all);

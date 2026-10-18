@@ -53,6 +53,13 @@
       },
       "description": "Discrete two-node spring/link elements (bearings, isolators, soil springs); see SpringLink.hpp."
     },
+    "rigid_links": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/rigid_link"
+      },
+      "description": "Master-slave multi-point constraints; a slave's 6 DOFs follow its master's rigidly. See kopruq/assembly/RigidLink.hpp. Supported by the static solver only."
+    },
     "supports": {
       "type": "array",
       "items": {
@@ -363,6 +370,30 @@
         "id",
         "nodes",
         "stiffness"
+      ],
+      "additionalProperties": false
+    },
+    "rigid_link": {
+      "type": "object",
+      "description": "A slave node's 6 DOFs are entirely determined by its master's via rigid-body kinematics; the slave cannot carry its own restraints.",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "master": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "slave": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "id",
+        "master",
+        "slave"
       ],
       "additionalProperties": false
     },

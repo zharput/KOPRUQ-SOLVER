@@ -12,6 +12,10 @@
 // member's actual end point; {0,0,0} (default) is a no-op, preserving prior results for every model that omits them.
 namespace kopruq { struct Beam3DConnection { Id id{}, node1{}, node2{}, material{}, section{}; Eigen::Vector3d reference_y{0,1,0}; std::array<bool,12> releases{}; Eigen::Vector3d offset1{0,0,0}, offset2{0,0,0}; };
 // springs: discrete two-node spring/link elements (kopruq/elements/SpringLink.hpp); id space is independent of beams'.
-struct Model { std::vector<Node> nodes; std::vector<Material> materials; std::vector<Section> sections; std::vector<Beam3DConnection> beams; std::vector<SpringConnection> springs; };
+// rigid_links: master-slave multi-point constraints (kopruq/assembly/RigidLink.hpp); a slave's 6 DOFs are
+// entirely determined by its master's via rigid-body kinematics. Supported by LinearStaticSolver only so far
+// (ModalSolver/ResponseSpectrumSolver explicitly reject a model that has any).
+struct RigidLink { Id id{}, master{}, slave{}; };
+struct Model { std::vector<Node> nodes; std::vector<Material> materials; std::vector<Section> sections; std::vector<Beam3DConnection> beams; std::vector<SpringConnection> springs; std::vector<RigidLink> rigid_links; };
 // Restraint flags per node, UX..RZ; a map naturally forbids more than one entry per node.
 using Restraints = std::map<Id, std::array<bool,6>>; }

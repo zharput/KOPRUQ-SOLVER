@@ -1,6 +1,7 @@
 #pragma once
 #include "SolverStatus.hpp"
 #include "../assembly/MatrixAssembler.hpp"
+#include "../assembly/RigidLink.hpp"
 #include "../loads/Loads.hpp"
 #include "../elements/Releases.hpp"
 #include "../elements/Offsets.hpp"
@@ -185,8 +186,12 @@ static AnalysisResults recover(const Model&m,const Restraints&rs,const std::vect
 static StaticSolution solve(const Model&m,const Restraints&rs,const std::vector<NodalLoad>&ls){return solveCases(m,rs,{LoadCase{"",ls,{},0}}).cases.front();}
 
 // Solves every load case with one factorization of Kff, then each combination by superposition of the case
-// displacements (recovered with the correspondingly combined loads).
+// displacements (recovered with the correspondingly combined loads). Delegates to
+// solveCasesWithRigidLinks when the model has any (a separate, isolated code path -- see RigidLink.hpp --
+// so a model without rigid_links, the overwhelming majority including every previously verified test,
+// runs through this exact unmodified code, unaffected by the feature's existence).
 static MultiCaseSolution solveCases(const Model&m,const Restraints&rs,const std::vector<LoadCase>&cases,const std::vector<LoadCombination>&combos={}){
+  if(!m.rigid_links.empty())return solveCasesWithRigidLinks(m,rs,cases,combos);
   MultiCaseSolution out;out.cases.resize(cases.size());out.combinations.resize(combos.size());
   auto fail=[&](const SolverStatus&st){out.status=st;for(auto&c:out.cases)c.status=st;for(auto&c:out.combinations)c.status=st;return out;};
   try{
@@ -219,6 +224,70 @@ static MultiCaseSolution solveCases(const Model&m,const Restraints&rs,const std:
       auto&o=out.combinations[k];
       LoadCase lc;lc.name=combos[k].name;
       Eigen::VectorXd uf=Eigen::VectorXd::Zero((Eigen::Index)b.free.size());
+      const SolverStatus*failed=nullptr;
+      for(const auto&[idx,f]:combos[k].terms){
+        if(!out.cases[idx].status.success){failed=&out.cases[idx].status;break;}
+        uf+=f*out.cases[idx].free;
+        for(auto l:cases[idx].nodal){l.values*=f;lc.nodal.push_back(l);}
+        for(auto l:cases[idx].member){l.w1*=f;l.w2*=f;lc.member.push_back(l);}
+        for(auto l:cases[idx].point){l.value*=f;lc.point.push_back(l);}
+        lc.self_weight+=f*cases[idx].self_weight;
+      }
+      if(failed){o.status=*failed;continue;}
+      auto ap=assembleLoadCase(m,dm,lc);auto Ff=freeLoads(ap);o.free=uf;finish(o,ap,Ff);
+    }
+    out.status={true,"linear static solution and recovery completed",SolverStatusCode::Success};
+    for(const auto&c:out.cases)if(!c.status.success){out.status=c.status;break;}
+    if(out.status.success)for(const auto&c:out.combinations)if(!c.status.success){out.status=c.status;break;}
+  }catch(const std::exception&e){return fail({false,e.what(),SolverStatusCode::InvalidModel});}
+  return out;
+}
+
+// Same algorithm as solveCases, with every quantity that touches Kff/Ff/the free-DOF solution
+// built in the rigid-link-REDUCED DOF space (RigidLinkReduction): the full-DOF K/F/U that
+// MatrixAssembler and recoverAssembled operate on are completely unchanged, only the solve step
+// in between is routed through T^T(.)T / T^T(.) / T(.).
+static MultiCaseSolution solveCasesWithRigidLinks(const Model&m,const Restraints&rs,const std::vector<LoadCase>&cases,const std::vector<LoadCombination>&combos){
+  MultiCaseSolution out;out.cases.resize(cases.size());out.combinations.resize(combos.size());
+  auto fail=[&](const SolverStatus&st){out.status=st;for(auto&c:out.cases)c.status=st;for(auto&c:out.combinations)c.status=st;return out;};
+  try{
+    DofManager dm(m);
+    for(auto&c:out.cases)c.total_dofs=dm.dof_count();
+    for(auto&c:out.combinations)c.total_dofs=dm.dof_count();
+    if(rs.empty())return fail({false,"no restraints",SolverStatusCode::NoRestraints});
+    for(const auto&cb:combos)for(const auto&t:cb.terms)if(t.first>=cases.size()||!std::isfinite(t.second))throw AssemblyError(AssemblyErrorCode::InvalidLoad,"load combination term is invalid");
+    auto red=RigidLinkReduction::build(m,dm);
+    auto all=rs;for(const auto&n:m.nodes)if(!all.count(n.id))all[n.id]={};
+    for(const auto&slave:red.slaveNodes){auto it=all.find(slave);if(it!=all.end())for(bool flag:it->second)if(flag)throw AssemblyError(AssemblyErrorCode::MissingNode,"rigid-link slave node "+std::to_string(slave)+" cannot carry its own restraints");}
+    auto allRetained=all;for(const auto&slave:red.slaveNodes)allRetained.erase(slave);
+    auto bFull=MatrixAssembler::classify(dm,allRetained);
+    std::vector<std::size_t> freeReduced,fixedReduced;
+    for(auto fi:bFull.free)freeReduced.push_back(red.fullToReduced(fi));
+    for(auto fi:bFull.fixed)fixedReduced.push_back(red.fullToReduced(fi));
+    for(auto&c:out.cases){c.free_dofs=freeReduced.size();c.fixed_dofs=fixedReduced.size();}
+    for(auto&c:out.combinations){c.free_dofs=freeReduced.size();c.fixed_dofs=fixedReduced.size();}
+    std::vector<AppliedLoads> applied;applied.reserve(cases.size());for(const auto&lc:cases)applied.push_back(assembleLoadCase(m,dm,lc));
+    Eigen::SparseMatrix<Real>K=MatrixAssembler::assemble(m);
+    Eigen::SparseMatrix<Real>Kmid=red.reduceMatrix(K);
+    Eigen::SparseMatrix<Real>Kff=reduceKff(Kmid,freeReduced);
+    Eigen::SimplicialLDLT<Eigen::SparseMatrix<Real>>fac;fac.compute(Kff);
+    if(fac.info()!=Eigen::Success)return fail({false,"singular system",SolverStatusCode::SingularSystem});
+    auto freeLoads=[&](const AppliedLoads&ap){Eigen::VectorXd Fmid=red.reduceVector(ap.F);Eigen::VectorXd Ff((Eigen::Index)freeReduced.size());for(size_t i=0;i<freeReduced.size();++i)Ff((Eigen::Index)i)=Fmid((Eigen::Index)freeReduced[i]);return Ff;};
+    auto finish=[&](StaticSolution&o,const AppliedLoads&ap,const Eigen::VectorXd&Ff){
+      if(!o.free.allFinite()){o.status={false,"non-finite solution",SolverStatusCode::NonFiniteSolution};return;}
+      {Eigen::VectorXd res=Kff*o.free-Ff;o.residual_norm=res.norm();Real den=Kff.norm()*o.free.norm()+Ff.norm();o.relative_residual=den>0?o.residual_norm/den:0;}
+      Eigen::VectorXd Umid=Eigen::VectorXd::Zero((Eigen::Index)red.reduced_count());for(size_t i=0;i<freeReduced.size();++i)Umid((Eigen::Index)freeReduced[i])=o.free((Eigen::Index)i);
+      o.global=red.expand(Umid);
+      o.results=recoverAssembled(m,all,dm,K,ap,o.global);
+      o.reactions=Eigen::VectorXd::Zero((Eigen::Index)dm.dof_count());for(const auto&n:o.results.nodes){auto d=dm.node_dofs(n.node_id);for(int i=0;i<6;++i)o.reactions((Eigen::Index)d[i])=n.reaction[i];}
+      o.fixed.resize(bFull.fixed.size());for(size_t i=0;i<bFull.fixed.size();++i)o.fixed[i]=o.reactions((Eigen::Index)bFull.fixed[i]);
+      o.status={true,"linear static solution and recovery completed",SolverStatusCode::Success};
+    };
+    for(size_t c=0;c<cases.size();++c){auto Ff=freeLoads(applied[c]);out.cases[c].free=fac.solve(Ff);finish(out.cases[c],applied[c],Ff);}
+    for(size_t k=0;k<combos.size();++k){
+      auto&o=out.combinations[k];
+      LoadCase lc;lc.name=combos[k].name;
+      Eigen::VectorXd uf=Eigen::VectorXd::Zero((Eigen::Index)freeReduced.size());
       const SolverStatus*failed=nullptr;
       for(const auto&[idx,f]:combos[k].terms){
         if(!out.cases[idx].status.success){failed=&out.cases[idx].status;break;}

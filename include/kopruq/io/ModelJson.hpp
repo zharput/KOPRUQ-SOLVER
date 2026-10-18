@@ -31,7 +31,7 @@ inline constexpr int model_schema_version = 1;
 // Keys accepted in each JSON object. io_tests checks these against schemas/model.schema.json.
 struct KeySpec { std::vector<std::string> required, optional; };
 namespace model_keys {
-inline const KeySpec top{{"schema","schema_version","nodes","materials","sections","beams","supports"},{"units","trusses","springs","load_cases","combinations","response_spectra"}};
+inline const KeySpec top{{"schema","schema_version","nodes","materials","sections","beams","supports"},{"units","trusses","springs","rigid_links","load_cases","combinations","response_spectra"}};
 inline const KeySpec units{{},{"length","force","angle"}};
 inline const KeySpec node{{"id","x","y","z"},{}};
 inline const KeySpec material{{"id","elastic_modulus","poisson_ratio"},{"unit_weight"}};
@@ -41,6 +41,7 @@ inline const KeySpec beam{{"id","nodes","material","section"},{"reference_y","re
 // reference_y/releases are not accepted here since the truss's orientation and release pattern are implicit.
 inline const KeySpec truss{{"id","nodes","material","section"},{}};
 inline const KeySpec spring{{"id","nodes","stiffness"},{"local_x","reference_y"}};
+inline const KeySpec rigid_link{{"id","master","slave"},{}};
 inline const KeySpec releases{{},{"start","end"}};
 inline const KeySpec support{{"node","restraints"},{}};
 inline const KeySpec load_case{{"name"},{"self_weight","nodal","member","point"}};
@@ -96,7 +97,9 @@ class ModelReader {
     readBeams(root, R, in);
     readTrusses(root, R, in);
     readSprings(root, R, in);
+    readRigidLinks(root, R, in);
     readSupports(root, R, in);
+    checkRigidLinkRestraints(in);
     readLoadCases(root, R, in);
     readCombinations(root, R, in);
     readResponseSpectra(root, R, in);
@@ -105,6 +108,7 @@ class ModelReader {
 
  private:
   std::set<Id> nodeIds_, materialIds_, sectionIds_, beamIds_, springIds_;
+  std::map<Id, Id> rigidSlaveToMaster_;
   std::unordered_map<Id, Eigen::Vector3d> coords_;
   std::unordered_map<Id, Material> materials_;
   std::unordered_map<Id, Section> sections_;
@@ -424,6 +428,42 @@ class ModelReader {
     }
   }
 
+  void readRigidLinks(const json& root, const std::string& R, ModelInput& in) {
+    const json* a = array(root, R, "rigid_links");
+    if (!a) return;
+    std::set<Id> linkIds;
+    for (std::size_t i = 0; i < a->size(); ++i) {
+      const std::string p = at(key(R, "rigid_links"), i);
+      const json& b = (*a)[i];
+      if (!object(b, p, model_keys::rigid_link)) continue;
+      RigidLink l;
+      bool ok = id(b, p, "id", l.id);
+      ok = id(b, p, "master", l.master) && ok;
+      ok = id(b, p, "slave", l.slave) && ok;
+      if (!ok) continue;
+      bool valid = true;
+      if (!nodeIds_.count(l.master)) { issue(key(p, "master"), "references unknown node " + std::to_string(l.master)); valid = false; }
+      if (!nodeIds_.count(l.slave)) { issue(key(p, "slave"), "references unknown node " + std::to_string(l.slave)); valid = false; }
+      if (valid && l.master == l.slave) { issue(p, "master and slave must be different nodes"); valid = false; }
+      if (!valid) continue;
+      if (!linkIds.insert(l.id).second) { issue(key(p, "id"), "duplicate rigid link id " + std::to_string(l.id)); continue; }
+      if (rigidSlaveToMaster_.count(l.slave)) { issue(key(p, "slave"), "node " + std::to_string(l.slave) + " is a slave of more than one rigid link"); continue; }
+      rigidSlaveToMaster_[l.slave] = l.master;
+      in.model.rigid_links.push_back(l);
+    }
+    for (const auto& [slave, master] : rigidSlaveToMaster_)
+      if (rigidSlaveToMaster_.count(master)) issue("rigid_links", "chaining: node " + std::to_string(master) + " is both a master and a slave");
+  }
+
+  void checkRigidLinkRestraints(const ModelInput& in) {
+    for (const auto& [slave, master] : rigidSlaveToMaster_) {
+      (void)master;
+      auto it = in.restraints.find(slave);
+      if (it == in.restraints.end()) continue;
+      for (bool f : it->second) if (f) { issue("supports", "node " + std::to_string(slave) + " is a rigid-link slave and cannot carry its own restraints"); break; }
+    }
+  }
+
   bool readReleases(const json& j, const std::string& p, Releases& out) {
     if (!object(j, p, model_keys::releases)) return false;
     bool ok = true;
@@ -683,6 +723,8 @@ inline json writeModel(const ModelInput& in) {
                             {"local_x", {e.local_x.x(), e.local_x.y(), e.local_x.z()}},
                             {"reference_y", {e.reference_y.x(), e.reference_y.y(), e.reference_y.z()}},
                             {"stiffness", {e.stiffness[0], e.stiffness[1], e.stiffness[2], e.stiffness[3], e.stiffness[4], e.stiffness[5]}}});
+  j["rigid_links"] = json::array();
+  for (const auto& l : in.model.rigid_links) j["rigid_links"].push_back({{"id", l.id}, {"master", l.master}, {"slave", l.slave}});
   j["supports"] = json::array();
   for (const auto& [node, r] : in.restraints) j["supports"].push_back({{"node", node}, {"restraints", r}});
   j["load_cases"] = json::array();

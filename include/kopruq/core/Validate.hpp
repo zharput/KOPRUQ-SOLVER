@@ -52,6 +52,7 @@ class ModelValidator {
     sections(m);
     beams(m);
     springs(m);
+    rigidLinks(m, rs);
     restraints(m, rs);
     for (std::size_t i = 0; i < cases.size(); ++i) loadCase(m, cases[i], "load_cases[" + std::to_string(i) + "]");
     combinations(cases, combos);
@@ -150,6 +151,31 @@ class ModelValidator {
       catch (const std::exception& ex) { issue(p, ex.what()); }
       try { springAxes(e.local_x, e.reference_y); }
       catch (const std::exception& ex) { issue(p, std::string("invalid orientation: ") + ex.what()); }
+    }
+  }
+  void rigidLinks(const Model& m, const Restraints& rs) {
+    std::set<Id> linkIds;
+    std::map<Id, Id> slaveToMaster;
+    for (std::size_t i = 0; i < m.rigid_links.size(); ++i) {
+      const auto& l = m.rigid_links[i];
+      const std::string p = "rigid_links[" + std::to_string(i) + "]";
+      if (l.id == 0) { issue(p + ".id", "must be nonzero"); continue; }
+      if (!linkIds.insert(l.id).second) { issue(p + ".id", "duplicate rigid link id " + std::to_string(l.id)); continue; }
+      bool valid = true;
+      if (!coords_.count(l.master)) { issue(p + ".master", "references unknown node " + std::to_string(l.master)); valid = false; }
+      if (!coords_.count(l.slave)) { issue(p + ".slave", "references unknown node " + std::to_string(l.slave)); valid = false; }
+      if (valid && l.master == l.slave) { issue(p, "master and slave must be different nodes"); valid = false; }
+      if (!valid) continue;
+      if (slaveToMaster.count(l.slave)) { issue(p + ".slave", "node " + std::to_string(l.slave) + " is a slave of more than one rigid link"); continue; }
+      slaveToMaster[l.slave] = l.master;
+    }
+    for (const auto& [slave, master] : slaveToMaster)
+      if (slaveToMaster.count(master)) issue("rigid_links", "chaining: node " + std::to_string(master) + " is both a master and a slave");
+    for (const auto& [slave, master] : slaveToMaster) {
+      (void)master;
+      auto it = rs.find(slave);
+      if (it == rs.end()) continue;
+      for (bool f : it->second) if (f) { issue("rigid_links", "slave node " + std::to_string(slave) + " cannot carry its own restraints"); break; }
     }
   }
   void restraints(const Model&, const Restraints& rs) {

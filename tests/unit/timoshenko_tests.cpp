@@ -69,7 +69,7 @@ TEST(Timoshenko, CantileverTipDeflectionMatchesClosedFormTimoshenko) {
   constexpr double P = 1000.0;
   for (double Asy : {0.0, 0.05, 0.01, 0.002}) {
     Model m = cantilever(Asy, 0.0);
-    LoadCase lc; lc.point = {MemberPointLoad{7, LoadAxes::Local, 1, MemberLoadKind::Force, P, 0.0}};
+    LoadCase lc; lc.point = {MemberPointLoad{7, LoadAxes::Local, 1, MemberLoadKind::Force, P, 1.0}};
     auto sol = solve(m, lc);
     ASSERT_TRUE(sol.status.success) << sol.status.message;
     const auto& tip = nodeOf(sol, 2);
@@ -87,7 +87,7 @@ TEST(Timoshenko, LowerShearAreaMonotonicallyIncreasesDeflection) {
   double prevW = -1;
   for (double Asy : {0.1, 0.02, 0.005, 0.001}) {
     Model m = cantilever(Asy, 0.0);
-    LoadCase lc; lc.point = {MemberPointLoad{7, LoadAxes::Local, 1, MemberLoadKind::Force, P, 0.0}};
+    LoadCase lc; lc.point = {MemberPointLoad{7, LoadAxes::Local, 1, MemberLoadKind::Force, P, 1.0}};
     auto sol = solve(m, lc);
     ASSERT_TRUE(sol.status.success);
     double w = nodeOf(sol, 2).displacement[1];

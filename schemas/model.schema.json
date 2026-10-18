@@ -184,6 +184,18 @@
         "J": {
           "type": "number",
           "exclusiveMinimum": 0
+        },
+        "Asy": {
+          "type": "number",
+          "minimum": 0,
+          "default": 0,
+          "description": "Effective shear area, y-bending plane [m^2]; 0 = rigid in shear (Euler-Bernoulli)"
+        },
+        "Asz": {
+          "type": "number",
+          "minimum": 0,
+          "default": 0,
+          "description": "Effective shear area, z-bending plane [m^2]; 0 = rigid in shear (Euler-Bernoulli)"
         }
       },
       "required": [

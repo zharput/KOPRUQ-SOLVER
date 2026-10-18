@@ -12,6 +12,14 @@
 // length is rho*J. Rotary inertia about the bending axes (beam cross-section
 // tilt inertia) is not included -- standard for slender Euler-Bernoulli
 // beams, where it is a higher-order effect.
+//
+// Uses these Euler-Bernoulli shape functions regardless of whether the
+// element's stiffness has a Timoshenko shear correction (Beam3D.hpp's
+// Asy/Asz); a fully shear-consistent dynamic mass matrix is not
+// implemented. This is a documented, intentional simplification, not an
+// oversight: modal/response-spectrum results for a Timoshenko beam
+// (Asy/Asz > 0) use this slightly approximate mass alongside the (exact)
+// Timoshenko stiffness.
 #include "Beam3D.hpp"
 #include "Releases.hpp"
 #include <array>

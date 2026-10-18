@@ -35,7 +35,7 @@ inline const KeySpec top{{"schema","schema_version","nodes","materials","section
 inline const KeySpec units{{},{"length","force","angle"}};
 inline const KeySpec node{{"id","x","y","z"},{}};
 inline const KeySpec material{{"id","elastic_modulus","poisson_ratio"},{"unit_weight"}};
-inline const KeySpec section{{"id","area","Iy","Iz","J"},{}};
+inline const KeySpec section{{"id","area","Iy","Iz","J"},{"Asy","Asz"}};
 inline const KeySpec beam{{"id","nodes","material","section"},{"reference_y","releases","offset1","offset2"}};
 // A truss is read as a Beam3DConnection with every rotational DOF released (kopruq/elements/Truss3D.hpp);
 // reference_y/releases are not accepted here since the truss's orientation and release pattern are implicit.
@@ -184,6 +184,10 @@ class ModelReader {
     if (x > 0) return true;
     issue(key(p, k), "must be greater than 0"); return false;
   }
+  bool nonNegative(const std::string& p, const char* k, Real x) {
+    if (x >= 0) return true;
+    issue(key(p, k), "must be non-negative"); return false;
+  }
 
   void readHeader(const json& root, const std::string& R) {
     std::string schema;
@@ -262,11 +266,15 @@ class ModelReader {
       ok = number(s, p, "Iy", sec.Iy) && ok;
       ok = number(s, p, "Iz", sec.Iz) && ok;
       ok = number(s, p, "J", sec.J) && ok;
+      if (field(s, "Asy")) ok = number(s, p, "Asy", sec.Asy) && ok;
+      if (field(s, "Asz")) ok = number(s, p, "Asz", sec.Asz) && ok;
       if (!ok) continue;
       bool valid = positive(p, "area", sec.area);
       valid = positive(p, "Iy", sec.Iy) && valid;
       valid = positive(p, "Iz", sec.Iz) && valid;
       valid = positive(p, "J", sec.J) && valid;
+      valid = nonNegative(p, "Asy", sec.Asy) && valid;
+      valid = nonNegative(p, "Asz", sec.Asz) && valid;
       if (!valid) continue;
       if (!sectionIds_.insert(sec.id).second) { issue(key(p, "id"), "duplicate section id " + std::to_string(sec.id)); continue; }
       in.model.sections.push_back(sec);
@@ -320,7 +328,7 @@ class ModelReader {
       }
       if (valid && anyReleased(e.releases)) {
         const Material& mat = materials_.at(e.material); const Section& sec = sections_.at(e.section);
-        Beam3DProperties bp{mat.elastic_modulus, mat.elastic_modulus / (2 * (1 + mat.poisson_ratio)), sec.area, sec.Iy, sec.Iz, sec.J};
+        Beam3DProperties bp{mat.elastic_modulus, mat.elastic_modulus / (2 * (1 + mat.poisson_ratio)), sec.area, sec.Iy, sec.Iz, sec.J, sec.Asy, sec.Asz};
         try { condensedStiffness(Beam3D::localStiffness(((coords_[e.node2] + e.offset2) - (coords_[e.node1] + e.offset1)).norm(), bp), e.releases); }
         catch (const std::exception& ex) { issue(key(p, "releases"), ex.what()); valid = false; }
       }
@@ -660,7 +668,7 @@ inline json writeModel(const ModelInput& in) {
   for (const auto& m : in.model.materials)
     j["materials"].push_back({{"id", m.id}, {"elastic_modulus", m.elastic_modulus}, {"poisson_ratio", m.poisson_ratio}, {"unit_weight", m.unit_weight}});
   j["sections"] = json::array();
-  for (const auto& s : in.model.sections) j["sections"].push_back({{"id", s.id}, {"area", s.area}, {"Iy", s.Iy}, {"Iz", s.Iz}, {"J", s.J}});
+  for (const auto& s : in.model.sections) j["sections"].push_back({{"id", s.id}, {"area", s.area}, {"Iy", s.Iy}, {"Iz", s.Iz}, {"J", s.J}, {"Asy", s.Asy}, {"Asz", s.Asz}});
   j["beams"] = json::array();
   for (const auto& e : in.model.beams)
     j["beams"].push_back({{"id", e.id}, {"nodes", {e.node1, e.node2}}, {"material", e.material}, {"section", e.section},

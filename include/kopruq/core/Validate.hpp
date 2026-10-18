@@ -97,6 +97,8 @@ class ModelValidator {
       if (!sectionIds_.insert(sec.id).second) { issue(p + ".id", "duplicate section id " + std::to_string(sec.id)); continue; }
       for (auto [name, v] : {std::pair{"area", sec.area}, {"Iy", sec.Iy}, {"Iz", sec.Iz}, {"J", sec.J}})
         if (!std::isfinite(v) || v <= 0) issue(p + "." + name, "must be finite and greater than 0");
+      for (auto [name, v] : {std::pair{"Asy", sec.Asy}, {"Asz", sec.Asz}})
+        if (!std::isfinite(v) || v < 0) issue(p + "." + name, "must be finite and non-negative (0 = rigid in shear)");
       sections_[sec.id] = &sec;
     }
   }
@@ -123,7 +125,7 @@ class ModelValidator {
       try { Beam3D::axes(g); }
       catch (const std::exception& ex) { issue(p, std::string("invalid geometry: ") + ex.what()); continue; }
       if (anyReleased(e.releases)) {
-        Beam3DProperties bp{mat->elastic_modulus, mat->elastic_modulus / (2 * (1 + mat->poisson_ratio)), sec->area, sec->Iy, sec->Iz, sec->J};
+        Beam3DProperties bp{mat->elastic_modulus, mat->elastic_modulus / (2 * (1 + mat->poisson_ratio)), sec->area, sec->Iy, sec->Iz, sec->J, sec->Asy, sec->Asz};
         try { condensedStiffness(Beam3D::localStiffness((g.node2 - g.node1).norm(), bp), e.releases); }
         catch (const std::exception& ex) { issue(p + ".releases", ex.what()); }
       }

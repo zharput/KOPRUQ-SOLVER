@@ -73,7 +73,7 @@ static AppliedLoads assembleLoadCase(const Model&m,const DofManager&dm,const Loa
       // Released members pass their loads to the nodes through the condensed load vector.
       const Material*mat=detail::find_by_id(matIdx,e.material); const Section*sec=detail::find_by_id(secIdx,e.section);
       if(!mat||!sec)throw AssemblyError(AssemblyErrorCode::MissingNode,"element property reference missing");
-      f.kl=Beam3D::localStiffness(f.L,Beam3DProperties{mat->elastic_modulus,mat->elastic_modulus/(2*(1+mat->poisson_ratio)),sec->area,sec->Iy,sec->Iz,sec->J});
+      f.kl=Beam3D::localStiffness(f.L,Beam3DProperties{mat->elastic_modulus,mat->elastic_modulus/(2*(1+mat->poisson_ratio)),sec->area,sec->Iy,sec->Iz,sec->J,sec->Asy,sec->Asz});
     }
     return f;
   };
@@ -123,7 +123,7 @@ static AnalysisResults recoverAssembled(const Model&m,const Restraints&rs,const 
   std::map<Id,const Material*>ma;for(const auto&x:m.materials)ma[x.id]=&x;std::map<Id,const Section*>se;for(const auto&x:m.sections)se[x.id]=&x;
   for(const auto&e:m.beams){
     const Node*a=detail::find_by_id(nodes,e.node1),*b=detail::find_by_id(nodes,e.node2);auto&p=*ma[e.material];auto&s=*se[e.section];
-    Beam3DGeometry g{Eigen::Vector3d(a->x,a->y,a->z)+e.offset1,Eigen::Vector3d(b->x,b->y,b->z)+e.offset2,e.reference_y};Beam3DProperties bp{p.elastic_modulus,p.elastic_modulus/(2*(1+p.poisson_ratio)),s.area,s.Iy,s.Iz,s.J};
+    Beam3DGeometry g{Eigen::Vector3d(a->x,a->y,a->z)+e.offset1,Eigen::Vector3d(b->x,b->y,b->z)+e.offset2,e.reference_y};Beam3DProperties bp{p.elastic_modulus,p.elastic_modulus/(2*(1+p.poisson_ratio)),s.area,s.Iy,s.Iz,s.J,s.Asy,s.Asz};
     auto T=Beam3D::transformation(Beam3D::axes(g));auto kl=Beam3D::localStiffness((g.node2-g.node1).norm(),bp);auto d=dm.element_dofs(e.node1,e.node2);
     auto li=ap.elements.find(e.id);const ElementLoad*el=li==ap.elements.end()?nullptr:&li->second;
     Eigen::Matrix<Real,12,1>u,upoint,ul,kul,fl,fg;for(int i=0;i<12;++i)u(i)=U((Eigen::Index)d[i]);upoint=offsetTransform(e.offset1,e.offset2)*u;ul=T*upoint;

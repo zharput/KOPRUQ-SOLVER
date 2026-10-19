@@ -15,7 +15,10 @@
 // (y_i,z_i), i=0..n-1 (closed, vertex n == vertex 0) and cross term
 // c_i = y_i*z_{i+1} - y_{i+1}*z_i:
 //   A       = (1/2)  * sum(c_i)
-//   A*Cy    = (1/6)  * sum((y_i+y_{i+1}) * c_i)
+//   A*Cy    = (1/6)  * sum((y_i+y_{i+1}) * c_i)    (NOT 1/12 -- a transcription slip here once
+//                                                    produced centroids off by exactly 2x,
+//                                                    invisible in symmetric test cases and only
+//                                                    caught by an explicit translation test)
 //   A*Cz    = (1/6)  * sum((z_i+z_{i+1}) * c_i)
 //   Izz_O   = (1/12) * sum((y_i^2 + y_i*y_{i+1} + y_{i+1}^2) * c_i)   (about the ORIGIN; this is Iz)
 //   Iyy_O   = (1/12) * sum((z_i^2 + z_i*z_{i+1} + z_{i+1}^2) * c_i)   (about the ORIGIN; this is Iy)
@@ -73,7 +76,7 @@ inline ContourSums contourSums(const Contour& c) {
     s.Iyy_O += (z0*z0 + z0*z1 + z1*z1) * cross;
     s.Iyz_O += (y0*z1 + 2*y0*z0 + 2*y1*z1 + y1*z0) * cross;
   }
-  s.A /= 2; s.ACy /= 12; s.ACz /= 12; s.Izz_O /= 12; s.Iyy_O /= 12; s.Iyz_O /= 24;
+  s.A /= 2; s.ACy /= 6; s.ACz /= 6; s.Izz_O /= 12; s.Iyy_O /= 12; s.Iyz_O /= 24;
   return s;
 }
 } // namespace detail

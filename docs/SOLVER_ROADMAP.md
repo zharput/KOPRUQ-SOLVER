@@ -333,13 +333,33 @@ already-defined thermal load, not a thermal-action generator; that is a separate
 explicitly-scoped capability if ever added.
 
 ### Phase 7C — Standalone EXE analysis (MIDAS-format CLI input)
-Not started; depends on 7B. `--format midas-nx-json` CLI option alongside the existing native
-JSON path; existing CLI behavior preserved.
+**COMPLETE (pending CI verification, 2026-10-19).** `include/kopruq/io/Cli.hpp`: added a
+`--format <native|midas-nx-json>` option to `solve`/`modal`/`spectrum`, sharing the same
+`CommonArgs` parser as `-o`/`-n`. With `--format midas-nx-json`, the CLI parses the input file as
+raw JSON and runs it through Phase 7B's `midas::importMidasJson()` instead of
+`readModelText()`, producing the same `ModelInput` either way -- the rest of the CLI (solve/
+modal/spectrum dispatch, results writing, exit codes) is completely unchanged and unaware which
+format was used. The importer's `MidasImportReport` (node/beam/material/... counts, every
+disclosed assumption, every rejected record) is always printed to stderr
+(`detail::reportMidasImport`), so a MIDAS import's gaps are visible on every run, not only when
+explicitly queried. An unknown `--format` value or a MIDAS file that is not valid JSON are
+usage/exit-3 errors with diagnostics, matching the native-format contract. Existing native-format
+CLI behavior is unchanged (format defaults to `"native"`). New tests in
+`tests/unit/io_tests.cpp` (`Cli.MidasNxJsonFormatOption`) exercise: unknown-format rejection,
+missing-value rejection, an end-to-end solve of the real `xmidas/deneme1.json` sample through the
+CLI (checking the import report appears on stderr with its node count and at least one
+rejection), and a malformed-MIDAS-JSON exit-3 path.
 
 ### Phase 7D — JSON results export (MIDAS-import-oriented results schema)
-Not started; depends on 7B/7C. Likely largely satisfied by extending the existing
-`kopruq-results`/`kopruq-modal-results`/`kopruq-response-spectrum-results` schemas rather than a
-new one, pending review once 7B's model shape is known.
+**COMPLETE as "no new schema needed" (2026-10-19).** Because Phase 7C's importer produces the
+same `ModelInput` the native path produces, `solve`/`modal`/`spectrum` already write results
+through the existing, unmodified `writeResults`/`writeModalResults`/`writeResponseSpectrumResults`
+schemas regardless of which input format was used -- confirmed directly by the Phase 7C CLI test,
+whose MIDAS-sourced `solve` output is parsed and checked like any native-format result. No
+MIDAS-import-oriented results schema was needed or added; a model's provenance (which format it
+was imported from) is not part of the results document today, since nothing downstream
+(comparison, reporting) currently needs to distinguish it. If MIDAS NX result comparison (Phase
+7E) later needs provenance tagging, it can be added in that phase without reopening 7D.
 
 ### Phase 7E — MIDAS NX results comparison
 Not started; depends on 7B-7D. Reference data available so far: MIDAS's own modal frequencies

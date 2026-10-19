@@ -38,7 +38,13 @@ TEST(ThermalLoads, FreeUniformExpansionMatchesAlphaDeltaTL) {
   auto sol = solveOne(m, rs, lc);
   ASSERT_TRUE(sol.status.success) << sol.status.message;
   rel(nodeOf(sol,2).displacement[0], ALPHA*DT*L, "tip displacement == alpha*deltaT*L");
-  EXPECT_LT(sol.results.force_equilibrium_error, 1e-9);
+  // force_equilibrium_error is a SCALE-NORMALIZED ratio (balance/scale); for a free thermal
+  // expansion the applied-load resultant af is exactly zero by design (ThermalLoads.hpp:
+  // a thermal load has no real external resultant), so that ratio is mathematically exactly
+  // 1.0 for ANY nonzero reaction, however round-off-small -- it cannot distinguish "truly
+  // zero" from "a real violation" in this specific degenerate case. Check the raw (absolute)
+  // reaction/balance norm instead, against the problem's own force scale (E*A ~ 4e6).
+  EXPECT_LT(sol.results.force_balance_norm, 1e-6);
   EXPECT_LT(sol.results.energy_error, 1e-8);
 }
 

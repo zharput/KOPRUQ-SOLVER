@@ -234,14 +234,15 @@ EN(RC) code formula plus disclosed standard-value assumptions), `MidasSectionLib
 search). Supported: `NODE`, `ELEM` (`BEAM` only), `MATL`/`MATD`, `SECT`, `CONS`, `RIGD`, `BODF`
 (global -Z only), `BMLD` (`CMD=BEAM`,`TYPE=UNILOAD`,`DIRECTION=GZ` only).
 
-**Update, 2026-10-19 (after Phase 7T): `ETMP` (uniform element temperature) is now imported**,
-mapping directly onto `MemberThermalLoad::uniform_delta_t` -- the sample's 40 `ETMP` records
-(case `"TU"`, all `TEMP=40.0`) are no longer rejected, and `MidasMaterialLibrary.hpp` now also
-assigns the disclosed EN1992-1-1 S3.1.3(5) thermal expansion coefficient (1.0e-5/K) so the
-imported thermal load actually has an effect. `GTMP` (gradient) and `BTMP` (beam-section
-temperature) remain explicitly rejected when present -- not in this sample, 0 records -- because
-MIDAS's T1/T2 top-fiber sign convention could not be confirmed from accessible documentation;
-guessing it would silently flip which way a member bends.
+**Update, 2026-10-19 (verified, CI run `39247142910`, 219/219 Debug/Release/ASan; commits
+`2b19d2a`, `b43f605`): `ETMP` (uniform element temperature) is now imported**, mapping directly
+onto `MemberThermalLoad::uniform_delta_t` -- the sample's 40 `ETMP` records (case `"TU"`, all
+`TEMP=40.0`) import and **solve successfully** (not merely parse) with the thermal load actually
+active (`MidasMaterialLibrary.hpp` now also assigns the disclosed EN1992-1-1 S3.1.3(5) thermal
+expansion coefficient, 1.0e-5/K). `GTMP` (gradient) and `BTMP` (beam-section temperature) remain
+explicitly rejected when present -- not in this sample, 0 records -- because MIDAS's T1/T2
+top-fiber sign convention could not be confirmed from accessible documentation; guessing it
+would silently flip which way a member bends.
 
 Explicitly rejected, not silently dropped: `ELNK` (non-coincident elastic links); `GTMP`/`BTMP`
 (see above); anything outside the supported `ELEM`/`MATL`/`SECT` types; `EIGV`/`SPLC` (not

@@ -23,6 +23,17 @@ record the current policy in this document too:
   restrictive approval-gated rule governs.
 
 ## Current priority
+**Phase 7B's MIDAS ETMP (uniform temperature) wiring — COMPLETE/verified
+(CI run `39247142910`, 219/219 Debug/Release/ASan, 2026-10-19).** Per the
+user's explicit follow-up request, the MIDAS importer now uses Phase 7T's
+thermal-load capability instead of rejecting `TU`/`ETMP`: the real
+sample's 40 `ETMP` records import and the model **solves successfully**
+with the thermal load actually active (not a zero no-op -- material
+thermal expansion is now also assigned). `GTMP`/`BTMP` (gradient/beam-
+section temperature) are recognized and explicitly rejected when present
+(0 records in this sample); MIDAS's T1/T2 top-fiber sign convention could
+not be confirmed from accessible documentation, so it was not guessed at.
+
 **Phase 7B, 7M and 7S (increment 1) — COMPLETE/verified (CI run
 `39227258173`, 199/199 Debug/Release/ASan, 2026-10-19).** The GitHub
 Actions "no runner assigned" blocker (present 2026-10-18 through the
@@ -1168,15 +1179,35 @@ Final verification: CI run `39237884916`, commits `bd0a079`, `9c53fd1`, `1dd5323
 **Debug/Release/ASan: 215/215 PASS** (up from 199; 16 new tests across `thermal_load_tests.cpp`,
 `thermal_io_tests.cpp`). This completes the 7M -> 7S -> 7T implementation order in full.
 
+### 2026-10-19 — MIDAS ETMP wired to Phase 7T thermal loads
+Per the user's explicit "2. MADDEYE DEVAM EDELİM" instruction, picked item 2 from the previous
+report's candidate list: wire Phase 7B's MIDAS importer to Phase 7T instead of rejecting
+`TU`/`ETMP`. Inspected the real export's `ETMP` records directly (PowerShell `ConvertFrom-Json`):
+all 40 are the simple `{ID, LCNAME, GROUP_NAME, TEMP}` shape, `TEMP=40.0` for every one -- a
+single uniform value, confirmed (via a web search of MIDAS's own documentation, since
+support.midasuser.com itself returns HTTP 403) to be a SEPARATE category (`GTMP`) from gradient
+temperature, whose `TZ`/`TY` fields and unconfirmed T1/T2 top-fiber sign convention are
+deliberately NOT mapped -- `GTMP`/`BTMP` are recognized and rejected explicitly instead, with 0
+records in this sample so that path is untested against real data (covered by three new tests
+against a minimal hand-built MIDAS-shaped JSON snippet instead).
+
+CI (run `39245168495`) caught a compile error (not a logic bug): a plain `R"(...)"` raw string
+literal was terminated early by the `)"` sequence embedded in `"EN04(RC)"` inside the test file's
+own synthetic JSON content -- fixed (`b43f605`) with a custom delimiter (`R"json(...)json"`).
+
+Final verification: CI run `39247142910`, commits `2b19d2a`, `b43f605`. **Debug/Release/ASan:
+219/219 PASS** (up from 215; 4 new tests). The real `xmidas/deneme1.json` model, now with its
+`TU` thermal case actually active (not a zero no-op -- `MidasMaterialLibrary.hpp` also assigns
+the EN1992-1-1 S3.1.3(5) thermal expansion coefficient), still **solves successfully**.
+
 ## Next autonomous action
 Phase 3.2, Phase 4, Phase 5 (5.1-5.6), Phase 6 (6.1, 6.1b, 6.2, 6.2b; 6.3 cancelled), Phase 7A,
-7B, 7M, 7S(1) and 7T are all complete and verified -- CI run `39237884916`, 215/215
-Debug/Release/ASan. This reaches the end of the originally scoped 7A-7F/7S/7M/7T work from the
-last two user-approved executions; this is a natural, mandatory approval checkpoint before any
-further work. Candidate next steps (say which, or propose a different scope):
+7B (including ETMP thermal wiring), 7M, 7S(1) and 7T are all complete and verified -- CI run
+`39247142910`, 219/219 Debug/Release/ASan. Candidate next steps (say which, or propose a
+different scope):
 1. Phase 7C/7D: MIDAS-format CLI input (`--format midas-nx-json`) and JSON results export.
-2. Wire Phase 7B's MIDAS importer to use the new Phase 7T thermal-load capability for `TU`/`ETMP`
-   records, currently still rejected.
-3. **Phase 7 (production solver, unrelated to MIDAS import)**: sparse direct/iterative strategy,
+2. **Phase 7 (production solver, unrelated to MIDAS import)**: sparse direct/iterative strategy,
    optional SuiteSparse, profiling/parallelism -- still not started.
-4. Extend rigid-link support to ModalSolver/ResponseSpectrumSolver, or cut a `v0.1.0` release tag.
+3. Extend rigid-link support to ModalSolver/ResponseSpectrumSolver, or cut a `v0.1.0` release tag.
+4. Confirm MIDAS's GTMP T1/T2 sign convention (e.g. from the user, who may have access to the
+   official API manual) to unblock gradient-temperature import, if ever needed.

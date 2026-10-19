@@ -219,9 +219,13 @@ documentation pages (API manual, Export-to-JSON) returned HTTP 403 (authenticate
 findings are from direct inspection of the real export, not assumed from inaccessible docs.
 
 ### Phase 7B — MIDAS JSON importer and internal model reconstruction
-**Implemented, CI verification pending** (commits `0823f8f`, `281b2b2`, `bd5ebbe`, 2026-10-18/19;
-blocked on the ongoing GitHub Actions "no runner assigned" infrastructure issue, not a code
-problem -- see `docs/DEVELOPMENT_STATUS.md`). `include/kopruq/io/midas/MidasJsonImporter.hpp`
+**COMPLETE (verified, CI run `39227258173`, 199/199 Debug/Release/ASan, 2026-10-19; commits
+`0823f8f`, `281b2b2`, `bd5ebbe`).** The real `xmidas/deneme1.json` bridge model (106 nodes, 94
+beam elements, 7 individual rigid links, 4 load cases) imports successfully, passes
+`validateModel`, and **solves successfully end to end** with KOPRUQ-SOLVER's own
+`LinearStaticSolver` (no exception, `status.success == true`) -- the full chain MIDAS JSON ->
+internal model -> independent numerical solution is demonstrated, not merely parsed.
+`include/kopruq/io/midas/MidasJsonImporter.hpp`
 translates `xmidas/deneme1.json` into a `kopruq::io::ModelInput`, using three MIDAS-specific
 helpers built for this: `MidasMaterialLibrary.hpp` (grade-name -> E/Poisson/unit-weight, the
 EN(RC) code formula plus disclosed standard-value assumptions), `MidasSectionLibrary.hpp`
@@ -249,8 +253,11 @@ analysis) and later phases should use these general engines rather than 7B's cur
 MIDAS-specific stand-ins once they exist.
 
 ### Phase 7S — Parametric and general section property engine
-**First increment implemented, CI verification pending** (commit TBD -- see
-`docs/DEVELOPMENT_STATUS.md`; blocked on the same GitHub Actions infrastructure issue as 7B/7M).
+**First increment COMPLETE (verified, CI run `39227258173`, 199/199 Debug/Release/ASan,
+2026-10-19; commits `f10dca0`, `59b0035`).** The first CI run (`39223638115`) caught a real bug
+-- the centroid accumulator used the wrong divisor (1/12 instead of 1/6), off by exactly 2x,
+invisible in every symmetric/origin-centered test case and only caught by a dedicated
+translation-invariance test; fixed in `59b0035`.
 `include/kopruq/sections/SectionGeometry.hpp`: a general polygon-integration engine (Green's
 theorem / shoelace moment formulas) computing area, centroid, Iy/Iz/Iyz, principal axes/moments,
 extreme fiber distances and elastic moduli (Wy+/-, Wz+/-) for ANY section built from simple
@@ -270,7 +277,8 @@ section verification report (needs 7B wiring once this engine covers what 7B cur
 `MidasSectionLibrary.hpp` directly).
 
 ### Phase 7M — Eurocode material library
-Not started. Scope: a versioned Eurocode concrete (and future-compatible steel) material
+**COMPLETE (verified, CI run `39227258173`, 199/199 Debug/Release/ASan, 2026-10-19; commit
+`557d375`).** `include/kopruq/materials/EurocodeMaterialLibrary.hpp`. Scope: a versioned Eurocode concrete (and future-compatible steel) material
 database addressed by grade name (e.g. `EN-C35/45`), citing the standard edition and National
 Annex, giving fck, fck,cube, fcm, fctm, Ecm, Poisson's ratio, unit weight, thermal expansion
 coefficient, and deriving G = E/(2(1+ν)). Distinguishes standard-defined values, National Annex

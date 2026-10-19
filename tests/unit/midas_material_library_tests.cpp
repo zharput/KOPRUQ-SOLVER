@@ -24,7 +24,8 @@ TEST(MidasMaterialLibrary, C35_45ElasticModulusMatchesHandComputedCubeRoot) {
   EXPECT_EQ(r.material.id, 1u);
   EXPECT_DOUBLE_EQ(r.material.poisson_ratio, 0.2);
   EXPECT_DOUBLE_EQ(r.material.unit_weight, 25.0);
-  ASSERT_EQ(r.assumptions.size(), 3u);
+  EXPECT_DOUBLE_EQ(r.material.thermal_expansion, 1.0e-5);
+  ASSERT_EQ(r.assumptions.size(), 4u);
 }
 
 TEST(MidasMaterialLibrary, C45_55GivesAHigherModulusThanC35_45) {

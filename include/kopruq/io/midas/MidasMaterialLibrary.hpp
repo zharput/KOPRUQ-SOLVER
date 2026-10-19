@@ -16,14 +16,19 @@
 // code names containing "EN" and "(RC)" are accepted; anything else is
 // rejected with a clear diagnostic rather than guessed at.
 //
-// Poisson's ratio and unit weight are not present anywhere in the export
-// for a grade-named material. Per explicit user decision (2026-10-18,
-// Phase 7B kickoff), standard code-default values are substituted rather
-// than failing the import, and the substitution is always recorded
-// (never silent) in the returned ResolvedMaterial::assumptions, which the
-// importer's reconstruction report must surface to the caller:
-//   Poisson's ratio = 0.2       (EN1992-1-1 S3.1.3, concrete, linear analysis)
-//   Unit weight      = 25 kN/m^3 (EN1991-1-1, normal-weight reinforced concrete)
+// Poisson's ratio, unit weight and thermal expansion are not present
+// anywhere in the export for a grade-named material. Per explicit user
+// decision (2026-10-18, Phase 7B kickoff), standard code-default values
+// are substituted rather than failing the import, and the substitution
+// is always recorded (never silent) in the returned
+// ResolvedMaterial::assumptions, which the importer's reconstruction
+// report must surface to the caller:
+//   Poisson's ratio    = 0.2        (EN1992-1-1 S3.1.3(4), concrete, linear analysis)
+//   Unit weight         = 25 kN/m^3  (EN1991-1-1, normal-weight reinforced concrete)
+//   Thermal expansion   = 1.0e-5 /K  (EN1992-1-1 S3.1.3(5), normal-weight concrete --
+//                                     needed so ETMP/thermal loads, Phase 7T, actually
+//                                     produce a nonzero effect rather than silently
+//                                     computing to zero through a zero alpha_T)
 #include "../../core/Material.hpp"
 #include <cmath>
 #include <stdexcept>
@@ -52,11 +57,13 @@ inline ResolvedMaterial resolveConcreteGradeMaterial(kopruq::Id id, const std::s
   r.material.elastic_modulus = EcmMPa * 1000.0; // MPa -> kN/m^2
   r.material.poisson_ratio = 0.2;
   r.material.unit_weight = 25.0;
+  r.material.thermal_expansion = 1.0e-5;
   r.assumptions = {
     {"elastic_modulus", std::to_string(r.material.elastic_modulus) + " kN/m^2",
      "derived from fck=" + std::to_string(fckMPa) + " MPa via MIDAS's documented EN(RC) formula Ecm=9.5*(fck+8)^(1/3)*1e3 MPa (support.midasuser.com, 'Modify Concrete Materials')"},
     {"poisson_ratio", "0.2", "not present in the MIDAS export for a grade-named material; EN1992-1-1 S3.1.3 standard value for concrete"},
     {"unit_weight", "25 kN/m^3", "not present in the MIDAS export for a grade-named material; EN1991-1-1 standard value for normal-weight reinforced concrete"},
+    {"thermal_expansion", "1.0e-5 /K", "not present in the MIDAS export for a grade-named material; EN1992-1-1 S3.1.3(5) standard value for normal-weight concrete"},
   };
   return r;
 }

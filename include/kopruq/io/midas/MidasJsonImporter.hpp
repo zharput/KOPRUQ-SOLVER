@@ -10,7 +10,10 @@
 // EN..(RC) code family only), SECT (SECTTYPE="DBUSER", shapes SB/B/SR
 // only), CONS (point restraints), RIGD (master/slave rigid links), BODF
 // (self-weight, direction must be exactly global -Z), BMLD
-// (CMD="BEAM", TYPE="UNILOAD", DIRECTION="GZ" uniform member loads).
+// (CMD="BEAM", TYPE="UNILOAD", DIRECTION="GZ" uniform member loads),
+// ETMP (uniform element temperature -- maps directly onto
+// MemberThermalLoad::uniform_delta_t, Phase 7T; TEMP is already a
+// temperature CHANGE, the same quantity that load takes).
 //
 // Explicitly REJECTED, not silently ignored or approximated (recorded in
 // MidasImportReport::rejected with the record identified): any ELEM TYPE
@@ -18,10 +21,11 @@
 // than EN..(RC); any SECT shape other than SB/B/SR; ELNK (elastic links
 // between non-coincident nodes -- SpringLink, Phase 5.4, requires
 // coincident nodes, a real formulation limit, not a missing-data gap);
-// any STLD whose TYPE is "T" (temperature) together with its ETMP
-// records (thermal loads are not implemented in any phase); any BODF
-// whose direction is not exactly global -Z; any BMLD whose CMD/TYPE/
-// DIRECTION is not the one combination implemented above.
+// GTMP/BTMP (gradient/beam-section temperature -- MIDAS's T1/T2
+// top-fiber sign convention could not be confirmed from accessible
+// documentation, and guessing would silently flip which way a member
+// bends); any BODF whose direction is not exactly global -Z; any BMLD
+// whose CMD/TYPE/DIRECTION is not the one combination implemented above.
 //
 // Disclosed, not silent, substitutions (MidasImportReport::assumptions):
 // material Poisson's ratio/unit weight (MidasMaterialLibrary.hpp);
@@ -51,7 +55,7 @@
 namespace kopruq::io::midas {
 
 struct MidasImportReport {
-  std::size_t nodes{}, beams{}, materials{}, sections{}, supports{}, rigid_links{}, load_cases{}, member_loads{};
+  std::size_t nodes{}, beams{}, materials{}, sections{}, supports{}, rigid_links{}, load_cases{}, member_loads{}, thermal_loads{};
   std::vector<std::string> assumptions; // disclosed substitutions, e.g. "material 1: poisson_ratio=0.2 (...)"
   std::vector<std::string> rejected;    // records explicitly not imported, with the reason
   std::map<Id, Id> originalToInternalNodeId;    // identity mapping in this importer (MIDAS IDs preserved), kept
@@ -194,12 +198,6 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
     }
   out.report.beams = out.input.model.beams.size();
 
-  // --- STLD (load case names/types) ---
-  std::map<std::string, std::string> caseType; // LCNAME -> TYPE
-  if (dbg.contains("STLD"))
-    for (auto it = dbg.at("STLD").begin(); it != dbg.at("STLD").end(); ++it)
-      caseType[it.value().at("NAME").get<std::string>()] = it.value().at("TYPE").get<std::string>();
-
   std::map<std::string, std::size_t> caseIndex;
   auto caseFor = [&](const std::string& name) -> LoadCase& {
     auto found = caseIndex.find(name);
@@ -209,16 +207,11 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
     return out.input.load_cases.back();
   };
 
-  // Reject thermal ("T") load cases up front; nothing from BODF/BMLD will be added to them.
-  for (const auto& [name, type] : caseType)
-    if (type == "T") out.report.rejected.push_back("load case '" + name + "': TYPE=T (temperature) is not implemented in any phase; its ETMP records are not imported");
-
   // --- BODF (self-weight; must be exactly global -Z) ---
   if (dbg.contains("BODF"))
     for (auto it = dbg.at("BODF").begin(); it != dbg.at("BODF").end(); ++it) {
       const auto& v = it.value();
       const std::string lc = v.at("LCNAME").get<std::string>();
-      if (caseType.count(lc) && caseType.at(lc) == "T") continue; // already rejected above
       const auto fv = detail::toRealVector(v.at("FV"));
       if (fv.size() != 3 || std::abs(fv[0]) > 1e-9 || std::abs(fv[1]) > 1e-9 || std::abs(fv[2] + 1.0) > 1e-9) {
         out.report.rejected.push_back("self-weight for case '" + lc + "': direction is not exactly global -Z (only that direction is implemented)");
@@ -233,7 +226,6 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
       const Id element = detail::parseId(it.key());
       for (const auto& item : it.value().at("ITEMS")) {
         const std::string lc = item.at("LCNAME").get<std::string>();
-        if (caseType.count(lc) && caseType.at(lc) == "T") continue;
         const std::string cmd = item.value("CMD", std::string());
         const std::string ltype = item.value("TYPE", std::string());
         const std::string dir = item.value("DIRECTION", std::string());
@@ -249,6 +241,30 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
         ++out.report.member_loads;
       }
     }
+
+  // --- ETMP (uniform element temperature; maps directly onto MemberThermalLoad::uniform_delta_t,
+  // Phase 7T). TEMP is already a temperature CHANGE (deltaT), the same quantity our thermal load
+  // takes, not an absolute temperature -- confirmed by this sample's own values (e.g. 40.0, a
+  // plausible deltaT for a "TU" case, not a plausible absolute ambient temperature in any unit). ---
+  if (dbg.contains("ETMP"))
+    for (auto it = dbg.at("ETMP").begin(); it != dbg.at("ETMP").end(); ++it) {
+      const Id element = detail::parseId(it.key());
+      for (const auto& item : it.value().at("ITEMS")) {
+        const std::string lc = item.at("LCNAME").get<std::string>();
+        const Real temp = item.at("TEMP").get<Real>();
+        caseFor(lc).thermal.push_back(MemberThermalLoad{element, temp, 0, 0, 0, 0});
+        ++out.report.thermal_loads;
+      }
+    }
+  // GTMP (gradient, TZ/TY deltas across the section) and BTMP (beam-section-specific temperature
+  // differences) are recognized but NOT mapped: which of MIDAS's T1/T2 is the top fiber could not
+  // be confirmed from accessible documentation (support.midasuser.com returns HTTP 403), and
+  // guessing the sign would silently flip which way the member bends -- exactly what this project
+  // does not do. Rejected explicitly, not silently dropped, only when actually present.
+  for (const char* key : {"GTMP", "BTMP"})
+    if (dbg.contains(key) && !dbg.at(key).empty())
+      out.report.rejected.push_back(std::string(key) + ": gradient/beam-section temperature records are present but not mapped (MIDAS's T1/T2 top-fiber sign convention could not be confirmed); only uniform ETMP temperature is imported");
+
   out.report.load_cases = out.input.load_cases.size();
 
   // --- EIGV/SPLC: recognized but not executed this phase ---

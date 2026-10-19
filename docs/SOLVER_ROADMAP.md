@@ -232,14 +232,24 @@ EN(RC) code formula plus disclosed standard-value assumptions), `MidasSectionLib
 (DBUSER shape code + dimensions -> area/I/J for `SB`/`B`/`SR`), `MidasOrientation.hpp`
 (Beta angle -> `reference_y`, confirmed against MIDAS's own manual wording found via web
 search). Supported: `NODE`, `ELEM` (`BEAM` only), `MATL`/`MATD`, `SECT`, `CONS`, `RIGD`, `BODF`
-(global -Z only), `BMLD` (`CMD=BEAM`,`TYPE=UNILOAD`,`DIRECTION=GZ` only). Explicitly rejected,
-not silently dropped: `ELNK` (non-coincident elastic links), any `TYPE=T` (temperature) load
-case and its `ETMP` records, anything outside the supported `ELEM`/`MATL`/`SECT` types, and
-`EIGV`/`SPLC` (not executed while `RIGD` models are rejected by `ModalSolver`/
-`ResponseSpectrumSolver`). **Superseded by Phase 7S/7M below**: `MidasSectionLibrary`/
-`MidasMaterialLibrary` are MIDAS-specific stand-ins for what 7S/7M build as general, reusable
-engines; once those exist, 7B should be revisited to delegate to them instead of duplicating the
-shape/grade formulas -- see the 2026-10-19 scope addition.
+(global -Z only), `BMLD` (`CMD=BEAM`,`TYPE=UNILOAD`,`DIRECTION=GZ` only).
+
+**Update, 2026-10-19 (after Phase 7T): `ETMP` (uniform element temperature) is now imported**,
+mapping directly onto `MemberThermalLoad::uniform_delta_t` -- the sample's 40 `ETMP` records
+(case `"TU"`, all `TEMP=40.0`) are no longer rejected, and `MidasMaterialLibrary.hpp` now also
+assigns the disclosed EN1992-1-1 S3.1.3(5) thermal expansion coefficient (1.0e-5/K) so the
+imported thermal load actually has an effect. `GTMP` (gradient) and `BTMP` (beam-section
+temperature) remain explicitly rejected when present -- not in this sample, 0 records -- because
+MIDAS's T1/T2 top-fiber sign convention could not be confirmed from accessible documentation;
+guessing it would silently flip which way a member bends.
+
+Explicitly rejected, not silently dropped: `ELNK` (non-coincident elastic links); `GTMP`/`BTMP`
+(see above); anything outside the supported `ELEM`/`MATL`/`SECT` types; `EIGV`/`SPLC` (not
+executed while `RIGD` models are rejected by `ModalSolver`/`ResponseSpectrumSolver`).
+**Superseded by Phase 7S/7M below**: `MidasSectionLibrary`/`MidasMaterialLibrary` are
+MIDAS-specific stand-ins for what 7S/7M build as general, reusable engines; once those exist, 7B
+should be revisited to delegate to them instead of duplicating the shape/grade formulas -- see
+the 2026-10-19 scope addition.
 
 ## Scope addition — 2026-10-19 (user decision): Phases 7S, 7M, 7T
 User instruction: extend the standalone solver with three general-purpose engineering

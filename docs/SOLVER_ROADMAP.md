@@ -249,20 +249,25 @@ analysis) and later phases should use these general engines rather than 7B's cur
 MIDAS-specific stand-ins once they exist.
 
 ### Phase 7S — Parametric and general section property engine
-Not started. Scope: `SectionGeometry`/`SectionPropertyCalculator`/`GeneralSection` types
-computing area, centroid, Iy/Iz/Iyz, principal axes, elastic moduli (Wy+/-, Wz+/-), extreme
-fiber distances, torsional constant J (exact/validated formulas only, explicit rejection
-otherwise -- never `J = Iy + Iz` for a non-circular section), polar second moment where
-applicable, shear areas Asy/Asz where the beam formulation needs them, and mass per length when
-density is available. Section families to support, **subject to phase approval before each is
-implemented** (not all at once): rectangle, solid/hollow circle, rectangular hollow/box,
-I/H/T/channel/angle, precast girder sections, general polygonal sections (polygon-integration
-area/centroid/Iy/Iz/Iyz), multi-contour sections with openings. Reuses/generalizes the three
-shapes already in `MidasSectionLibrary.hpp` (built for Phase 7B) rather than duplicating them.
-MIDAS compatibility: reconstruct geometry and independently compute properties when MIDAS gives
-dimensions; when MIDAS gives only numeric properties, preserve them as a property-based section
-and never claim geometry was reconstructed when it was not. A section verification report
-(independently-computed vs. imported properties, where both exist) is a deliverable.
+**First increment implemented, CI verification pending** (commit TBD -- see
+`docs/DEVELOPMENT_STATUS.md`; blocked on the same GitHub Actions infrastructure issue as 7B/7M).
+`include/kopruq/sections/SectionGeometry.hpp`: a general polygon-integration engine (Green's
+theorem / shoelace moment formulas) computing area, centroid, Iy/Iz/Iyz, principal axes/moments,
+extreme fiber distances and elastic moduli (Wy+/-, Wz+/-) for ANY section built from simple
+polygon contours -- an outer boundary plus any number of holes (opposite winding), i.e. the
+general polygonal and multi-contour/openings families from the original scope are done.
+`include/kopruq/sections/ParametricSections.hpp`: adds the hollow circle (annulus), the one
+closed-form shape not already covered by `MidasSectionLibrary.hpp` (Phase 7B)'s solid rectangle/
+box/solid circle, which still need migrating into this general (non-MIDAS-named) namespace --
+not done in this increment, to keep it isolated and testable.
+
+**Deliberately NOT implemented, requiring individual approval before each is added** (per
+explicit instruction): I-section, H-section, T-section, channel section, angle section, precast
+concrete girder sections. Also not yet done: torsional constant J for a general polygon (no
+validated general-polygon torsion formula implemented; only the closed-form shapes have J so
+far), shear areas Asy/Asz for any shape, mass-per-length, and the MIDAS geometry-vs-property
+section verification report (needs 7B wiring once this engine covers what 7B currently gets from
+`MidasSectionLibrary.hpp` directly).
 
 ### Phase 7M — Eurocode material library
 Not started. Scope: a versioned Eurocode concrete (and future-compatible steel) material

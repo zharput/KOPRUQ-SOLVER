@@ -23,13 +23,27 @@ record the current policy in this document too:
   restrictive approval-gated rule governs.
 
 ## Current priority
-**Phase 7A — MIDAS NX JSON import audit — COMPLETE (this execution,
-2026-10-18, audit only, no code changed).** `docs/MIDAS_JSON_DATA_AUDIT.md`
-and `docs/SOLVER_CAPABILITY_MATRIX.md` record a full inventory of the real
+**Phase 7B — MIDAS JSON importer — implemented, CI verification BLOCKED
+(GitHub Actions "no runner assigned" infrastructure issue, not code;
+started 2026-10-18, still present 2026-10-19).** Material/section/
+orientation helpers and the full importer are written and pushed
+(commits `0823f8f`, `281b2b2`, `bd5ebbe`); import counts were checked
+against independently-computed totals (PowerShell `ConvertFrom-Json`
+directly on the source file), but the C++ code itself has **not**
+compiled or run anywhere yet -- no PASS is claimed.
+
+**Scope addition, 2026-10-19 (roadmap-update-only execution, no code
+changed):** Phases 7S (general section property engine), 7M (Eurocode
+material library) and 7T (uniform/gradient temperature analysis) added
+to `docs/SOLVER_ROADMAP.md`, between 7B and 7C. None implemented yet;
+this execution was explicitly roadmap-update only, ending at a mandatory
+approval checkpoint.
+
+**Phase 7A — MIDAS NX JSON import audit — COMPLETE (2026-10-18, audit
+only, no code changed).** `docs/MIDAS_JSON_DATA_AUDIT.md` and
+`docs/SOLVER_CAPABILITY_MATRIX.md` record a full inventory of the real
 `xmidas/deneme1.json` export and a capability-by-capability gap analysis
-against the current solver. Per the user's explicit instruction, Phase 7B
-(the actual importer) has **not** been started; this was audit and
-roadmap-update only, and ends at a mandatory approval checkpoint.
+against the current solver.
 
 Phase 5 — COMPLETE IN FULL, 5.1-5.6 (verified, CI run `39104401638`,
 167/167 Debug/Release/ASan). Truss elements (5.2), rigid end offsets
@@ -1067,20 +1081,50 @@ Phase 7B implementation.
   7B (the actual importer) requires explicit user approval before starting**, per the user's own
   instruction for this execution.
 
+### 2026-10-19 — Phase 7B implementation (CI-blocked) + Phase 7S/7M/7T roadmap addition
+Phase 7B (MIDAS JSON importer) was implemented per the user's "devam" approval following the
+Phase 7A report: `MidasMaterialLibrary.hpp`, `MidasSectionLibrary.hpp`, `MidasOrientation.hpp`
+(the local-axis convention, confirmed against MIDAS's own manual text found via web search after
+WebFetch to midasuser.com returned HTTP 403 throughout), and `MidasJsonImporter.hpp`, plus
+`xmidas/deneme1.json` added to the repo so CI can read it. Two explicit clarifying questions were
+asked and answered before implementing: missing material Poisson/unit-weight -> use disclosed
+standard values rather than fail; local axis convention -> user asked to confirm via MIDAS itself,
+then supplied a documentation link, whose content was retrieved via web search (not WebFetch,
+which stayed blocked) and matched the general convention already drafted.
+
+GitHub Actions has been returning "no runner assigned" (empty steps, `runner_id:0`, 2-3 second
+failures) since partway through 2026-10-18, continuing into 2026-10-19 -- the same pattern as an
+earlier, account-wide billing/quota episode in this project's history, reported to the user twice;
+not resolved as of this entry. **No commit since `0823f8f` has been compiled or run anywhere.**
+Import counts (106 nodes, 94 beams, 2 materials, 5 sections, 9 supports, 7 individual rigid
+links, 4 load cases, 70 member loads) were cross-checked independently via PowerShell
+`ConvertFrom-Json` on the raw source file, but that only confirms the *expected* values the C++
+test asserts against, not that the C++ itself is correct.
+
+Immediately after, the user opened a second, separate instruction: extend the roadmap (audit/
+update only, no implementation) with three new general-purpose capabilities -- Phase 7S
+(parametric/general section property engine), Phase 7M (Eurocode material library by grade
+name), Phase 7T (uniform/gradient temperature analysis) -- generalizing what 7B's MIDAS-specific
+helpers currently do ad hoc, plus adding thermal/temperature support KOPRUQ-SOLVER has never had
+in any phase. `docs/SOLVER_ROADMAP.md` updated (7S/7M/7T inserted between 7B and 7C, with scope,
+required properties, section families subject to per-family approval, and explicit "not yet
+implemented" status); nothing implemented. Milestone status: **roadmap updated; mandatory
+approval checkpoint, per this execution's own explicit instruction.**
+
 ## Next autonomous action
-**Stopped at a mandatory approval checkpoint after Phase 7A** (MIDAS JSON audit), per the user's
-explicit instruction for this execution ("do not begin implementing Phase 7B during this first
-execution"). Phase 3.2, Phase 4, Phase 5 (5.1-5.6, complete in full) and Phase 6 (6.1, 6.1b, 6.2,
-6.2b; 6.3 cancelled) remain complete and verified -- CI run `39104401638`, 167/167
-Debug/Release/ASan; nothing in this audit changed any of that. Candidate next steps (say which,
-or propose a different scope):
-1. **Phase 7B -- MIDAS JSON importer**: requires first resolving (or explicitly deciding how to
-   handle) the five gaps in `docs/MIDAS_JSON_DATA_AUDIT.md` -- material-grade-to-E formula,
-   section-shape property library, non-coincident `ELNK` records, rigid-links-vs-dynamics
-   restriction, and `ETMP` thermal loads being unimplemented.
-2. **Phase 7 (production solver, unrelated to MIDAS import)**: sparse direct/iterative strategy,
-   optional SuiteSparse, profiling/parallelism -- still not started, still available as an
-   alternative next step.
-3. Extend rigid-link support to ModalSolver/ResponseSpectrumSolver (needed either way before this
-   particular MIDAS sample's dynamic cases can run).
-4. Cut an actual `v0.1.0`-style release tag now, to verify `release.yml`'s tag trigger end-to-end.
+**Stopped at a mandatory approval checkpoint after the Phase 7S/7M/7T roadmap update**, per this
+execution's explicit instruction (roadmap update only, do not implement). Separately, **Phase 7B
+remains blocked on CI** (GitHub Actions infrastructure issue, not code) -- its own approval
+checkpoint from the previous report is still open too; whichever the user addresses first,
+report back here. Phase 3.2, Phase 4, Phase 5 (5.1-5.6) and Phase 6 (6.1, 6.1b, 6.2, 6.2b; 6.3
+cancelled) remain complete and verified -- CI run `39104401638`, 167/167 Debug/Release/ASan;
+nothing since then has been verified due to the CI blocker. Candidate next steps (say which, or
+propose a different scope):
+1. Check GitHub Actions billing/usage status so Phase 7B's commits can finally be verified.
+2. Approve Phase 7S/7M/7T to begin implementation (likely order: 7M material library first, since
+   7S's section engine and 7T's thermal loads both need resolved material properties; 7S next;
+   7T last, since it is new structural-analysis capability, not just data plumbing).
+3. **Phase 7 (production solver, unrelated to MIDAS import)**: sparse direct/iterative strategy,
+   optional SuiteSparse, profiling/parallelism -- still not started, still available.
+4. Extend rigid-link support to ModalSolver/ResponseSpectrumSolver (needed either way before the
+   MIDAS sample's dynamic cases can run).

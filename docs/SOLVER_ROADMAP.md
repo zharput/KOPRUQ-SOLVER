@@ -219,12 +219,74 @@ documentation pages (API manual, Export-to-JSON) returned HTTP 403 (authenticate
 findings are from direct inspection of the real export, not assumed from inaccessible docs.
 
 ### Phase 7B — MIDAS JSON importer and internal model reconstruction
-Not started; blocked on explicit approval to proceed, and on resolving 7A's material/section
-gaps (a dedicated code-formula material table and a section-shape property library), plus a
-decision on the non-coincident `ELNK` records and the rigid-links/dynamics restriction. Scope:
-a MIDAS-specific adapter producing KOPRUQ-SOLVER's existing internal `Model`/`LoadCase` types,
-preserving original MIDAS IDs, canonical units (m, kN, kNm, kN/m², rad), explicit failure
-(not silent defaults) for anything unresolved.
+**Implemented, CI verification pending** (commits `0823f8f`, `281b2b2`, `bd5ebbe`, 2026-10-18/19;
+blocked on the ongoing GitHub Actions "no runner assigned" infrastructure issue, not a code
+problem -- see `docs/DEVELOPMENT_STATUS.md`). `include/kopruq/io/midas/MidasJsonImporter.hpp`
+translates `xmidas/deneme1.json` into a `kopruq::io::ModelInput`, using three MIDAS-specific
+helpers built for this: `MidasMaterialLibrary.hpp` (grade-name -> E/Poisson/unit-weight, the
+EN(RC) code formula plus disclosed standard-value assumptions), `MidasSectionLibrary.hpp`
+(DBUSER shape code + dimensions -> area/I/J for `SB`/`B`/`SR`), `MidasOrientation.hpp`
+(Beta angle -> `reference_y`, confirmed against MIDAS's own manual wording found via web
+search). Supported: `NODE`, `ELEM` (`BEAM` only), `MATL`/`MATD`, `SECT`, `CONS`, `RIGD`, `BODF`
+(global -Z only), `BMLD` (`CMD=BEAM`,`TYPE=UNILOAD`,`DIRECTION=GZ` only). Explicitly rejected,
+not silently dropped: `ELNK` (non-coincident elastic links), any `TYPE=T` (temperature) load
+case and its `ETMP` records, anything outside the supported `ELEM`/`MATL`/`SECT` types, and
+`EIGV`/`SPLC` (not executed while `RIGD` models are rejected by `ModalSolver`/
+`ResponseSpectrumSolver`). **Superseded by Phase 7S/7M below**: `MidasSectionLibrary`/
+`MidasMaterialLibrary` are MIDAS-specific stand-ins for what 7S/7M build as general, reusable
+engines; once those exist, 7B should be revisited to delegate to them instead of duplicating the
+shape/grade formulas -- see the 2026-10-19 scope addition.
+
+## Scope addition — 2026-10-19 (user decision): Phases 7S, 7M, 7T
+User instruction: extend the standalone solver with three general-purpose engineering
+capabilities that belong to the solver core itself, not to the MIDAS importer -- a parametric/
+general section property engine, a Eurocode material library addressed by grade name, and
+uniform/gradient temperature load analysis for Beam3D. All three must be usable by native JSON
+models and by the MIDAS importer alike (no duplicate engineering logic). First execution
+(2026-10-19) was roadmap-update only, per explicit instruction not to implement yet; nothing in
+7S/7M/7T has been implemented. Inserted here, between 7B and 7C, because 7C (standalone EXE
+analysis) and later phases should use these general engines rather than 7B's current
+MIDAS-specific stand-ins once they exist.
+
+### Phase 7S — Parametric and general section property engine
+Not started. Scope: `SectionGeometry`/`SectionPropertyCalculator`/`GeneralSection` types
+computing area, centroid, Iy/Iz/Iyz, principal axes, elastic moduli (Wy+/-, Wz+/-), extreme
+fiber distances, torsional constant J (exact/validated formulas only, explicit rejection
+otherwise -- never `J = Iy + Iz` for a non-circular section), polar second moment where
+applicable, shear areas Asy/Asz where the beam formulation needs them, and mass per length when
+density is available. Section families to support, **subject to phase approval before each is
+implemented** (not all at once): rectangle, solid/hollow circle, rectangular hollow/box,
+I/H/T/channel/angle, precast girder sections, general polygonal sections (polygon-integration
+area/centroid/Iy/Iz/Iyz), multi-contour sections with openings. Reuses/generalizes the three
+shapes already in `MidasSectionLibrary.hpp` (built for Phase 7B) rather than duplicating them.
+MIDAS compatibility: reconstruct geometry and independently compute properties when MIDAS gives
+dimensions; when MIDAS gives only numeric properties, preserve them as a property-based section
+and never claim geometry was reconstructed when it was not. A section verification report
+(independently-computed vs. imported properties, where both exist) is a deliverable.
+
+### Phase 7M — Eurocode material library
+Not started. Scope: a versioned Eurocode concrete (and future-compatible steel) material
+database addressed by grade name (e.g. `EN-C35/45`), citing the standard edition and National
+Annex, giving fck, fck,cube, fcm, fctm, Ecm, Poisson's ratio, unit weight, thermal expansion
+coefficient, and deriving G = E/(2(1+ν)). Distinguishes standard-defined values, National Annex
+values, project assumptions and user overrides; never hardcodes an undocumented default
+density/Poisson/thermal-expansion value. Generalizes `MidasMaterialLibrary.hpp` (built for Phase
+7B), which both the MIDAS importer and native JSON models should use once this exists, instead
+of each having their own grade-resolution logic.
+
+### Phase 7T — Uniform and gradient temperature load analysis
+Not started. Scope: `ThermalLoadDefinition`/`ThermalLoadAssembler` plus Beam3D thermal
+equivalent nodal loads, for (a) uniform temperature change (free thermal strain
+epsilon_T = alpha_T * Delta T, verified against a fully/partially restrained member's thermal
+axial force |N| = E*A*alpha_T*|Delta T|) and (b) linear temperature gradients about local y
+and/or z (thermal curvature -> consistent equivalent nodal loads, respecting Beam3D's existing
+local axis and sign conventions -- not an unverified fixed-end-force formula copied from
+elsewhere). This is the first thermal/temperature capability in any phase; `ETMP`/`TYPE=T` MIDAS
+records are rejected by Phase 7B today specifically because this did not exist. Explicitly out
+of scope for 7T itself: EN 1991-1-5 code-based thermal action generation (bridge deck
+temperature components, National Annex parameters) -- 7T is structural analysis under an
+already-defined thermal load, not a thermal-action generator; that is a separate, later,
+explicitly-scoped capability if ever added.
 
 ### Phase 7C — Standalone EXE analysis (MIDAS-format CLI input)
 Not started; depends on 7B. `--format midas-nx-json` CLI option alongside the existing native

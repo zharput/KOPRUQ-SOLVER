@@ -160,6 +160,11 @@
           "minimum": 0,
           "default": 0,
           "description": "kN/m^3, used by self-weight"
+        },
+        "thermal_expansion": {
+          "type": "number",
+          "default": 0,
+          "description": "1/K, used by thermal loads (load_case.thermal)"
         }
       },
       "required": [
@@ -449,6 +454,13 @@
           "items": {
             "$ref": "#/$defs/point_load"
           }
+        },
+        "thermal": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/member_thermal_load"
+          },
+          "description": "Uniform and/or linear-gradient temperature loads (UNIFORM_TEMPERATURE / TEMPERATURE_GRADIENT)"
         }
       },
       "required": [
@@ -623,6 +635,47 @@
         "direction",
         "value",
         "position"
+      ],
+      "additionalProperties": false
+    },
+    "member_thermal_load": {
+      "type": "object",
+      "description": "Uniform and/or linear-gradient temperature change on a member. gradient_*_delta_t != 0 requires the matching gradient_*_depth > 0.",
+      "properties": {
+        "element": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "uniform_delta_t": {
+          "type": "number",
+          "default": 0,
+          "description": "K, uniform through the section"
+        },
+        "gradient_y_delta_t": {
+          "type": "number",
+          "default": 0,
+          "description": "K, temperature difference across local y"
+        },
+        "gradient_y_depth": {
+          "type": "number",
+          "minimum": 0,
+          "default": 0,
+          "description": "m, section depth the gradient_y_delta_t acts over"
+        },
+        "gradient_z_delta_t": {
+          "type": "number",
+          "default": 0,
+          "description": "K, temperature difference across local z"
+        },
+        "gradient_z_depth": {
+          "type": "number",
+          "minimum": 0,
+          "default": 0,
+          "description": "m, section depth the gradient_z_delta_t acts over"
+        }
+      },
+      "required": [
+        "element"
       ],
       "additionalProperties": false
     },

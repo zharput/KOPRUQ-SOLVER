@@ -3,6 +3,7 @@
 #include "../assembly/MatrixAssembler.hpp"
 #include "../assembly/RigidLink.hpp"
 #include "../loads/Loads.hpp"
+#include "../loads/ThermalLoads.hpp"
 #include "../elements/Releases.hpp"
 #include "../elements/Offsets.hpp"
 #include "../elements/SpringLink.hpp"
@@ -55,7 +56,7 @@ static AppliedLoads assembleLoadCase(const Model&m,const DofManager&dm,const Loa
       if(w!=0)loads.push_back(MemberLoad{e.id,LoadAxes::Global,2,w,w,0,1});
     }
   }
-  if(loads.empty()&&lc.point.empty())return a;
+  if(loads.empty()&&lc.point.empty()&&lc.thermal.empty())return a;
   std::unordered_map<Id,const Beam3DConnection*> beams; beams.reserve(m.beams.size());
   for(const auto&e:m.beams)beams[e.id]=&e;
   auto matIdx=detail::index_by_id(m.materials); auto secIdx=detail::index_by_id(m.sections);
@@ -113,6 +114,12 @@ static AppliedLoads assembleLoadCase(const Model&m,const DofManager&dm,const Loa
       throw AssemblyError(AssemblyErrorCode::InvalidLoad,"member point load value or position is invalid");
     auto f=frameOf(ld.element,"member point load");
     accumulate(f,detail::pointLoadEffect(ld,f.R,f.L));
+  }
+  for(const auto&ld:lc.thermal){
+    auto f=frameOf(ld.element,"thermal load");
+    const Material*mat=detail::find_by_id(matIdx,f.e->material); const Section*sec=detail::find_by_id(secIdx,f.e->section);
+    if(!mat||!sec)throw AssemblyError(AssemblyErrorCode::MissingNode,"element property reference missing");
+    accumulate(f,detail::thermalLoadEffect(ld,mat->thermal_expansion,mat->elastic_modulus,sec->area,sec->Iy,sec->Iz));
   }
   return a;
 }

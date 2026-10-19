@@ -87,6 +87,7 @@ class ModelValidator {
       if (!std::isfinite(mat.elastic_modulus) || mat.elastic_modulus <= 0) issue(p + ".elastic_modulus", "must be finite and greater than 0");
       if (!std::isfinite(mat.poisson_ratio) || !(mat.poisson_ratio > -1 && mat.poisson_ratio < 0.5)) issue(p + ".poisson_ratio", "must satisfy -1 < poisson_ratio < 0.5");
       if (!std::isfinite(mat.unit_weight) || mat.unit_weight < 0) issue(p + ".unit_weight", "must be finite and >= 0");
+      if (!std::isfinite(mat.thermal_expansion)) issue(p + ".thermal_expansion", "must be finite");
       materials_[mat.id] = &mat;
     }
   }
@@ -210,6 +211,16 @@ class ModelValidator {
       if (l.direction < 0 || l.direction > 2) issue(lp + ".direction", "must be 0, 1 or 2");
       if (!std::isfinite(l.value)) issue(lp + ".value", "must be finite");
       if (!std::isfinite(l.position) || !(l.position >= 0 && l.position <= 1)) issue(lp + ".position", "must satisfy 0 <= position <= 1");
+    }
+    for (std::size_t i = 0; i < lc.thermal.size(); ++i) {
+      const auto& l = lc.thermal[i];
+      const std::string lp = p + ".thermal[" + std::to_string(i) + "]";
+      if (!beamIds_.count(l.element)) issue(lp + ".element", "references unknown beam " + std::to_string(l.element));
+      if (!std::isfinite(l.uniform_delta_t)) issue(lp + ".uniform_delta_t", "must be finite");
+      if (!std::isfinite(l.gradient_y_delta_t) || !std::isfinite(l.gradient_y_depth)) issue(lp, "gradient_y_delta_t/gradient_y_depth must be finite");
+      else if (l.gradient_y_delta_t != 0 && !(l.gradient_y_depth > 0)) issue(lp + ".gradient_y_depth", "must be positive when gradient_y_delta_t is nonzero");
+      if (!std::isfinite(l.gradient_z_delta_t) || !std::isfinite(l.gradient_z_depth)) issue(lp, "gradient_z_delta_t/gradient_z_depth must be finite");
+      else if (l.gradient_z_delta_t != 0 && !(l.gradient_z_depth > 0)) issue(lp + ".gradient_z_depth", "must be positive when gradient_z_delta_t is nonzero");
     }
   }
   void combinations(const std::vector<LoadCase>& cases, const std::vector<LoadCombination>& combos) {

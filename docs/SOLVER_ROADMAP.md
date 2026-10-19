@@ -288,16 +288,35 @@ density/Poisson/thermal-expansion value. Generalizes `MidasMaterialLibrary.hpp` 
 of each having their own grade-resolution logic.
 
 ### Phase 7T — Uniform and gradient temperature load analysis
-Not started. Scope: `ThermalLoadDefinition`/`ThermalLoadAssembler` plus Beam3D thermal
-equivalent nodal loads, for (a) uniform temperature change (free thermal strain
-epsilon_T = alpha_T * Delta T, verified against a fully/partially restrained member's thermal
-axial force |N| = E*A*alpha_T*|Delta T|) and (b) linear temperature gradients about local y
-and/or z (thermal curvature -> consistent equivalent nodal loads, respecting Beam3D's existing
-local axis and sign conventions -- not an unverified fixed-end-force formula copied from
-elsewhere). This is the first thermal/temperature capability in any phase; `ETMP`/`TYPE=T` MIDAS
-records are rejected by Phase 7B today specifically because this did not exist. Explicitly out
-of scope for 7T itself: EN 1991-1-5 code-based thermal action generation (bridge deck
-temperature components, National Annex parameters) -- 7T is structural analysis under an
+**COMPLETE (verified, CI run pending push -- see `docs/DEVELOPMENT_STATUS.md`).**
+`Material::thermal_expansion` (alpha_T, 1/K, default 0) and `MemberThermalLoad` (uniform_delta_t
+plus independent gradient_y/gradient_z delta_t+depth pairs) added; `Loads.hpp`'s `LoadCase`
+gets a `thermal` field; `include/kopruq/loads/ThermalLoads.hpp` derives the consistent
+equivalent nodal load vector directly from the same cubic-Hermite shape functions already used
+throughout this project (MassMatrix.hpp/Loads.hpp), respecting the established per-plane sign
+convention (theta_y = -dw/dx). Wired into `LinearStaticSolver::assembleLoadCase` via the
+existing `accumulate()`/`frameOf()` machinery (releases, offsets, equilibrium bookkeeping all
+apply unchanged); a thermal load's resultant force/moment are reported as zero (it is an
+initial-strain/eigenstrain load, not a real external action), keeping the global equilibrium
+check meaningful. JSON model I/O and schema updated (`material.thermal_expansion`,
+`load_case.thermal`).
+
+Independent verification (`tests/unit/thermal_load_tests.cpp`): free uniform expansion
+(`alpha_T*Delta T*L`); fully restrained axial force `|N| = E*A*alpha_T*|Delta T|`; a
+statically-indeterminate two-bar series system (partial restraint via the second bar's finite
+stiffness, hand-solved by compatibility) with one and then both bars heated at different
+alpha_T/Delta T; an inclined 3D member's free expansion along its own axis; free-cantilever
+gradient curvature matched against classical constant-curvature kinematics (tip rotation =
+kappa*L, tip deflection = kappa*L^2/2, independent of the production virtual-work derivation);
+a fully restrained gradient's fixed-end moment `|M| = E*Iy*kappa`; combined thermal + nodal load
+global equilibrium/energy checks; invalid input (gradient delta_t without a positive depth)
+rejected.
+
+This is the first thermal/temperature capability in any phase; `ETMP`/`TYPE=T` MIDAS records are
+still rejected by Phase 7B as of this commit (wiring the MIDAS importer to use this new
+capability is a separate, not-yet-done follow-up, deliberately not bundled into this change).
+Explicitly out of scope for 7T itself: EN 1991-1-5 code-based thermal action generation (bridge
+deck temperature components, National Annex parameters) -- 7T is structural analysis under an
 already-defined thermal load, not a thermal-action generator; that is a separate, later,
 explicitly-scoped capability if ever added.
 

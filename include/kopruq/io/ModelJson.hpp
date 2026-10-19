@@ -34,7 +34,7 @@ namespace model_keys {
 inline const KeySpec top{{"schema","schema_version","nodes","materials","sections","beams","supports"},{"units","trusses","springs","rigid_links","load_cases","combinations","response_spectra"}};
 inline const KeySpec units{{},{"length","force","angle"}};
 inline const KeySpec node{{"id","x","y","z"},{}};
-inline const KeySpec material{{"id","elastic_modulus","poisson_ratio"},{"unit_weight"}};
+inline const KeySpec material{{"id","elastic_modulus","poisson_ratio"},{"unit_weight","thermal_expansion"}};
 inline const KeySpec section{{"id","area","Iy","Iz","J"},{"Asy","Asz"}};
 inline const KeySpec beam{{"id","nodes","material","section"},{"reference_y","releases","offset1","offset2"}};
 // A truss is read as a Beam3DConnection with every rotational DOF released (kopruq/elements/Truss3D.hpp);
@@ -44,10 +44,11 @@ inline const KeySpec spring{{"id","nodes","stiffness"},{"local_x","reference_y"}
 inline const KeySpec rigid_link{{"id","master","slave"},{}};
 inline const KeySpec releases{{},{"start","end"}};
 inline const KeySpec support{{"node","restraints"},{}};
-inline const KeySpec load_case{{"name"},{"self_weight","nodal","member","point"}};
+inline const KeySpec load_case{{"name"},{"self_weight","nodal","member","point","thermal"}};
 inline const KeySpec nodal_load{{"node","values"},{}};
 inline const KeySpec member_load{{"element","axes","direction","w1"},{"w2","start","end","projected","kind"}};
 inline const KeySpec point_load{{"element","axes","direction","value","position"},{"kind"}};
+inline const KeySpec member_thermal_load{{"element"},{"uniform_delta_t","gradient_y_delta_t","gradient_y_depth","gradient_z_delta_t","gradient_z_depth"}};
 inline const KeySpec combination{{"name","terms"},{}};
 inline const KeySpec combination_term{{"case","factor"},{}};
 inline const KeySpec response_spectrum_case{{"name","direction","spectrum"},{"num_modes"}};
@@ -246,6 +247,7 @@ class ModelReader {
       ok = number(m, p, "elastic_modulus", mat.elastic_modulus) && ok;
       ok = number(m, p, "poisson_ratio", mat.poisson_ratio) && ok;
       if (field(m, "unit_weight")) ok = number(m, p, "unit_weight", mat.unit_weight) && ok;
+      if (field(m, "thermal_expansion")) ok = number(m, p, "thermal_expansion", mat.thermal_expansion) && ok;
       if (!ok) continue;
       bool valid = positive(p, "elastic_modulus", mat.elastic_modulus);
       if (!(mat.poisson_ratio > -1 && mat.poisson_ratio < 0.5)) { issue(key(p, "poisson_ratio"), "must satisfy -1 < poisson_ratio < 0.5"); valid = false; }
@@ -523,6 +525,8 @@ class ModelReader {
         for (std::size_t k = 0; k < ml->size(); ++k) ok = readMemberLoad((*ml)[k], at(key(p, "member"), k), lc) && ok;
       if (const json* pl = array(c, p, "point"))
         for (std::size_t k = 0; k < pl->size(); ++k) ok = readPointLoad((*pl)[k], at(key(p, "point"), k), lc) && ok;
+      if (const json* tl = array(c, p, "thermal"))
+        for (std::size_t k = 0; k < tl->size(); ++k) ok = readThermalLoad((*tl)[k], at(key(p, "thermal"), k), lc) && ok;
       if (!ok) continue;
       caseIndex_[lc.name] = in.load_cases.size();
       in.load_cases.push_back(std::move(lc));
@@ -594,6 +598,23 @@ class ModelReader {
     if (!beamIds_.count(l.element)) { issue(key(p, "element"), "references unknown beam " + std::to_string(l.element)); ok = false; }
     if (!(l.position >= 0 && l.position <= 1)) { issue(key(p, "position"), "must satisfy 0 <= position <= 1"); ok = false; }
     if (ok) lc.point.push_back(l);
+    return ok;
+  }
+
+  bool readThermalLoad(const json& j, const std::string& p, LoadCase& lc) {
+    if (!object(j, p, model_keys::member_thermal_load)) return false;
+    MemberThermalLoad l;
+    bool ok = id(j, p, "element", l.element);
+    if (field(j, "uniform_delta_t")) ok = number(j, p, "uniform_delta_t", l.uniform_delta_t) && ok;
+    if (field(j, "gradient_y_delta_t")) ok = number(j, p, "gradient_y_delta_t", l.gradient_y_delta_t) && ok;
+    if (field(j, "gradient_y_depth")) ok = number(j, p, "gradient_y_depth", l.gradient_y_depth) && ok;
+    if (field(j, "gradient_z_delta_t")) ok = number(j, p, "gradient_z_delta_t", l.gradient_z_delta_t) && ok;
+    if (field(j, "gradient_z_depth")) ok = number(j, p, "gradient_z_depth", l.gradient_z_depth) && ok;
+    if (!ok) return false;
+    if (!beamIds_.count(l.element)) { issue(key(p, "element"), "references unknown beam " + std::to_string(l.element)); ok = false; }
+    if (l.gradient_y_delta_t != 0 && !(l.gradient_y_depth > 0)) { issue(key(p, "gradient_y_depth"), "must be positive when gradient_y_delta_t is nonzero"); ok = false; }
+    if (l.gradient_z_delta_t != 0 && !(l.gradient_z_depth > 0)) { issue(key(p, "gradient_z_depth"), "must be positive when gradient_z_delta_t is nonzero"); ok = false; }
+    if (ok) lc.thermal.push_back(l);
     return ok;
   }
 
@@ -706,7 +727,7 @@ inline json writeModel(const ModelInput& in) {
   for (const auto& n : in.model.nodes) j["nodes"].push_back({{"id", n.id}, {"x", n.x}, {"y", n.y}, {"z", n.z}});
   j["materials"] = json::array();
   for (const auto& m : in.model.materials)
-    j["materials"].push_back({{"id", m.id}, {"elastic_modulus", m.elastic_modulus}, {"poisson_ratio", m.poisson_ratio}, {"unit_weight", m.unit_weight}});
+    j["materials"].push_back({{"id", m.id}, {"elastic_modulus", m.elastic_modulus}, {"poisson_ratio", m.poisson_ratio}, {"unit_weight", m.unit_weight}, {"thermal_expansion", m.thermal_expansion}});
   j["sections"] = json::array();
   for (const auto& s : in.model.sections) j["sections"].push_back({{"id", s.id}, {"area", s.area}, {"Iy", s.Iy}, {"Iz", s.Iz}, {"J", s.J}, {"Asy", s.Asy}, {"Asz", s.Asz}});
   j["beams"] = json::array();
@@ -729,7 +750,7 @@ inline json writeModel(const ModelInput& in) {
   for (const auto& [node, r] : in.restraints) j["supports"].push_back({{"node", node}, {"restraints", r}});
   j["load_cases"] = json::array();
   for (const auto& lc : in.load_cases) {
-    json c = {{"name", lc.name}, {"self_weight", lc.self_weight}, {"nodal", json::array()}, {"member", json::array()}, {"point", json::array()}};
+    json c = {{"name", lc.name}, {"self_weight", lc.self_weight}, {"nodal", json::array()}, {"member", json::array()}, {"point", json::array()}, {"thermal", json::array()}};
     for (const auto& l : lc.nodal)
       c["nodal"].push_back({{"node", l.node}, {"values", {l.values(0), l.values(1), l.values(2), l.values(3), l.values(4), l.values(5)}}});
     for (const auto& l : lc.member)
@@ -740,6 +761,10 @@ inline json writeModel(const ModelInput& in) {
       c["point"].push_back({{"element", l.element}, {"axes", l.axes == LoadAxes::Local ? "local" : "global"},
                             {"direction", detail::axisName(l.direction)}, {"kind", detail::kindName(l.kind)},
                             {"value", l.value}, {"position", l.position}});
+    for (const auto& l : lc.thermal)
+      c["thermal"].push_back({{"element", l.element}, {"uniform_delta_t", l.uniform_delta_t},
+                              {"gradient_y_delta_t", l.gradient_y_delta_t}, {"gradient_y_depth", l.gradient_y_depth},
+                              {"gradient_z_delta_t", l.gradient_z_delta_t}, {"gradient_z_depth", l.gradient_z_depth}});
     j["load_cases"].push_back(c);
   }
   j["combinations"] = json::array();

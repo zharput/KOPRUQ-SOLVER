@@ -54,12 +54,23 @@ struct MemberPointLoad {
   Real position{};
 };
 
+// Uniform and/or linear-gradient temperature change on a member (Phase 7T, kopruq/loads/
+// ThermalLoads.hpp has the equivalent-nodal-load derivation). gradient_*_delta_t != 0 requires
+// the matching gradient_*_depth > 0 (the section depth the gradient acts over).
+struct MemberThermalLoad {
+  Id element{};
+  Real uniform_delta_t{0};
+  Real gradient_y_delta_t{0}, gradient_y_depth{0};
+  Real gradient_z_delta_t{0}, gradient_z_depth{0};
+};
+
 struct LoadCase {
   std::string name;
   std::vector<NodalLoad> nodal;
   std::vector<MemberLoad> member;
   Real self_weight{};       // factor on self-weight; 0 = no self-weight
   std::vector<MemberPointLoad> point;
+  std::vector<MemberThermalLoad> thermal;
 };
 
 struct LoadCombination {

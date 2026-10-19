@@ -35,8 +35,15 @@ on the first try. The real `xmidas/deneme1.json` bridge model now
 imports, validates and **solves successfully end to end** with
 KOPRUQ-SOLVER's own `LinearStaticSolver`.
 
-**Phase 7T (temperature loads) is next, per the approved implementation
-order (7M -> 7S -> 7T), not yet started.**
+**Phase 7T (temperature loads) — COMPLETE/verified (CI run `39237884916`,
+215/215 Debug/Release/ASan, 2026-10-19).** This completes the approved
+7M -> 7S -> 7T implementation order in full. Two genuine issues were
+caught and fixed during verification (session log below): a test-design
+flaw (a scale-normalized equilibrium ratio that reads exactly 1.0 for
+any nonzero reaction when the applied-load resultant is exactly zero by
+design) and a real, pre-existing solver robustness gap (`solveCases`
+crashed on a model with zero free DOFs -- `SimplicialLDLT::compute()` on
+a 0x0 matrix aborted in Debug builds specifically, masked in Release).
 
 **Phase 7A — MIDAS NX JSON import audit — COMPLETE (2026-10-18, audit
 only, no code changed).** `docs/MIDAS_JSON_DATA_AUDIT.md` and
@@ -1137,13 +1144,39 @@ Milestone status: **Phase 7B COMPLETE. Phase 7M COMPLETE. Phase 7S increment 1 C
 (general polygon engine + hollow circle; I/H/T/channel/angle/girder sections still explicitly
 deferred, each needing its own approval). Phase 7T (temperature loads) is next.**
 
+### 2026-10-19 — Phase 7T implementation and verification (2 issues caught and fixed)
+`Material::thermal_expansion`, `MemberThermalLoad`/`LoadCase::thermal`, and
+`include/kopruq/loads/ThermalLoads.hpp` (uniform + gradient equivalent nodal loads, derived via
+the same virtual-work integral already used throughout this project) implemented and wired into
+`LinearStaticSolver::assembleLoadCase` via the existing `accumulate()`/`frameOf()` machinery.
+JSON I/O, schema and `Validate.hpp` updated. First CI run (`39233490979`) caught a test-design
+flaw in `ThermalLoads.FreeUniformExpansionMatchesAlphaDeltaTL`: `force_equilibrium_error` is a
+ratio that reads exactly 1.0 for ANY nonzero reaction when the applied-load resultant is exactly
+zero (true by design for a thermal load, which has no real external resultant) -- fixed
+(`9c53fd1`) by checking the raw `force_balance_norm` instead. Second CI run (`39235802175`)
+caught a real, pre-existing solver robustness gap:
+`ThermalLoads.FullyRestrainedUniformGivesEAAlphaDeltaT` and
+`...FullyRestrainedGradientGivesEIKappaMoment` both restrain every DOF of a 2-node model (by
+design, to measure the fixed-end thermal force/moment directly) -- a legitimate, trivially-solved
+model, but `SimplicialLDLT::compute()` on the resulting 0x0 `Kff` aborted the process in the
+Debug build specifically (Release tolerated it, masking the issue there). Fixed (`1dd5323`) in
+both `solveCases` and `solveCasesWithRigidLinks`: a model with zero free DOFs now skips the
+factorization/solve entirely rather than relying on Eigen's undefined-across-configurations
+behavior for a 0x0 matrix.
+
+Final verification: CI run `39237884916`, commits `bd0a079`, `9c53fd1`, `1dd5323`.
+**Debug/Release/ASan: 215/215 PASS** (up from 199; 16 new tests across `thermal_load_tests.cpp`,
+`thermal_io_tests.cpp`). This completes the 7M -> 7S -> 7T implementation order in full.
+
 ## Next autonomous action
-Proceeding to **Phase 7T (uniform and gradient temperature load analysis)** per the user's
-"7s'ye geçelim" / continued-work instruction and the already-approved 7M -> 7S -> 7T order.
 Phase 3.2, Phase 4, Phase 5 (5.1-5.6), Phase 6 (6.1, 6.1b, 6.2, 6.2b; 6.3 cancelled), Phase 7A,
-7B, 7M and 7S(1) are all complete and verified -- CI run `39227258173`, 199/199
-Debug/Release/ASan. After 7T is implemented and verified, this reaches the end of the originally
-scoped 7A-7F/7S/7M/7T work; the next mandatory approval checkpoint should cover what comes after
-(candidates, unchanged from before): Phase 7C/7D (MIDAS-format CLI + results export), Phase 7
-(production solver, unrelated to MIDAS), extending rigid-link support to Modal/
-ResponseSpectrumSolver, or a `v0.1.0` release tag.
+7B, 7M, 7S(1) and 7T are all complete and verified -- CI run `39237884916`, 215/215
+Debug/Release/ASan. This reaches the end of the originally scoped 7A-7F/7S/7M/7T work from the
+last two user-approved executions; this is a natural, mandatory approval checkpoint before any
+further work. Candidate next steps (say which, or propose a different scope):
+1. Phase 7C/7D: MIDAS-format CLI input (`--format midas-nx-json`) and JSON results export.
+2. Wire Phase 7B's MIDAS importer to use the new Phase 7T thermal-load capability for `TU`/`ETMP`
+   records, currently still rejected.
+3. **Phase 7 (production solver, unrelated to MIDAS import)**: sparse direct/iterative strategy,
+   optional SuiteSparse, profiling/parallelism -- still not started.
+4. Extend rigid-link support to ModalSolver/ResponseSpectrumSolver, or cut a `v0.1.0` release tag.

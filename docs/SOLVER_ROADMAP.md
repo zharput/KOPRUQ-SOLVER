@@ -288,7 +288,8 @@ density/Poisson/thermal-expansion value. Generalizes `MidasMaterialLibrary.hpp` 
 of each having their own grade-resolution logic.
 
 ### Phase 7T — Uniform and gradient temperature load analysis
-**COMPLETE (verified, CI run pending push -- see `docs/DEVELOPMENT_STATUS.md`).**
+**COMPLETE (verified, CI run `39237884916`, 215/215 Debug/Release/ASan, 2026-10-19; commits
+`bd0a079`, `9c53fd1`, `1dd5323`).**
 `Material::thermal_expansion` (alpha_T, 1/K, default 0) and `MemberThermalLoad` (uniform_delta_t
 plus independent gradient_y/gradient_z delta_t+depth pairs) added; `Loads.hpp`'s `LoadCase`
 gets a `thermal` field; `include/kopruq/loads/ThermalLoads.hpp` derives the consistent

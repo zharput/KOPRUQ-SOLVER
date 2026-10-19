@@ -1202,12 +1202,13 @@ the EN1992-1-1 S3.1.3(5) thermal expansion coefficient), still **solves successf
 
 ## Next autonomous action
 Phase 3.2, Phase 4, Phase 5 (5.1-5.6), Phase 6 (6.1, 6.1b, 6.2, 6.2b; 6.3 cancelled), Phase 7A,
-7B (including ETMP thermal wiring), 7M, 7S(1) and 7T are all complete and verified -- CI run
-`39247142910`, 219/219 Debug/Release/ASan. Candidate next steps (say which, or propose a
-different scope):
-1. Phase 7C/7D: MIDAS-format CLI input (`--format midas-nx-json`) and JSON results export.
-2. **Phase 7 (production solver, unrelated to MIDAS import)**: sparse direct/iterative strategy,
+7B (including ETMP thermal wiring), 7C, 7D, 7M, 7S(1) and 7T are all complete and verified -- CI
+run `39265009361`, commit `a92f045`, all three matrix jobs (gcc-debug, gcc-asan, gcc-release)
+`success`. Candidate next steps (say which, or propose a different scope):
+1. **Phase 7 (production solver, unrelated to MIDAS import)**: sparse direct/iterative strategy,
    optional SuiteSparse, profiling/parallelism -- still not started.
-3. Extend rigid-link support to ModalSolver/ResponseSpectrumSolver, or cut a `v0.1.0` release tag.
-4. Confirm MIDAS's GTMP T1/T2 sign convention (e.g. from the user, who may have access to the
+2. Extend rigid-link support to ModalSolver/ResponseSpectrumSolver, or cut a `v0.1.0` release tag.
+3. Confirm MIDAS's GTMP T1/T2 sign convention (e.g. from the user, who may have access to the
    official API manual) to unblock gradient-temperature import, if ever needed.
+4. The user's pasted "RAPID Qt 6 VERIFICATION GUI" task (native Qt 6 Widgets front end over the
+   existing CLI) is queued but not started -- it was interrupted by the "7C/7D first" instruction.

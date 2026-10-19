@@ -73,7 +73,7 @@ namespace {
 // A minimal, hand-built MIDAS-shaped JSON snippet (not the real sample) for testing ETMP/GTMP/
 // BTMP handling in isolation, deterministically.
 nlohmann::json minimalMidasModel(const char* extraRecords) {
-  std::string text = std::string(R"({"DBG":{
+  std::string text = std::string(R"json({"DBG":{
     "UNIT":{"1":{"FORCE":"KN","DIST":"M"}},
     "NODE":{"1":{"X":0.0,"Y":0.0,"Z":0.0},"2":{"X":4.0,"Y":0.0,"Z":0.0}},
     "MATL":{"1":{"TYPE":"CONC","NAME":"C35/45"}},
@@ -81,7 +81,7 @@ nlohmann::json minimalMidasModel(const char* extraRecords) {
     "SECT":{"1":{"SECTTYPE":"DBUSER","SECT_NAME":"S","SECT_BEFORE":{"SHAPE":"SB","SECT_I":{"vSIZE":[1.0,1.0]}}}},
     "ELEM":{"1":{"TYPE":"BEAM","MATL":1,"SECT":1,"NODE":[1,2,0,0,0,0,0,0],"ANGLE":0.0}},
     "CONS":{"1":{"ITEMS":[{"ID":1,"CONSTRAINT":"1111111"}]}},
-    "STLD":{"1":{"NO":1,"NAME":"TU","TYPE":"T"}})") + extraRecords + "}}";
+    "STLD":{"1":{"NO":1,"NAME":"TU","TYPE":"T"}})json") + extraRecords + "}}";
   return nlohmann::json::parse(text);
 }
 }

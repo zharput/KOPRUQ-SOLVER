@@ -1246,15 +1246,34 @@ preset (`9c74ba9`), then **PASS** on run `39406148285` -- all five Windows prese
 launches (with `windeployqt`-deployed Qt6 runtime/platform-plugin), stays alive 5s, and closes
 cleanly. No existing regression test was touched.
 
+## GUI-2 — file selection, extension/existence validation, QSettings (2026-10-20)
+**COMPLETE AND VERIFIED, first dispatch.** `FileInputPanel` now wires a real `QFileDialog` per
+row, validates by extension (`.json` for the MIDAS model; `.xlsx`/`.xls` for the four reference
+rows -- widened to include `.xls` since the real MIDAS exports already in `xmidas/` are legacy
+BIFF, not `.xlsx`, per GUI-0's audit) and `QFileInfo::exists()`, producing
+NotSelected/Selected/Invalid/Unsupported (deliberately never "Valid" -- that claim belongs to the
+"Modeli Doğrula" action once GUI-3 wires the real CLI, not to a file-selection check). Every path
+is persisted via `QSettings` and restored-and-revalidated on next launch, so a moved/deleted file
+correctly shows Invalid rather than silently reappearing as selected. The four Excel rows remain
+individually optional; only the MIDAS JSON row is required (`hasRequiredModel()`). No action
+button is wired yet -- still GUI-3's scope.
+
+Verification: `release.yml` run `39422159633`, all five Windows presets `success`, **220/220
+tests**, GUI smoke test confirmed a clean 5s launch/close (exercising `FileInputPanel`'s full
+construction including `QSettings` restore on a runner with no prior settings). Honestly noted
+limitation: the interactive file-dialog flow itself and cross-restart persistence are not
+exercised by an unattended CI job (no one to click a dialog) -- confirmed by code review of the
+validation/persistence logic instead; see `docs/SOLVER_ROADMAP.md`'s "GUI-2 verification" entry.
+
 ## Next autonomous action
 Phase 3.2, Phase 4, Phase 5 (5.1-5.6), Phase 6 (6.1, 6.1b, 6.2, 6.2b; 6.3 cancelled), Phase 7A,
 7B (including ETMP thermal wiring), 7C, 7D, 7M, 7S(1) and 7T are all complete and verified -- CI
 run `39265009361`, commit `a92f045`, all three matrix jobs (gcc-debug, gcc-asan, gcc-release)
-`success`. GUI-0 and GUI-1 (Qt 6 Verification GUI) are also complete and verified (see above).
-Per the GUI task's own "stop for approval after each milestone" instruction, development is
-paused awaiting approval to start **GUI-2 — file selection and validation** (QFileDialog wiring,
-extension/existence checks, QSettings persistence). Other candidate next steps (unrelated to the
-GUI, say which, or propose a different scope):
+`success`. GUI-0, GUI-1 and GUI-2 (Qt 6 Verification GUI) are also complete and verified (see
+above). Per the GUI task's own "stop for approval after each milestone" instruction, development
+is paused awaiting approval to start **GUI-3 — solver execution via QProcess** (real CLI
+integration, async execution, results.json discovery, progress indication). Other candidate next
+steps (unrelated to the GUI, say which, or propose a different scope):
 1. **Phase 7 (production solver, unrelated to MIDAS import)**: sparse direct/iterative strategy,
    optional SuiteSparse, profiling/parallelism -- still not started.
 2. Extend rigid-link support to ModalSolver/ResponseSpectrumSolver, or cut a `v0.1.0` release tag.

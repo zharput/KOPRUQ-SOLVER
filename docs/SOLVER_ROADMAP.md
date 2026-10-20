@@ -447,7 +447,7 @@ Karşılaştır / Raporu Dışa Aktar), (3) an execution-status panel
 |---|---|---|
 | GUI-0 | Repository audit, roadmap/status update | **COMPLETE** |
 | GUI-1 | Main window, four-area dark-theme layout, empty tabs | **COMPLETE (verified, release.yml run `39406148285`, 2026-10-20)** |
-| GUI-2 | File selection, extension/existence validation, QSettings persistence | **IMPLEMENTED, PENDING CI VERIFICATION** |
+| GUI-2 | File selection, extension/existence validation, QSettings persistence | **COMPLETE (verified, release.yml run `39422159633`, 2026-10-20)** |
 | GUI-3 | Solver execution via QProcess + real CLI, async, results.json discovery | NOT STARTED |
 | GUI-4 | MIDAS Excel reference parsing (4 files) | NOT STARTED |
 | GUI-5 | Comparison engine, PASS/FAIL/N-A/UNSUPPORTED, tables | NOT STARTED |
@@ -541,6 +541,20 @@ remain individually optional by construction -- nothing in `FileInputPanel` requ
 filled, only the MIDAS JSON row (`hasRequiredModel()`). No action button is wired in this
 milestone (that is GUI-3's CLI-integration scope); clicking one is still inert, not fabricated
 success.
+
+### GUI-2 verification (2026-10-20)
+**COMPLETE on the first dispatch.** `release.yml` run `39422159633`: all five Windows presets
+(`ninja-debug/release/asan/analyze/gui-release`) `success`, **220/220 tests**, GUI smoke test
+again confirmed a 5s clean launch/close -- this run exercised `FileInputPanel`'s full
+construction path (including `restorePersistedPaths()`/`revalidate()` against a fresh runner
+with no prior `QSettings` entries) without a crash. What is **not** CI-verified, and is noted
+honestly rather than claimed: the interactive `QFileDialog` flow itself (opening the dialog,
+picking a file, seeing the status badge update) and cross-restart settings persistence cannot be
+exercised by an unattended CI job with no user to click a dialog -- those are confirmed by code
+review of `FileInputPanel.cpp`'s validation logic (extension check, `QFileInfo::exists()`,
+`QSettings` read/write) rather than an end-to-end interactive test. A future milestone could add
+`QTest`-driven headless UI tests (synthesizing clicks/dialog results) if that level of rigor is
+wanted; not implemented here to keep scope matched to "minimize frontend development time."
 
 ### GUI-1 verification (2026-10-20)
 **COMPLETE.** Three `release.yml` dispatches were needed to reach green, each catching a real,

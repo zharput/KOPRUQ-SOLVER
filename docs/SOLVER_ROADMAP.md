@@ -449,7 +449,7 @@ Karşılaştır / Raporu Dışa Aktar), (3) an execution-status panel
 | GUI-1 | Main window, four-area dark-theme layout, empty tabs | **COMPLETE (verified, release.yml run `39406148285`, 2026-10-20)** |
 | GUI-2 | File selection, extension/existence validation, QSettings persistence | **COMPLETE (verified, release.yml run `39422159633`, 2026-10-20)** |
 | GUI-3 | Solver execution via QProcess + real CLI, async, results.json discovery | **COMPLETE (verified, release.yml run `39428529324`, 2026-10-20)** |
-| GUI-4 | MIDAS Excel reference parsing (4 files) | NOT STARTED |
+| GUI-4 | MIDAS Excel reference parsing (4 files) | **IMPLEMENTED, PENDING CI VERIFICATION** |
 | GUI-5 | Comparison engine, PASS/FAIL/N-A/UNSUPPORTED, tables | NOT STARTED |
 | GUI-6 | XLSX verification report export | NOT STARTED |
 | GUI-7 | Cross-platform build/release validation (Windows + Ubuntu) | NOT STARTED |
@@ -524,6 +524,39 @@ package instead of the project's pinned-baseline vcpkg toolchain, a deliberate i
 should be called out explicitly wherever it is introduced, not silently mixed in). **Section 14
 names this as the central open risk**, since it determines whether the GUI can be built/verified
 automatically at all before GUI-7.
+
+### GUI-4 implementation note (2026-10-20)
+**Format decision (user, 2026-10-20):** the real exports already in `xmidas/` turned out to be
+legacy `.xls` (BIFF/OLE2) during inspection, confirmed via `xlrd`. vcpkg has no `.xls`-capable
+library (`xlnt`/`xlsxio`/`openxlsx` all read `.xlsx` only; `libxls` is not in vcpkg and would need
+vendoring a C library with no local build to verify it against). Asked the user to choose between
+vendoring `libxls`, supporting only `.xlsx`, or re-exporting the samples as `.xlsx` -- user chose
+**re-export as `.xlsx`**, so `ExcelReferenceReader` supports `.xlsx` only, via `xlnt` (vcpkg,
+already gated behind the "gui" manifest feature alongside `qtbase`). A `.xls` file is sniffed by
+its real signature (OLE2 `D0 CF 11 E0`, never trusted from the extension alone) and rejected with
+an explicit diagnostic naming the problem and the fix, both in `ExcelReferenceReader` itself and
+one level up in `FileInputPanel` (GUI-2's Excel rows now only accept `.xlsx`, so a `.xls` file is
+never shown as "Seçildi" for a file GUI-4 cannot actually parse).
+
+New `verification/ExcelReferenceReader.{h,cpp}` (Qt-independent, per the architecture split):
+locates every field **by header text**, never a hardcoded column index -- the four MIDAS export
+types have different column counts/orders (Beam Force 23, Elastic Link 19, Displacements/
+Reaction 15 columns, confirmed directly against the real samples before conversion), and nothing
+guarantees MIDAS won't add/reorder columns in a future version. The header row itself is located
+by content (first row with >=3 non-empty, non-numeric-looking cells), not a hardcoded row index,
+since MIDAS's exports have a title row above it. A header cell's `"Name\n(unit)"` text is split
+into a name and a unit, both preserved (never discarded). Every cell is captured in
+`ReferenceTable::rows` regardless of whether anything currently reads it (`CellValue` holds both
+the raw text and, if numeric, the parsed double) -- no silent data loss. New
+`tests/unit/excel_reference_reader_tests.cpp`: builds small `.xlsx` fixtures with `xlnt` itself
+(no external fixture file needed) mirroring the real `Displacements(Global)` column layout, and
+checks header/unit splitting, position-independent name lookup, correct row values, the `.xls`-
+rejection diagnostic (via a hand-written OLE2-signature file, not a real `.xls`), and a
+missing-file diagnostic.
+
+**Not yet wired into the GUI's "Sonuçları Karşılaştır" button** -- that is GUI-5's
+`ComparisonEngine`/`ResultMatcher` job, deliberately out of scope here to keep this milestone
+testable in isolation, per the task's own GUI-0→GUI-7 ordering.
 
 ### GUI-3 verification (2026-10-20)
 **COMPLETE on the first dispatch.** `release.yml` run `39428529324`: all five Windows presets

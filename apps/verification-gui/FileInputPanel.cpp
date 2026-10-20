@@ -13,12 +13,13 @@ struct RowSpec {
   QStringList allowedSuffixes; // lower-case, without the dot
 };
 
-// The reference MIDAS exports already in the repo (xmidas/*.xls) are legacy BIFF, not .xlsx --
-// confirmed during the GUI-0 audit -- so both extensions are accepted for the four Excel rows,
-// a superset of the task spec's ".xlsx" rather than a narrower, spec-literal match that would
-// reject the only real sample files available.
-const QStringList kExcelSuffixes{"xlsx", "xls"};
-const char* kExcelFilter = "Excel dosyaları (*.xlsx *.xls)";
+// GUI-0 found the repo's sample exports (xmidas/*.xls) are legacy BIFF, not .xlsx; GUI-4's
+// ExcelReferenceReader only reads .xlsx (OOXML), per the 2026-10-20 decision to avoid vendoring
+// a second, higher-risk library just for the legacy format -- a .xls file is rejected right here
+// at selection time (status Unsupported) rather than showing "Seçildi" for a file GUI-4 cannot
+// actually parse. Re-export from MIDAS Civil NX as .xlsx.
+const QStringList kExcelSuffixes{"xlsx"};
+const char* kExcelFilter = "Excel dosyaları (*.xlsx)";
 
 const std::array<RowSpec, static_cast<std::size_t>(FileInputPanel::Row::Count)> kRows{{
   {"MIDAS NX Model (JSON)", "midasModel", "MIDAS NX JSON (*.json)", {"json"}},

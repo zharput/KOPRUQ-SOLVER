@@ -42,6 +42,16 @@ target_link_libraries(kopruq_solver_benchmark PRIVATE kopruq_solver_core)
 option(KOPRUQ_BUILD_GUI "Build the Qt6 Widgets MIDAS verification GUI (apps/verification-gui)" OFF)
 if(KOPRUQ_BUILD_GUI)
   find_package(Qt6 CONFIG REQUIRED COMPONENTS Widgets)
+
+  # verification/: Qt-independent (GUI-4 Excel reading today; ResultMatcher/ComparisonEngine/
+  # VerificationReportExporter land here in later milestones) -- gated the same way as the GUI
+  # itself, since xlnt is only ever fetched via the "gui" vcpkg feature.
+  find_package(xlnt CONFIG REQUIRED)
+  add_library(kopruq_verification STATIC verification/ExcelReferenceReader.cpp)
+  target_include_directories(kopruq_verification PUBLIC ${PROJECT_SOURCE_DIR}/verification)
+  target_link_libraries(kopruq_verification PUBLIC xlnt::xlnt)
+  target_compile_features(kopruq_verification PUBLIC cxx_std_20)
+
   set(CMAKE_AUTOMOC ON)
   add_executable(kopruq_verification_gui
     apps/verification-gui/main.cpp
@@ -51,7 +61,7 @@ if(KOPRUQ_BUILD_GUI)
     apps/verification-gui/ExecutionLogPanel.cpp
     apps/verification-gui/ResultsComparisonPanel.cpp
     apps/verification-gui/SolverRunner.cpp)
-  target_link_libraries(kopruq_verification_gui PRIVATE kopruq_solver_io Qt6::Widgets)
+  target_link_libraries(kopruq_verification_gui PRIVATE kopruq_solver_io Qt6::Widgets kopruq_verification)
   set(CMAKE_AUTOMOC OFF)
   add_custom_command(TARGET kopruq_verification_gui POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
@@ -144,6 +154,11 @@ if(BUILD_TESTING)
   target_link_libraries(kopruq_thermal_load_tests PRIVATE kopruq_solver_core GTest::gtest_main)
   add_executable(kopruq_thermal_io_tests tests/unit/thermal_io_tests.cpp)
   target_link_libraries(kopruq_thermal_io_tests PRIVATE kopruq_solver_io GTest::gtest_main)
+  # Only exists once KOPRUQ_BUILD_GUI's xlnt dependency is available -- see the GUI block above.
+  if(KOPRUQ_BUILD_GUI)
+    add_executable(kopruq_excel_reference_reader_tests tests/unit/excel_reference_reader_tests.cpp)
+    target_link_libraries(kopruq_excel_reference_reader_tests PRIVATE kopruq_verification GTest::gtest_main)
+  endif()
   if(MSVC)
     target_compile_options(kopruq_solver_tests PRIVATE /bigobj)
   endif()
@@ -182,6 +197,9 @@ if(BUILD_TESTING)
   gtest_discover_tests(kopruq_parametric_sections_tests DISCOVERY_TIMEOUT 60)
   gtest_discover_tests(kopruq_thermal_load_tests DISCOVERY_TIMEOUT 60)
   gtest_discover_tests(kopruq_thermal_io_tests DISCOVERY_TIMEOUT 60)
+  if(KOPRUQ_BUILD_GUI)
+    gtest_discover_tests(kopruq_excel_reference_reader_tests DISCOVERY_TIMEOUT 60)
+  endif()
   # The real CLI executable, end to end.
   add_test(NAME cli.solve_portal_frame_example
            COMMAND kopruq_solver_cli solve ${PROJECT_SOURCE_DIR}/examples/portal_frame.json -o ${CMAKE_BINARY_DIR}/cli_portal_frame_results.json)

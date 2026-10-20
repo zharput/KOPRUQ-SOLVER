@@ -448,7 +448,7 @@ Karşılaştır / Raporu Dışa Aktar), (3) an execution-status panel
 | GUI-0 | Repository audit, roadmap/status update | **COMPLETE** |
 | GUI-1 | Main window, four-area dark-theme layout, empty tabs | **COMPLETE (verified, release.yml run `39406148285`, 2026-10-20)** |
 | GUI-2 | File selection, extension/existence validation, QSettings persistence | **COMPLETE (verified, release.yml run `39422159633`, 2026-10-20)** |
-| GUI-3 | Solver execution via QProcess + real CLI, async, results.json discovery | **IMPLEMENTED, PENDING CI VERIFICATION** |
+| GUI-3 | Solver execution via QProcess + real CLI, async, results.json discovery | **COMPLETE (verified, release.yml run `39428529324`, 2026-10-20)** |
 | GUI-4 | MIDAS Excel reference parsing (4 files) | NOT STARTED |
 | GUI-5 | Comparison engine, PASS/FAIL/N-A/UNSUPPORTED, tables | NOT STARTED |
 | GUI-6 | XLSX verification report export | NOT STARTED |
@@ -524,6 +524,20 @@ package instead of the project's pinned-baseline vcpkg toolchain, a deliberate i
 should be called out explicitly wherever it is introduced, not silently mixed in). **Section 14
 names this as the central open risk**, since it determines whether the GUI can be built/verified
 automatically at all before GUI-7.
+
+### GUI-3 verification (2026-10-20)
+**COMPLETE on the first dispatch.** `release.yml` run `39428529324`: all five Windows presets
+`success`, **220/220 tests**, GUI smoke test confirmed another clean 5s launch/close -- the
+construction path now also builds `SolverRunner` and wires its signals without a crash. As with
+GUI-2, an unattended CI job has nothing to point the MIDAS model selector at and no one to click
+Run, so an actual CLI invocation (process launch, stdout/stderr capture, exit-code handling,
+results.json discovery) is **not yet exercised end to end by CI** -- confirmed instead by code
+review of `SolverRunner.cpp`/`MainWindow.cpp` against `Cli.hpp`'s documented contract. A real
+local run (same machine, both `ninja-release` and `ninja-gui-release` built from the same tree so
+`locateCli()`'s relative-path fallback finds `kopruq_solver_cli.exe`) against the real
+`xmidas/deneme1.json` sample would be the natural manual confirmation step once GUI-4/5 give the
+GUI something to compare the results against; not performed in this unattended CI-only
+environment.
 
 ### GUI-3 implementation note (2026-10-20)
 New `apps/verification-gui/SolverRunner.{h,cpp}` wraps `QProcess` asynchronously (never blocks the

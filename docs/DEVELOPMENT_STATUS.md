@@ -1265,15 +1265,38 @@ limitation: the interactive file-dialog flow itself and cross-restart persistenc
 exercised by an unattended CI job (no one to click a dialog) -- confirmed by code review of the
 validation/persistence logic instead; see `docs/SOLVER_ROADMAP.md`'s "GUI-2 verification" entry.
 
+## GUI-3 — solver execution via QProcess, real CLI (2026-10-20)
+**COMPLETE AND VERIFIED, first dispatch.** New `SolverRunner` (async `QProcess` wrapper):
+`locateCli()` searches plausible developer-build locations next to the GUI exe then `PATH`,
+returning empty (never guessed) if not found. `run()` always invokes `solve <model> -o <output>
+--format midas-nx-json` -- exactly `Cli.hpp`'s documented contract, no invented flags, since this
+GUI is specifically a MIDAS verification tool. "Modeli Doğrula" and "Solver'ı Çalıştır" both run
+that identical command (the CLI has no validate-only mode) and differ only in how `MainWindow`
+interprets the exit code: Validate reports only invalid/valid (exit 3 vs. not), never claiming a
+solve succeeded; Run Solver reports the full 0 (success)/1 (results written but failed)/other
+contract. Progress bar is indeterminate while running (no granular CLI progress exists) and only
+reaches 100% on real success -- never a fabricated percentage. `closeEvent` terminates/kills an
+in-flight process rather than orphaning it.
+
+Verification: `release.yml` run `39428529324`, all five Windows presets `success`, **220/220
+tests**, GUI smoke test confirmed a clean 5s launch/close (now also constructing `SolverRunner`
+and wiring its signals without a crash). Honestly noted limitation, same as GUI-2: an actual CLI
+invocation end to end (process launch, stdout capture, exit-code handling, results.json
+discovery) is not exercised by unattended CI, since nothing selects a model or clicks Run there
+-- confirmed by code review against `Cli.hpp` instead; a real local run against
+`xmidas/deneme1.json` is the natural manual confirmation once GUI-4/5 exist to make results
+useful.
+
 ## Next autonomous action
 Phase 3.2, Phase 4, Phase 5 (5.1-5.6), Phase 6 (6.1, 6.1b, 6.2, 6.2b; 6.3 cancelled), Phase 7A,
 7B (including ETMP thermal wiring), 7C, 7D, 7M, 7S(1) and 7T are all complete and verified -- CI
 run `39265009361`, commit `a92f045`, all three matrix jobs (gcc-debug, gcc-asan, gcc-release)
-`success`. GUI-0, GUI-1 and GUI-2 (Qt 6 Verification GUI) are also complete and verified (see
-above). Per the GUI task's own "stop for approval after each milestone" instruction, development
-is paused awaiting approval to start **GUI-3 — solver execution via QProcess** (real CLI
-integration, async execution, results.json discovery, progress indication). Other candidate next
-steps (unrelated to the GUI, say which, or propose a different scope):
+`success`. GUI-0 through GUI-3 (Qt 6 Verification GUI) are also complete and verified (see above).
+Per the GUI task's own "stop for approval after each milestone" instruction, development is
+paused awaiting approval to start **GUI-4 — MIDAS Excel reference parsing** (Beam Force,
+Displacements(Global), Elastic Link, Reaction(Global); needs a new Excel-reading dependency, see
+roadmap section 9). Other candidate next steps (unrelated to the GUI, say which, or propose a
+different scope):
 1. **Phase 7 (production solver, unrelated to MIDAS import)**: sparse direct/iterative strategy,
    optional SuiteSparse, profiling/parallelism -- still not started.
 2. Extend rigid-link support to ModalSolver/ResponseSpectrumSolver, or cut a `v0.1.0` release tag.

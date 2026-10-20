@@ -20,7 +20,7 @@ QWidget* ResultsComparisonPanel::buildSummaryTab() {
   auto* layout = new QVBoxLayout(page);
 
   auto* tiles = new QHBoxLayout();
-  auto* addTile = [&](const QString& title, QLabel*& valueOut) {
+  auto addTile = [&](const QString& title, QLabel*& valueOut) {
     auto* box = new QGroupBox(page);
     auto* inner = new QVBoxLayout(box);
     inner->addWidget(new QLabel(title, box));

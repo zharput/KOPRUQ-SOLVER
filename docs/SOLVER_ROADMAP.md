@@ -449,7 +449,7 @@ Karşılaştır / Raporu Dışa Aktar), (3) an execution-status panel
 | GUI-1 | Main window, four-area dark-theme layout, empty tabs | **COMPLETE (verified, release.yml run `39406148285`, 2026-10-20)** |
 | GUI-2 | File selection, extension/existence validation, QSettings persistence | **COMPLETE (verified, release.yml run `39422159633`, 2026-10-20)** |
 | GUI-3 | Solver execution via QProcess + real CLI, async, results.json discovery | **COMPLETE (verified, release.yml run `39428529324`, 2026-10-20)** |
-| GUI-4 | MIDAS Excel reference parsing (4 files) | **IMPLEMENTED, PENDING CI VERIFICATION** |
+| GUI-4 | MIDAS Excel reference parsing (4 files) | **COMPLETE (verified, release.yml run `39435756925`, 2026-10-20)** |
 | GUI-5 | Comparison engine, PASS/FAIL/N-A/UNSUPPORTED, tables | NOT STARTED |
 | GUI-6 | XLSX verification report export | NOT STARTED |
 | GUI-7 | Cross-platform build/release validation (Windows + Ubuntu) | NOT STARTED |
@@ -524,6 +524,16 @@ package instead of the project's pinned-baseline vcpkg toolchain, a deliberate i
 should be called out explicitly wherever it is introduced, not silently mixed in). **Section 14
 names this as the central open risk**, since it determines whether the GUI can be built/verified
 automatically at all before GUI-7.
+
+### GUI-4 verification (2026-10-20)
+**COMPLETE on the first dispatch.** `release.yml` run `39435756925`: all five Windows presets
+`success` (`xlnt` built from vcpkg source for the first time, similar to Qt6's first build --
+the run took ~50 minutes, now cached). **226/226 tests** (220 prior + the 6 new
+`ExcelReferenceReader` tests, all passing, including the `.xls`-rejection and missing-file
+diagnostics). GUI smoke test again confirmed a clean 5s launch/close -- the executable now also
+links `kopruq_verification` (and transitively `xlnt`) without any runtime startup issue. The
+Windows GUI executable artifact was uploaded successfully (`kopruq-verification-gui-windows-x64`,
+40,572 bytes). No existing test was modified, weakened, or removed to reach this result.
 
 ### GUI-4 implementation note (2026-10-20)
 **Format decision (user, 2026-10-20):** the real exports already in `xmidas/` turned out to be

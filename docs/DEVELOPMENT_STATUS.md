@@ -1287,16 +1287,38 @@ discovery) is not exercised by unattended CI, since nothing selects a model or c
 `xmidas/deneme1.json` is the natural manual confirmation once GUI-4/5 exist to make results
 useful.
 
+## GUI-4 — MIDAS Excel reference parsing (2026-10-20)
+**COMPLETE AND VERIFIED, first dispatch.** Format decision: the real samples in `xmidas/` are
+legacy `.xls` (BIFF/OLE2), but no vcpkg library reads that format. Asked the user to choose
+between vendoring `libxls` (no vcpkg port, higher engineering/CI risk with no local build to
+verify against), `.xlsx`-only support, or re-exporting the samples -- user chose **re-export as
+`.xlsx`**. New `verification/ExcelReferenceReader.{h,cpp}` (Qt-independent) reads via `xlnt`
+(vcpkg, added to the "gui" manifest feature alongside `qtbase`): every field is located **by
+header text**, never a hardcoded column index (the four real export types have different column
+counts confirmed against the real samples: Beam Force 23, Elastic Link 19, Displacements/
+Reaction 15), and the header row itself is located by content, not a fixed row index (MIDAS's
+exports have a title row above it). `.xls` files are rejected via their real OLE2 signature
+(never trusted from the extension) with an explicit diagnostic, both in the reader and in
+`FileInputPanel` (GUI-2's Excel rows now accept `.xlsx` only). Not wired into "Sonuçları
+Karşılaştır" yet -- that's GUI-5.
+
+Verification: `release.yml` run `39435756925` (first dispatch after GUI-4 2026-10-21 status-check
+request confirmed it completed clean): all five Windows presets `success` (`xlnt` built from
+vcpkg source for the first time, ~50 min, now cached). **226/226 tests** (6 new
+`ExcelReferenceReader` tests, built with self-contained `.xlsx` fixtures via `xlnt` itself, no
+external fixture file). GUI smoke test confirmed another clean 5s launch/close. Windows GUI
+executable artifact uploaded successfully (40,572 bytes). No existing test modified or removed.
+
 ## Next autonomous action
 Phase 3.2, Phase 4, Phase 5 (5.1-5.6), Phase 6 (6.1, 6.1b, 6.2, 6.2b; 6.3 cancelled), Phase 7A,
 7B (including ETMP thermal wiring), 7C, 7D, 7M, 7S(1) and 7T are all complete and verified -- CI
 run `39265009361`, commit `a92f045`, all three matrix jobs (gcc-debug, gcc-asan, gcc-release)
-`success`. GUI-0 through GUI-3 (Qt 6 Verification GUI) are also complete and verified (see above).
+`success`. GUI-0 through GUI-4 (Qt 6 Verification GUI) are also complete and verified (see above).
 Per the GUI task's own "stop for approval after each milestone" instruction, development is
-paused awaiting approval to start **GUI-4 — MIDAS Excel reference parsing** (Beam Force,
-Displacements(Global), Elastic Link, Reaction(Global); needs a new Excel-reading dependency, see
-roadmap section 9). Other candidate next steps (unrelated to the GUI, say which, or propose a
-different scope):
+paused awaiting approval to start **GUI-5 — comparison engine and tables** (ResultMatcher/
+ComparisonEngine: ID/load-case matching, unit conversion, category-specific tolerances, PASS/
+FAIL/N-A/UNSUPPORTED, wiring "Sonuçları Karşılaştır" and the result tabs to real data). Other
+candidate next steps (unrelated to the GUI, say which, or propose a different scope):
 1. **Phase 7 (production solver, unrelated to MIDAS import)**: sparse direct/iterative strategy,
    optional SuiteSparse, profiling/parallelism -- still not started.
 2. Extend rigid-link support to ModalSolver/ResponseSpectrumSolver, or cut a `v0.1.0` release tag.

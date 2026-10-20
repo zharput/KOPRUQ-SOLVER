@@ -1309,16 +1309,40 @@ vcpkg source for the first time, ~50 min, now cached). **226/226 tests** (6 new
 external fixture file). GUI smoke test confirmed another clean 5s launch/close. Windows GUI
 executable artifact uploaded successfully (40,572 bytes). No existing test modified or removed.
 
+## GUI-5 — comparison engine, PASS/FAIL/N-A/UNSUPPORTED, real tables (2026-10-20)
+**COMPLETE AND VERIFIED, first dispatch.** New `ComparisonEngine` (combined abs/rel criterion,
+independent documented absolute-tolerance floor per physical quantity -- displacement m, rotation
+rad, force kN, moment kNm; the approved UI's single Mutlak/Bağıl Tolerans pair maps to a
+dimensionless scale factor + the legitimately-shared relative tolerance) and `ResultMatcher`
+(matches `results.json` against a `ReferenceTable` by original MIDAS id + load case name, both
+preserved unchanged by Phase 7B's importer; Beam Force reads the `Part` column's `I[...]`/
+`J[...]` prefix to pick the right half of `local_end_forces`; elastic links always report
+`Unsupported`, since Phase 7B rejects every MIDAS `ELNK` record -- a real formulation gap).
+`MainWindow::onCompare()` wires "Sonuçları Karşılaştır" to this for real: reads the last solve's
+`results.json`, reads whichever Excel files are actually selected (each independently optional),
+populates all five result tables (Özet's tiles + category table, Deplasmanlar, Mesnet
+Tepkimeleri, Kiriş İç Kuvvetleri, Elastik Bağlantılar) plus Diagnostik with every diagnostic.
+
+Verification: `release.yml` run `39468392733`, all five Windows presets `success`. **237/237
+tests** (11 new: 7 `ComparisonEngine` + 4 `ResultMatcher`, hand-built fixtures, no Excel I/O
+needed). GUI smoke test confirmed another clean 5s launch/close. No existing test modified.
+
+**Known open question, not resolved here:** MIDAS's beam-force sign convention (confirmed via
+WebSearch, never independently cross-checked against a solved result) is explicitly Phase 7E's
+job, still not started -- if the real model shows systematic beam-force FAILs once compared, that
+is this milestone correctly surfacing a real question, not a GUI-5 defect.
+
 ## Next autonomous action
 Phase 3.2, Phase 4, Phase 5 (5.1-5.6), Phase 6 (6.1, 6.1b, 6.2, 6.2b; 6.3 cancelled), Phase 7A,
 7B (including ETMP thermal wiring), 7C, 7D, 7M, 7S(1) and 7T are all complete and verified -- CI
 run `39265009361`, commit `a92f045`, all three matrix jobs (gcc-debug, gcc-asan, gcc-release)
-`success`. GUI-0 through GUI-4 (Qt 6 Verification GUI) are also complete and verified (see above).
+`success`. GUI-0 through GUI-5 (Qt 6 Verification GUI) are also complete and verified (see above).
 Per the GUI task's own "stop for approval after each milestone" instruction, development is
-paused awaiting approval to start **GUI-5 — comparison engine and tables** (ResultMatcher/
-ComparisonEngine: ID/load-case matching, unit conversion, category-specific tolerances, PASS/
-FAIL/N-A/UNSUPPORTED, wiring "Sonuçları Karşılaştır" and the result tabs to real data). Other
-candidate next steps (unrelated to the GUI, say which, or propose a different scope):
+paused awaiting approval to start **GUI-6 — Excel verification report export**
+(`VerificationReportExporter`: `KOPRUQ_SOLVER_Verification_Report.xlsx` with Summary/
+Displacements/Reactions/Beam Forces/Elastic Links/Diagnostics worksheets, same comparison results
+already shown in the GUI, no separate recomputation). Other candidate next steps (unrelated to
+the GUI, say which, or propose a different scope):
 1. **Phase 7 (production solver, unrelated to MIDAS import)**: sparse direct/iterative strategy,
    optional SuiteSparse, profiling/parallelism -- still not started.
 2. Extend rigid-link support to ModalSolver/ResponseSpectrumSolver, or cut a `v0.1.0` release tag.

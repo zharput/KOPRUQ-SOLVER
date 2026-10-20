@@ -450,7 +450,7 @@ Karşılaştır / Raporu Dışa Aktar), (3) an execution-status panel
 | GUI-2 | File selection, extension/existence validation, QSettings persistence | **COMPLETE (verified, release.yml run `39422159633`, 2026-10-20)** |
 | GUI-3 | Solver execution via QProcess + real CLI, async, results.json discovery | **COMPLETE (verified, release.yml run `39428529324`, 2026-10-20)** |
 | GUI-4 | MIDAS Excel reference parsing (4 files) | **COMPLETE (verified, release.yml run `39435756925`, 2026-10-20)** |
-| GUI-5 | Comparison engine, PASS/FAIL/N-A/UNSUPPORTED, tables | **IMPLEMENTED, PENDING CI VERIFICATION** |
+| GUI-5 | Comparison engine, PASS/FAIL/N-A/UNSUPPORTED, tables | **COMPLETE (verified, release.yml run `39468392733`, 2026-10-20)** |
 | GUI-6 | XLSX verification report export | NOT STARTED |
 | GUI-7 | Cross-platform build/release validation (Windows + Ubuntu) | NOT STARTED |
 
@@ -524,6 +524,14 @@ package instead of the project's pinned-baseline vcpkg toolchain, a deliberate i
 should be called out explicitly wherever it is introduced, not silently mixed in). **Section 14
 names this as the central open risk**, since it determines whether the GUI can be built/verified
 automatically at all before GUI-7.
+
+### GUI-5 verification (2026-10-20)
+**COMPLETE on the first dispatch.** `release.yml` run `39468392733`: all five Windows presets
+`success`. **237/237 tests** (226 prior + 7 new `ComparisonEngine` tests + 4 new `ResultMatcher`
+tests, all passing). GUI smoke test confirmed another clean 5s launch/close -- the executable now
+also wires `onCompare()` and the `ComparisonRow`/category-summary population path without any
+startup issue (reachable code only, not exercised end to end since no model/Excel files are
+selected in the unattended smoke test). No existing test modified or removed.
 
 ### GUI-5 implementation note (2026-10-21)
 New `verification/ComparisonEngine.{h,cpp}` (pure numeric, no I/O): implements the task spec's

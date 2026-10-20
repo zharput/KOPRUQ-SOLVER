@@ -1,0 +1,116 @@
+/* KOPRUQ-SOLVER -- MIDAS Verification Tool, compact dark theme.
+   Palette matches the approved reference layout (repo root,
+   KOPRUQ-SOLVER_menu_qt6.jpg): deep navy background, slightly lighter
+   panels, blue accent on the primary action. */
+
+* {
+  font-family: "Segoe UI", "Noto Sans", sans-serif;
+  font-size: 10pt;
+  color: #e4e8f1;
+}
+
+QMainWindow, QWidget {
+  background-color: #0f1420;
+}
+
+QGroupBox {
+  background-color: #151c2c;
+  border: 1px solid #262f45;
+  border-radius: 6px;
+  margin-top: 14px;
+  padding: 8px;
+  font-weight: 600;
+}
+
+QGroupBox::title {
+  subcontrol-origin: margin;
+  left: 10px;
+  padding: 0 4px;
+  color: #9fb0d0;
+}
+
+QLineEdit, QPlainTextEdit, QTableWidget, QTableView {
+  background-color: #0b0f18;
+  border: 1px solid #262f45;
+  border-radius: 4px;
+  padding: 4px;
+  selection-background-color: #2f6fed;
+}
+
+QLineEdit:read-only {
+  color: #b7c2db;
+}
+
+QPushButton {
+  background-color: #1c2538;
+  border: 1px solid #2d3850;
+  border-radius: 4px;
+  padding: 6px 14px;
+}
+
+QPushButton:hover:!disabled {
+  background-color: #263150;
+}
+
+QPushButton:disabled {
+  color: #5c6680;
+}
+
+QPushButton#primaryAction {
+  background-color: #2f6fed;
+  border: 1px solid #2f6fed;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+QPushButton#primaryAction:hover:!disabled {
+  background-color: #4c82f0;
+}
+
+QTabWidget::pane {
+  border: 1px solid #262f45;
+  border-radius: 6px;
+  top: -1px;
+}
+
+QTabBar::tab {
+  background-color: #151c2c;
+  border: 1px solid #262f45;
+  border-bottom: none;
+  padding: 6px 14px;
+  margin-right: 2px;
+  border-top-left-radius: 4px;
+  border-top-right-radius: 4px;
+}
+
+QTabBar::tab:selected {
+  background-color: #2f6fed;
+  color: #ffffff;
+}
+
+QHeaderView::section {
+  background-color: #1c2538;
+  border: 1px solid #262f45;
+  padding: 4px;
+}
+
+QProgressBar {
+  background-color: #0b0f18;
+  border: 1px solid #262f45;
+  border-radius: 4px;
+  text-align: center;
+}
+
+QProgressBar::chunk {
+  background-color: #2f6fed;
+  border-radius: 3px;
+}
+
+QSplitter::handle {
+  background-color: #0f1420;
+}
+
+QLabel#statusBadge {
+  border-radius: 3px;
+  padding: 1px 6px;
+}

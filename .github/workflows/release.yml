@@ -38,7 +38,12 @@ jobs:
         # ninja-asan: full CTest under MSVC AddressSanitizer.
         # ninja-analyze: MSVC /analyze build of project code (no tests); fails on any
         # finding except GoogleTest's C6326 macro false positive in tests\.
-        preset: [ninja-debug, ninja-release, ninja-asan, ninja-analyze]
+        # ninja-gui-release: Qt6 verification GUI (apps/verification-gui) -- the only preset
+        # that requests vcpkg's "gui" manifest feature (qtbase), so this job is the deliberate
+        # verification path for the GUI chosen over adding Qt6 to every-push ci.yml, per the
+        # user's 2026-10-20 decision; see docs/SOLVER_ROADMAP.md's "QT6 VERIFICATION GUI"
+        # section 14.
+        preset: [ninja-debug, ninja-release, ninja-asan, ninja-analyze, ninja-gui-release]
     steps:
       - uses: actions/checkout@v4
 
@@ -123,6 +128,28 @@ jobs:
           & $cli --help;    if ($LASTEXITCODE -ne 0) { throw "--help exit $LASTEXITCODE" }
           & $cli bogus;     if ($LASTEXITCODE -ne 2) { throw "unknown command: expected exit 2, got $LASTEXITCODE" }
           $global:LASTEXITCODE = 0
+
+      - name: GUI smoke test (launches, stays alive, closed cleanly)
+        if: matrix.preset == 'ninja-gui-release'
+        shell: pwsh
+        run: |
+          $exe = "build/gui-release/kopruq_verification_gui.exe"
+          if (-not (Test-Path $exe)) { throw "$exe was not built" }
+          $p = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 5
+          if ($p.HasExited) { throw "GUI process exited on its own within 5s (exit code $($p.ExitCode)) -- treat as a crash, not success" }
+          Stop-Process -Id $p.Id -Force
+          "GUI launched and stayed alive for 5s, then was closed cleanly."
+
+      - name: Upload GUI executable
+        if: matrix.preset == 'ninja-gui-release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: kopruq-verification-gui-windows-x64
+          path: |
+            build/gui-release/kopruq_verification_gui.exe
+            build/gui-release/resources/
+          if-no-files-found: error
 
       - name: Benchmarks
         if: matrix.preset == 'ninja-release'

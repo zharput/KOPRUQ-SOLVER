@@ -445,8 +445,8 @@ Karşılaştır / Raporu Dışa Aktar), (3) an execution-status panel
 ### 7. GUI-0 through GUI-7 milestones
 | # | Milestone | Status |
 |---|---|---|
-| GUI-0 | Repository audit, roadmap/status update | **COMPLETE (this entry)** |
-| GUI-1 | Main window, four-area dark-theme layout, empty tabs | NOT STARTED |
+| GUI-0 | Repository audit, roadmap/status update | **COMPLETE** |
+| GUI-1 | Main window, four-area dark-theme layout, empty tabs | **IMPLEMENTED, PENDING CI VERIFICATION** |
 | GUI-2 | File selection, extension/existence validation, QSettings persistence | NOT STARTED |
 | GUI-3 | Solver execution via QProcess + real CLI, async, results.json discovery | NOT STARTED |
 | GUI-4 | MIDAS Excel reference parsing (4 files) | NOT STARTED |
@@ -524,6 +524,21 @@ package instead of the project's pinned-baseline vcpkg toolchain, a deliberate i
 should be called out explicitly wherever it is introduced, not silently mixed in). **Section 14
 names this as the central open risk**, since it determines whether the GUI can be built/verified
 automatically at all before GUI-7.
+
+### GUI-1 implementation note (2026-10-20)
+User decision for the Qt6/CI verification-strategy question raised in GUI-0: **option (b)** --
+manual `release.yml` (Windows) dispatch after each GUI milestone, not a change to the every-push
+Ubuntu `ci.yml`. Implemented accordingly: `vcpkg.json` gained an opt-in `"gui"` manifest feature
+(`qtbase`, only fetched when `-DVCPKG_MANIFEST_FEATURES=gui` is passed, never by the default
+presets `ci.yml` uses); `CMakePresets.json` gained `ninja-gui-release`; `CMakeLists.txt` gained a
+`KOPRUQ_BUILD_GUI` option (default `OFF`) gating the new `kopruq_verification_gui` target;
+`release.yml`'s Windows matrix gained that preset, a launch-and-stays-alive-for-5s smoke test
+(treats an immediate exit as a crash, not success), and an artifact upload. A `windeployqt`
+best-effort step was added (skipped quietly if not found, since full Qt runtime deployment
+tooling is GUI-7's scope) because a Qt Widgets app cannot start at all without its platform
+plugin deployed next to the executable -- without it, the smoke test will correctly report a
+crash rather than a false pass. GUI-1's actual pass/fail is therefore determined by the next
+manually-dispatched `release.yml` run, not asserted here.
 
 ### 14. Risks and limitations
 - **No local build verification is currently possible in this development environment**: `cmake`

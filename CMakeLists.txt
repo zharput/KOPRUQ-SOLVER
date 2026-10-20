@@ -34,6 +34,40 @@ target_link_libraries(kopruq_sparse_assembly_benchmark PRIVATE kopruq_solver_cor
 add_executable(kopruq_solver_benchmark apps/benchmarks/solver_benchmark.cpp)
 target_link_libraries(kopruq_solver_benchmark PRIVATE kopruq_solver_core)
 
+# Qt6 verification GUI (apps/verification-gui): off by default. The routine ci.yml matrix never
+# sets KOPRUQ_BUILD_GUI, so qtbase is never requested from vcpkg and Ubuntu CI is unaffected;
+# build with the "ninja-gui-release" preset (MSVC, VCPKG_MANIFEST_FEATURES=gui) to exercise it --
+# see docs/SOLVER_ROADMAP.md's "QT6 VERIFICATION GUI" section for why this is a manual/dispatched
+# build rather than part of every push.
+option(KOPRUQ_BUILD_GUI "Build the Qt6 Widgets MIDAS verification GUI (apps/verification-gui)" OFF)
+if(KOPRUQ_BUILD_GUI)
+  find_package(Qt6 CONFIG REQUIRED COMPONENTS Widgets)
+  set(CMAKE_AUTOMOC ON)
+  add_executable(kopruq_verification_gui
+    apps/verification-gui/main.cpp
+    apps/verification-gui/MainWindow.cpp
+    apps/verification-gui/FileInputPanel.cpp
+    apps/verification-gui/AnalysisControlPanel.cpp
+    apps/verification-gui/ExecutionLogPanel.cpp
+    apps/verification-gui/ResultsComparisonPanel.cpp)
+  target_link_libraries(kopruq_verification_gui PRIVATE kopruq_solver_io Qt6::Widgets)
+  set(CMAKE_AUTOMOC OFF)
+  add_custom_command(TARGET kopruq_verification_gui POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${PROJECT_SOURCE_DIR}/apps/verification-gui/resources
+            $<TARGET_FILE_DIR:kopruq_verification_gui>/resources)
+  # A Qt Widgets app cannot even start without its platform plugin (qwindows.dll on Windows)
+  # deployed next to the exe -- vcpkg's "applocal" step (used elsewhere in this project for DLL
+  # dependencies) copies linked DLLs but not Qt plugins. Run windeployqt if vcpkg's Qt6 port
+  # provides it; skip quietly if not found rather than failing the whole configure, since full
+  # deployment tooling is GUI-7's scope -- GUI-1 only needs this for the CI launch smoke test.
+  find_program(KOPRUQ_WINDEPLOYQT windeployqt HINTS "${CMAKE_PREFIX_PATH}" "${Qt6_DIR}/../../../tools/Qt6/bin")
+  if(WIN32 AND KOPRUQ_WINDEPLOYQT)
+    add_custom_command(TARGET kopruq_verification_gui POST_BUILD
+      COMMAND ${KOPRUQ_WINDEPLOYQT} --no-translations --no-compiler-runtime $<TARGET_FILE:kopruq_verification_gui>)
+  endif()
+endif()
+
 if(BUILD_TESTING)
   find_package(GTest CONFIG REQUIRED)
   add_executable(kopruq_solver_tests tests/unit/core_tests.cpp)

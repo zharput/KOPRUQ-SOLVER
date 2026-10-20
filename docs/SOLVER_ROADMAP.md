@@ -450,7 +450,7 @@ Karşılaştır / Raporu Dışa Aktar), (3) an execution-status panel
 | GUI-2 | File selection, extension/existence validation, QSettings persistence | **COMPLETE (verified, release.yml run `39422159633`, 2026-10-20)** |
 | GUI-3 | Solver execution via QProcess + real CLI, async, results.json discovery | **COMPLETE (verified, release.yml run `39428529324`, 2026-10-20)** |
 | GUI-4 | MIDAS Excel reference parsing (4 files) | **COMPLETE (verified, release.yml run `39435756925`, 2026-10-20)** |
-| GUI-5 | Comparison engine, PASS/FAIL/N-A/UNSUPPORTED, tables | NOT STARTED |
+| GUI-5 | Comparison engine, PASS/FAIL/N-A/UNSUPPORTED, tables | **IMPLEMENTED, PENDING CI VERIFICATION** |
 | GUI-6 | XLSX verification report export | NOT STARTED |
 | GUI-7 | Cross-platform build/release validation (Windows + Ubuntu) | NOT STARTED |
 
@@ -524,6 +524,51 @@ package instead of the project's pinned-baseline vcpkg toolchain, a deliberate i
 should be called out explicitly wherever it is introduced, not silently mixed in). **Section 14
 names this as the central open risk**, since it determines whether the GUI can be built/verified
 automatically at all before GUI-7.
+
+### GUI-5 implementation note (2026-10-21)
+New `verification/ComparisonEngine.{h,cpp}` (pure numeric, no I/O): implements the task spec's
+combined criterion `abs(solver-reference) <= absTol(category)*scale + relTol*abs(reference)`.
+Each physical quantity (Displacement m, Rotation rad, Force kN, Moment kNm) has its own
+documented default absolute-tolerance floor -- never one dimensional number reused across all
+four, which the task spec explicitly forbids. The approved UI layout has only a single "Mutlak
+Tolerans"/"Bağıl Tolerans" pair (not one per category), so that field is exposed as
+`absoluteToleranceScale`, a dimensionless multiplier on every category's own floor, and
+`relativeTol`, legitimately shared since it is itself dimensionless. Near-zero references are
+handled by construction (the `relTol*abs(reference)` term vanishes, leaving the absolute floor),
+no special-cased branch needed.
+
+New `verification/ResultMatcher.{h,cpp}`: matches `results.json` (the real `kopruq-results`
+schema, `include/kopruq/io/ResultsJson.hpp` -- read back with `nlohmann::json`, never re-derived)
+against a `ReferenceTable` by original MIDAS id + load case name, both of which Phase 7B's
+importer preserves unchanged. `matchDisplacements`/`matchReactions` share one implementation
+(identical Node/Load/6-component structure); `matchBeamForces` additionally reads the `Part`
+column's `I[...]`/`J[...]` prefix to pick `local_end_forces[0..5]` vs `[6..11]`.
+`markElasticLinksUnsupported` reports every row `Unsupported` unconditionally, since Phase 7B's
+importer rejects every MIDAS `ELNK` record -- no element in `results.json` can ever correspond to
+one (a real formulation gap, not guessed around). Every reference row always produces a
+`ComparisonRow` with a real status: `Pass`/`Fail` (actually compared), `NotApplicable` (the id or
+load case has no counterpart in `results.json`, including a load case that failed to solve), or
+`Unsupported` -- never silently dropped.
+
+`MainWindow::onCompare()` wires this to the real GUI: reads `lastResultsPath_`, reads whichever
+Excel reference files are actually selected (each independently optional, per spec), runs the
+matchers, and populates all five result tables (`Özet`'s 4 tiles + category table,
+`Deplasmanlar`, `Mesnet Tepkimeleri`, `Kiriş İç Kuvvetleri`, `Elastik Bağlantılar`) plus
+`Diagnostik` with every reader/matcher diagnostic (missing columns, unmatched load cases, skipped
+categories). A category's Durum is PASS only when it has at least one row and zero FAILs. New
+`tests/unit/comparison_engine_tests.cpp` (7 tests: pass/fail, near-zero-reference floor,
+per-category tolerance independence, the UI scale factor, non-finite handling, status names) and
+`tests/unit/result_matcher_tests.cpp` (hand-built `results.json` fragment + in-memory
+`ReferenceTable`s, no Excel I/O needed since `ExcelReferenceReader`'s own tests already cover
+that path: displacement PASS/FAIL/3-kinds-of-N/A, beam-force I/J-end matching, elastic-link
+unconditional Unsupported, empty-table edge case).
+
+**Known open question, deliberately not resolved here:** MIDAS's own local-axis/beam-force sign
+convention was confirmed via WebSearch during Phase 7B (support.midasuser.com returns HTTP 403)
+but never independently cross-checked against a real solved result -- that is explicitly Phase
+7E's job ("MIDAS NX results comparison"), still not started. If the real `xmidas/deneme1.json`
+model shows systematic beam-force FAILs once re-exported to `.xlsx` and compared, that is
+information this milestone is supposed to surface, not a GUI-5 defect to silently work around.
 
 ### GUI-4 verification (2026-10-20)
 **COMPLETE on the first dispatch.** `release.yml` run `39435756925`: all five Windows presets

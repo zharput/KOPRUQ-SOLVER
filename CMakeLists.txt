@@ -47,10 +47,16 @@ if(KOPRUQ_BUILD_GUI)
   # VerificationReportExporter land here in later milestones) -- gated the same way as the GUI
   # itself, since xlnt is only ever fetched via the "gui" vcpkg feature.
   find_package(xlnt CONFIG REQUIRED)
-  add_library(kopruq_verification STATIC verification/ExcelReferenceReader.cpp)
+  add_library(kopruq_verification STATIC
+    verification/ExcelReferenceReader.cpp
+    verification/ComparisonEngine.cpp
+    verification/ResultMatcher.cpp)
   target_include_directories(kopruq_verification PUBLIC ${PROJECT_SOURCE_DIR}/verification)
-  target_link_libraries(kopruq_verification PUBLIC xlnt::xlnt)
+  target_link_libraries(kopruq_verification PUBLIC xlnt::xlnt nlohmann_json::nlohmann_json)
   target_compile_features(kopruq_verification PUBLIC cxx_std_20)
+  if(MSVC)
+    target_compile_options(kopruq_verification PRIVATE /bigobj)
+  endif()
 
   set(CMAKE_AUTOMOC ON)
   add_executable(kopruq_verification_gui
@@ -158,6 +164,10 @@ if(BUILD_TESTING)
   if(KOPRUQ_BUILD_GUI)
     add_executable(kopruq_excel_reference_reader_tests tests/unit/excel_reference_reader_tests.cpp)
     target_link_libraries(kopruq_excel_reference_reader_tests PRIVATE kopruq_verification GTest::gtest_main)
+    add_executable(kopruq_comparison_engine_tests tests/unit/comparison_engine_tests.cpp)
+    target_link_libraries(kopruq_comparison_engine_tests PRIVATE kopruq_verification GTest::gtest_main)
+    add_executable(kopruq_result_matcher_tests tests/unit/result_matcher_tests.cpp)
+    target_link_libraries(kopruq_result_matcher_tests PRIVATE kopruq_verification GTest::gtest_main)
   endif()
   if(MSVC)
     target_compile_options(kopruq_solver_tests PRIVATE /bigobj)
@@ -199,6 +209,8 @@ if(BUILD_TESTING)
   gtest_discover_tests(kopruq_thermal_io_tests DISCOVERY_TIMEOUT 60)
   if(KOPRUQ_BUILD_GUI)
     gtest_discover_tests(kopruq_excel_reference_reader_tests DISCOVERY_TIMEOUT 60)
+    gtest_discover_tests(kopruq_comparison_engine_tests DISCOVERY_TIMEOUT 60)
+    gtest_discover_tests(kopruq_result_matcher_tests DISCOVERY_TIMEOUT 60)
   endif()
   # The real CLI executable, end to end.
   add_test(NAME cli.solve_portal_frame_example

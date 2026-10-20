@@ -25,6 +25,11 @@ public:
   QLineEdit* relativeToleranceField() const { return relTolField_; }
   QPushButton* saveSettingsButton() const { return saveSettingsButton_; }
 
+  // GUI-5: updates the four summary tiles. `na` is meant to include both NotApplicable and
+  // Unsupported rows (the approved layout has no separate fifth tile for Unsupported) -- the
+  // per-row detail tables and the category table still distinguish them precisely.
+  void setSummaryCounts(int total, int pass, int fail, int na);
+
 private:
   QWidget* buildSummaryTab();
   static QTableWidget* buildTable(const QStringList& headers, QWidget* parent);

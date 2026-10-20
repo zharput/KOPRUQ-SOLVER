@@ -95,3 +95,10 @@ ResultsComparisonPanel::ResultsComparisonPanel(QWidget* parent) : QWidget(parent
   settingsLayout->addWidget(saveSettingsButton_);
   outer->addWidget(settingsStrip);
 }
+
+void ResultsComparisonPanel::setSummaryCounts(int total, int pass, int fail, int na) {
+  totalCompared_->setText(QString::number(total));
+  totalPass_->setText(QString::number(pass));
+  totalFail_->setText(QString::number(fail));
+  totalNa_->setText(QString::number(na));
+}

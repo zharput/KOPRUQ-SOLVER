@@ -448,7 +448,7 @@ Karşılaştır / Raporu Dışa Aktar), (3) an execution-status panel
 | GUI-0 | Repository audit, roadmap/status update | **COMPLETE** |
 | GUI-1 | Main window, four-area dark-theme layout, empty tabs | **COMPLETE (verified, release.yml run `39406148285`, 2026-10-20)** |
 | GUI-2 | File selection, extension/existence validation, QSettings persistence | **COMPLETE (verified, release.yml run `39422159633`, 2026-10-20)** |
-| GUI-3 | Solver execution via QProcess + real CLI, async, results.json discovery | NOT STARTED |
+| GUI-3 | Solver execution via QProcess + real CLI, async, results.json discovery | **IMPLEMENTED, PENDING CI VERIFICATION** |
 | GUI-4 | MIDAS Excel reference parsing (4 files) | NOT STARTED |
 | GUI-5 | Comparison engine, PASS/FAIL/N-A/UNSUPPORTED, tables | NOT STARTED |
 | GUI-6 | XLSX verification report export | NOT STARTED |
@@ -524,6 +524,29 @@ package instead of the project's pinned-baseline vcpkg toolchain, a deliberate i
 should be called out explicitly wherever it is introduced, not silently mixed in). **Section 14
 names this as the central open risk**, since it determines whether the GUI can be built/verified
 automatically at all before GUI-7.
+
+### GUI-3 implementation note (2026-10-20)
+New `apps/verification-gui/SolverRunner.{h,cpp}` wraps `QProcess` asynchronously (never blocks the
+GUI thread): `locateCli()` searches a handful of plausible developer-build locations next to the
+GUI executable, then falls back to `PATH`, returning an empty string (never a guessed path) if
+`kopruq_solver_cli[.exe]` isn't found anywhere -- real, deterministic packaging next to the GUI
+is GUI-7's job, not simulated here. `run()` always invokes `solve <model> -o <output> --format
+midas-nx-json` (this GUI is specifically a MIDAS verification tool, per area 1's "MIDAS NX Model
+(JSON)" label, so the format flag is never "native" in practice) exactly as `Cli.hpp` documents
+it -- no invented flags. Output is written to `%TEMP%/kopruq_verification/<model>.results.json`.
+
+Both "Modeli Doğrula" and "Solver'ı Çalıştır" invoke the identical CLI command (the CLI has no
+separate validate-only mode); they differ only in how `MainWindow` interprets the exit code --
+Validate reports only the invalid/valid (exit 3 vs. not) distinction and never claims a solve
+succeeded, while Run Solver reports the full 0/1/other contract from `cli_usage`
+(`Cli.hpp`). Both buttons are enabled only once `FileInputPanel::hasRequiredModel()` is true and
+no run is already in flight; the progress bar goes indeterminate while a run is active (the CLI
+exposes no granular progress) and only reaches 100% on an actual success, per the task spec's
+explicit "do not invent progress percentages" / "do not show 100% unless the operation actually
+succeeds" rules. `MainWindow::closeEvent` terminates (then kills, if needed) any in-flight
+process rather than leaving an orphan running after the window closes -- the "cancel/terminate
+handling where safe" GUI-3 asks for, done without adding a button outside the approved four-
+button layout.
 
 ### GUI-2 implementation note (2026-10-20)
 `FileInputPanel` now owns real behavior: each "..." button opens a `QFileDialog` filtered to the

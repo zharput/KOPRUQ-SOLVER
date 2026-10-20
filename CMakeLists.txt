@@ -49,7 +49,8 @@ if(KOPRUQ_BUILD_GUI)
     apps/verification-gui/FileInputPanel.cpp
     apps/verification-gui/AnalysisControlPanel.cpp
     apps/verification-gui/ExecutionLogPanel.cpp
-    apps/verification-gui/ResultsComparisonPanel.cpp)
+    apps/verification-gui/ResultsComparisonPanel.cpp
+    apps/verification-gui/SolverRunner.cpp)
   target_link_libraries(kopruq_verification_gui PRIVATE kopruq_solver_io Qt6::Widgets)
   set(CMAKE_AUTOMOC OFF)
   add_custom_command(TARGET kopruq_verification_gui POST_BUILD

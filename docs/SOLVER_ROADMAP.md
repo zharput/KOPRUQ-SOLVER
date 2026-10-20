@@ -447,7 +447,7 @@ Karşılaştır / Raporu Dışa Aktar), (3) an execution-status panel
 |---|---|---|
 | GUI-0 | Repository audit, roadmap/status update | **COMPLETE** |
 | GUI-1 | Main window, four-area dark-theme layout, empty tabs | **COMPLETE (verified, release.yml run `39406148285`, 2026-10-20)** |
-| GUI-2 | File selection, extension/existence validation, QSettings persistence | NOT STARTED |
+| GUI-2 | File selection, extension/existence validation, QSettings persistence | **IMPLEMENTED, PENDING CI VERIFICATION** |
 | GUI-3 | Solver execution via QProcess + real CLI, async, results.json discovery | NOT STARTED |
 | GUI-4 | MIDAS Excel reference parsing (4 files) | NOT STARTED |
 | GUI-5 | Comparison engine, PASS/FAIL/N-A/UNSUPPORTED, tables | NOT STARTED |
@@ -524,6 +524,23 @@ package instead of the project's pinned-baseline vcpkg toolchain, a deliberate i
 should be called out explicitly wherever it is introduced, not silently mixed in). **Section 14
 names this as the central open risk**, since it determines whether the GUI can be built/verified
 automatically at all before GUI-7.
+
+### GUI-2 implementation note (2026-10-20)
+`FileInputPanel` now owns real behavior: each "..." button opens a `QFileDialog` filtered to the
+row's expected type (`*.json` for the MIDAS model; `*.xlsx *.xls` for the four reference files --
+widened from the spec's `.xlsx`-only wording because the real MIDAS exports already in
+`xmidas/` are legacy `.xls`, confirmed in GUI-0). A selected path is validated by extension then
+by `QFileInfo::exists()`, producing one of `NotSelected`/`Selected`/`Invalid`/`Unsupported` --
+deliberately never a "Valid" state, since that would claim a level of checking (actual model
+parsing) this panel does not do; that remains the "Modeli Doğrula" action's job once GUI-3 wires
+the CLI. Every selection is persisted via `QSettings` (native per-OS backend: Windows registry
+under `KOPRUQ-SOLVER\KOPRUQ-SOLVER Verification GUI`, an `.ini`-style file on Linux) and restored
+(and re-validated against the current filesystem, so a moved/deleted file is correctly reported
+Invalid rather than silently reappearing as if still selected) on next launch. The four Excel rows
+remain individually optional by construction -- nothing in `FileInputPanel` requires them to be
+filled, only the MIDAS JSON row (`hasRequiredModel()`). No action button is wired in this
+milestone (that is GUI-3's CLI-integration scope); clicking one is still inert, not fabricated
+success.
 
 ### GUI-1 verification (2026-10-20)
 **COMPLETE.** Three `release.yml` dispatches were needed to reach green, each catching a real,

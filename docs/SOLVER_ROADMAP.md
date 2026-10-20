@@ -384,6 +384,190 @@ Not started; depends on 7A-7E.
 - AI proposes design candidates and prioritizes search; deterministic verified solver remains the authority for physics and safety checks.
 - Traceable constraints, objectives, result provenance and human engineering review.
 
+## QT6 VERIFICATION GUI — STANDALONE MIDAS NX VALIDATION
+
+### 1. Purpose
+A desktop verification tool that drives KOPRUQ-SOLVER's own CLI against a real MIDAS Civil NX
+JSON export and the MIDAS Excel result exports it produces, and reports, per result category and
+per individual value, whether KOPRUQ-SOLVER independently reproduces MIDAS's numbers within
+engineering tolerance. This is an engineering verification instrument (Phase 7E's practical front
+end), not a modeling or visualization tool.
+
+### 2. Scope
+In scope: file selection, model validation, solver invocation via the existing CLI, parsing
+MIDAS's own Excel result exports, numeric comparison against KOPRUQ-SOLVER's `results.json`, and
+report export. Explicitly out of scope: any 3D/graphical model preview, structural diagrams, QML/
+Qt Quick, model editing, or any change to the FEM numerical core. The GUI never recomputes a
+result itself -- every number it displays comes from the CLI's own JSON output or from the parsed
+MIDAS Excel files, never from GUI-side arithmetic duplicating the solver.
+
+### 3. Technology stack
+C++20, Qt 6 Widgets, CMake (new vcpkg dependency: a Qt6 port, e.g. `qtbase[core,gui,widgets]`, not
+present in today's `vcpkg.json`), `QProcess` to invoke the existing `kopruq_solver_cli` as a
+separate process, `QFileDialog`/`QSettings`/`QTableView`/`QTabWidget`/`QPlainTextEdit`/
+`QProgressBar`, a small dark-mode QSS stylesheet (reference layout:
+`KOPRUQ-SOLVER_menü_qt6.jpg`, repo root). No QML, no 3D, no React/Electron. An Excel reader
+is a new dependency (none exists in the repo today -- see section 9).
+
+### 4. Architecture
+Three independent layers, so the numerical core, the comparison logic, and the UI never blend:
+- **FEM core** (`include/kopruq/...`, `apps/cli`): completely unchanged; the GUI never links
+  against solver internals for computation, only reuses `kopruq_solver_io`'s JSON (de)serializers
+  (`ResultsJson.hpp`/`ModelJson.hpp`) to parse the CLI's own output, the same way any other result
+  consumer would.
+- **`verification/`** (new, Qt-independent static library): MIDAS Excel reading, result ID/load-
+  case matching, unit conversion, tolerance-based comparison, and XLSX report writing. Pure C++20
+  + nlohmann::json + the chosen Excel library; no `QWidget` dependency, so it is independently
+  unit-testable with GoogleTest exactly like the rest of the solver.
+- **`apps/verification-gui/`** (new Qt executable): widgets, `QProcess` orchestration, and nothing
+  else -- it calls into `verification/` for every actual computation or parse.
+
+### 5. Repository structure
+```
+apps/verification-gui/   main.cpp, MainWindow.{h,cpp}, FileInputPanel.{h,cpp},
+                          AnalysisControlPanel.{h,cpp}, ExecutionLogPanel.{h,cpp},
+                          ResultsComparisonPanel.{h,cpp}, resources/dark.qss
+verification/             ExcelReferenceReader.{h,cpp}, ResultMatcher.{h,cpp},
+                          ComparisonEngine.{h,cpp}, VerificationReportExporter.{h,cpp}
+```
+No duplicate JSON parser or comparison engine is created; `verification/` is the single
+implementation the GUI, any future CLI verification command, and tests all share.
+
+### 6. Approved UI layout
+Four areas, matching `KOPRUQ-SOLVER_menü_qt6.jpg` exactly in structure and proportion: (1)
+five input-file selectors (MIDAS JSON required, four MIDAS Excel exports individually optional),
+(2) four action buttons (Modeli Doğrula / Solver'ı Çalıştır / Sonuçları
+Karşılaştır / Raporu Dışa Aktar), (3) an execution-status panel
+(progress bar, timestamped log), (4) a full-width tabbed comparison area (Özet / Deplasmanlar
+(Global) / Mesnet Tepkimeleri (Global) / Kiriş İç Kuvvetleri / Elastik Bağlantılar
+/ Diagnostik) plus a bottom tolerance-settings strip. No model preview, no diagrams, no animation.
+
+### 7. GUI-0 through GUI-7 milestones
+| # | Milestone | Status |
+|---|---|---|
+| GUI-0 | Repository audit, roadmap/status update | **COMPLETE (this entry)** |
+| GUI-1 | Main window, four-area dark-theme layout, empty tabs | NOT STARTED |
+| GUI-2 | File selection, extension/existence validation, QSettings persistence | NOT STARTED |
+| GUI-3 | Solver execution via QProcess + real CLI, async, results.json discovery | NOT STARTED |
+| GUI-4 | MIDAS Excel reference parsing (4 files) | NOT STARTED |
+| GUI-5 | Comparison engine, PASS/FAIL/N-A/UNSUPPORTED, tables | NOT STARTED |
+| GUI-6 | XLSX verification report export | NOT STARTED |
+| GUI-7 | Cross-platform build/release validation (Windows + Ubuntu) | NOT STARTED |
+
+No milestone is marked COMPLETE without its stated acceptance tests passing; GUI-0's own
+"acceptance" is this audit plus the two documentation updates it produces.
+
+### 8. Dependencies on Phase 7C/7D
+**Satisfied.** Phase 7C (`--format midas-nx-json` on `solve`/`modal`/`spectrum`) and Phase 7D (no
+new results schema needed -- the importer produces a standard `ModelInput`, so existing
+`kopruq-results`/`kopruq-modal-results`/`kopruq-response-spectrum-results` JSON is written
+unchanged) are both complete and CI-verified (run `39265009361`, commit `a92f045`, all three
+matrix jobs green). GUI-3 can invoke `kopruq_solver_cli solve <model.json> --format
+midas-nx-json -o <results.json>` exactly as documented in `cli_usage`, with no CLI contract
+changes required.
+
+### 9. Excel parsing requirements
+**No Excel/XLSX handling exists anywhere in the repository today** (confirmed by a
+`grep -rn "xlsx|XLSX|Excel"` across all source and CMake files: zero matches outside this new
+roadmap text). `vcpkg.json` currently lists only `eigen3`, `gtest`, `nlohmann-json`. A reader must
+be added in GUI-4. Candidates to evaluate at that time: **QXlsx** (header+source, MIT-licensed,
+already Qt-dependent so it adds no *second* large dependency once Qt6 is already required for the
+GUI, straightforward to vendor under `third_party/` or pull via CMake `FetchContent` since it is
+not in the vcpkg registry under that exact name) versus a Qt-independent library such as `xlnt`
+(available via vcpkg, but a second substantial dependency on top of Qt6, and licensing/size should
+be re-checked against vcpkg's current registry before committing). GUI-4 must also first inspect
+the real files already present in the repo (`xmidas/Beam Force.xls`,
+`xmidas/Displacements(Global).xls`, `xmidas/Elastic Link.xls`, `xmidas/Reaction(Global).xls` --
+note these are legacy `.xls`, not `.xlsx`; MIDAS's actual export extension must be confirmed
+before picking a library, since `.xls` (BIFF/OLE2) and `.xlsx` (OOXML) are different formats and
+not every candidate library reads both) before assuming any fixed column layout.
+
+### 10. Engineering comparison rules
+Per-value status is PASS/FAIL/N-A/UNSUPPORTED, never a false PASS from a missing or unmatched
+value. Matching is by original MIDAS ID (node/element/link) and load-case name, both of which
+Phase 7B's importer already preserves (`MidasImportReport::originalToInternalNodeId`/
+`originalToInternalElementId`, and load case names are carried through unchanged). A category with
+no comparable KOPRUQ-SOLVER output -- today, this includes elastic links, since the importer
+unconditionally rejects every MIDAS `ELNK` record (non-coincident-node elastic links are a real
+formulation gap, not a missing-data gap -- see Phase 7B) -- must be reported as UNSUPPORTED for
+every row, never silently skipped or marked PASS/N-A.
+
+### 11. Numerical tolerances
+Combined absolute/relative criterion, `abs(solver - reference) <= absTol + relTol * abs(reference)`,
+applied with category-specific absolute tolerances and units (never one dimensional tolerance
+reused across displacements, rotations, forces and moments): e.g. displacement in m, rotation in
+rad, force in kN, moment in kNm each need their own default `absTol`, configurable in the GUI's
+bottom settings strip and persisted via `QSettings`. Exact default values are a GUI-5 decision
+(documented in `ComparisonEngine.h` and surfaced in the UI, not hardcoded invisibly), not fixed
+here. Near-zero reference values are handled correctly by construction (the `relTol * abs(reference)`
+term vanishes, leaving the `absTol` floor to govern) -- no special-cased division-by-reference
+logic.
+
+### 12. Acceptance criteria
+Per-milestone acceptance is stated under each GUI-N item above (section 6 of the originating task
+spec) and is not repeated in full here; the governing principle throughout is CLAUDE.md's existing
+quality gate: no fabricated or simulated results, no silent data loss, every unsupported/missing
+case explicitly and visibly reported, and every existing FEM regression test left untouched and
+passing.
+
+### 13. Windows and Ubuntu deployment
+Windows: existing `release.yml` (MSVC, `windows-2022`) is the natural home for a real `.exe` plus
+Qt6 runtime DLL deployment (`windeployqt` or vcpkg's `applocal` DLL copying, already used for the
+existing CLI's dependencies per that workflow's comments) -- but that workflow is manual-dispatch/
+tag-only today, specifically because every-push Windows CI exhausted the GitHub Free plan's
+monthly Actions-minute allowance earlier in this project's history (see `ci.yml`'s header comment
+and `docs/DEVELOPMENT_STATUS.md`). Ubuntu: `ci.yml` runs on every push today but only builds the
+existing GCC/Clang targets; adding Qt6 there means either a new vcpkg port compiled from source
+(Qt6 is a very large, slow source build -- likely impractical for a per-push job) or an `apt-get
+install qt6-base-dev` system-package path (fast, but makes the Ubuntu CI build depend on a system
+package instead of the project's pinned-baseline vcpkg toolchain, a deliberate inconsistency that
+should be called out explicitly wherever it is introduced, not silently mixed in). **Section 14
+names this as the central open risk**, since it determines whether the GUI can be built/verified
+automatically at all before GUI-7.
+
+### 14. Risks and limitations
+- **No local build verification is currently possible in this development environment**: `cmake`
+  is not on `PATH` here (confirmed this session), so every GUI milestone's "application compiles/
+  opens" acceptance criterion can only be verified through CI, not interactively, for as long as
+  that remains true.
+- **No CI path currently builds Qt6 at all.** `ci.yml` (every push, Ubuntu) has no Qt6; `release.yml`
+  (Windows, the natural home for a real desktop GUI) is manual-dispatch/tag-only, specifically to
+  avoid repeating an earlier Actions-minute exhaustion incident. Verifying GUI-1's own acceptance
+  criteria ("application compiles", "application opens", "no crashes when resizing") therefore
+  needs an explicit decision on *how* that will be done before GUI-1 starts -- candidates: (a) add
+  Qt6 to the Ubuntu `ci.yml` job (via system package, fastest, documented inconsistency vs. the
+  vcpkg-pinned toolchain used for everything else), (b) manually dispatch `release.yml` after each
+  GUI milestone (real Windows/MSVC build, but consumes the same limited Windows-minute budget this
+  project has already exhausted once), or (c) build and smoke-test only via manual
+  `workflow_dispatch` runs the user triggers, not on every push. This is flagged here rather than
+  decided unilaterally, since it is a CI-cost/verification-rigor tradeoff, not a routine
+  implementation detail.
+- Elastic-link MIDAS comparison is structurally UNSUPPORTED for the real `xmidas/deneme1.json`
+  sample today (ELNK unconditionally rejected by the Phase 7B importer) -- the GUI will correctly
+  show this, but it means the one real reference model available cannot exercise a PASS/FAIL
+  elastic-link comparison, only the UNSUPPORTED path.
+- MIDAS's real export file extension for the four reference files is `.xls` (legacy BIFF/OLE2) in
+  the samples already in the repo, not `.xlsx` -- confirm before choosing an Excel library, since
+  this changes the GUI-4 library evaluation.
+- No results category for spring/elastic-link elements is distinguished from ordinary beam
+  elements in today's `results.json` (`StaticSolution::results.elements` carries beam and spring
+  end-forces alike, keyed only by element id, with no element-type tag) -- GUI-5's matcher will
+  need the *input* model's element-type information (already available via `ModelInput`) to
+  separate "Kiriş İç Kuvvetleri" rows from "Elastik Bağlantılar" rows, not
+  `results.json` alone.
+
+### 15. Future enhancements
+Not scoped now: batch/multi-model verification runs, CLI-only (headless) verification mode reusing
+the same `verification/` library, automatic MIDAS API-based export (instead of manual Excel
+export), provenance tagging of `results.json` (import format, see Phase 7D's note), CSV support
+for the reference files (optional, only if trivial once the chosen Excel library is in place).
+
+### 16. Completion status tracking
+This section's own per-milestone table (item 7) is the single source of truth and will be updated
+in place after each milestone's acceptance tests actually pass, per the "Standard acceptance gate"
+below. `docs/DEVELOPMENT_STATUS.md` carries the same status in its running log and "Next
+autonomous action" section.
+
 ## Standard acceptance gate for each milestone
 1. Requirements and conventions documented.
 2. Implementation builds in Debug and Release.

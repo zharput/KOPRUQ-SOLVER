@@ -1200,11 +1200,42 @@ Final verification: CI run `39247142910`, commits `2b19d2a`, `b43f605`. **Debug/
 `TU` thermal case actually active (not a zero no-op -- `MidasMaterialLibrary.hpp` also assigns
 the EN1992-1-1 S3.1.3(5) thermal expansion coefficient), still **solves successfully**.
 
+## GUI-0 — Qt 6 Verification GUI repository audit (2026-10-20)
+Per the user's "QT6 VERIFICATION GUI" task spec, GUI-0 (audit only, no implementation) is
+**COMPLETE**. Full findings recorded in `docs/SOLVER_ROADMAP.md`'s new "QT6 VERIFICATION GUI --
+STANDALONE MIDAS NX VALIDATION" section (purpose/scope/architecture/structure/UI layout/GUI-0..7
+milestone table/7C-7D dependency/Excel requirements/comparison rules/tolerances/acceptance/
+deployment/risks/future work/tracking). Key findings, condensed:
+- Phase 7C/7D (CLI `--format midas-nx-json`, results export) are complete and CI-verified --
+  GUI-3 can invoke the real CLI exactly as documented, no backend changes needed.
+- **No Excel/XLSX handling exists anywhere in the repo today** (grep returned zero matches); a new
+  dependency is required in GUI-4. The reference `.xls` files already in `xmidas/` are legacy
+  BIFF/OLE2, not `.xlsx` -- this must be confirmed/handled before picking a library.
+- **No Qt6 anywhere**: not in `vcpkg.json`, not installed locally (no `qmake` found), no CI job
+  builds it. `ci.yml` (every push) is Ubuntu-only with no Qt6; `release.yml` (Windows, MSVC, the
+  natural GUI build target) is manual-dispatch/tag-only, specifically to avoid repeating an
+  earlier Actions-minute exhaustion incident this project already hit once. Local build
+  verification is also not currently possible in this dev environment (`cmake` not on `PATH`,
+  confirmed this session).
+- **Central open risk, flagged rather than decided unilaterally**: since neither routine CI path
+  nor the local environment can currently build/launch a Qt6 app, GUI-1's own acceptance criteria
+  ("application compiles", "application opens") need an explicit decision on verification strategy
+  before GUI-1 starts (see roadmap section 14 for the three candidate approaches and their
+  tradeoffs).
+- Element-type information needed to separate beam-force rows from elastic-link rows in GUI-5's
+  comparison tables is not present in `results.json` itself (element results are keyed only by id,
+  no type tag) -- the matcher will need to join against the *input* `ModelInput`, which does carry
+  element types.
+No code was written in GUI-0, per the task's explicit instruction.
+
 ## Next autonomous action
 Phase 3.2, Phase 4, Phase 5 (5.1-5.6), Phase 6 (6.1, 6.1b, 6.2, 6.2b; 6.3 cancelled), Phase 7A,
 7B (including ETMP thermal wiring), 7C, 7D, 7M, 7S(1) and 7T are all complete and verified -- CI
 run `39265009361`, commit `a92f045`, all three matrix jobs (gcc-debug, gcc-asan, gcc-release)
-`success`. Candidate next steps (say which, or propose a different scope):
+`success`. GUI-0 (Qt 6 Verification GUI audit) is also complete (see above), **stopped for
+approval per that task's own instruction** -- awaiting a decision on the Qt6/CI verification
+strategy (roadmap section 14) before GUI-1 can start. Other candidate next steps (unrelated to the
+GUI, say which, or propose a different scope):
 1. **Phase 7 (production solver, unrelated to MIDAS import)**: sparse direct/iterative strategy,
    optional SuiteSparse, profiling/parallelism -- still not started.
 2. Extend rigid-link support to ModalSolver/ResponseSpectrumSolver, or cut a `v0.1.0` release tag.

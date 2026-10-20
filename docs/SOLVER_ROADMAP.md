@@ -446,7 +446,7 @@ Karşılaştır / Raporu Dışa Aktar), (3) an execution-status panel
 | # | Milestone | Status |
 |---|---|---|
 | GUI-0 | Repository audit, roadmap/status update | **COMPLETE** |
-| GUI-1 | Main window, four-area dark-theme layout, empty tabs | **IMPLEMENTED, PENDING CI VERIFICATION** |
+| GUI-1 | Main window, four-area dark-theme layout, empty tabs | **COMPLETE (verified, release.yml run `39406148285`, 2026-10-20)** |
 | GUI-2 | File selection, extension/existence validation, QSettings persistence | NOT STARTED |
 | GUI-3 | Solver execution via QProcess + real CLI, async, results.json discovery | NOT STARTED |
 | GUI-4 | MIDAS Excel reference parsing (4 files) | NOT STARTED |
@@ -524,6 +524,25 @@ package instead of the project's pinned-baseline vcpkg toolchain, a deliberate i
 should be called out explicitly wherever it is introduced, not silently mixed in). **Section 14
 names this as the central open risk**, since it determines whether the GUI can be built/verified
 automatically at all before GUI-7.
+
+### GUI-1 verification (2026-10-20)
+**COMPLETE.** Three `release.yml` dispatches were needed to reach green, each catching a real,
+distinct defect (never worked around or suppressed):
+1. Run `39375862004`: Qt6 (`qtbase`, 31 features) built from vcpkg source successfully (~2.5h,
+   now binary-cached) and the five other presets (`ninja-debug/release/asan/analyze`) passed
+   unaffected, but `ninja-gui-release` failed to compile -- `ResultsComparisonPanel.cpp`'s
+   `auto* addTile = [&](...){...}` (a lambda is not a pointer; MSVC C3535/C2440). Fixed in
+   `6d7bc82` (plain `auto`).
+2. Run `39394108214`: compiled and linked, then failed at `ctest --preset ninja-gui-release -N`
+   with "No such test preset" -- `CMakePresets.json` had a `configurePresets`/`buildPresets`
+   entry for `ninja-gui-release` but no matching `testPresets` entry. Fixed in `9c74ba9`.
+3. Run `39406148285`: **PASS.** `ninja-gui-release`, `ninja-debug`, `ninja-release`, `ninja-asan`,
+   `ninja-analyze` all `success`. **220/220 tests passed** (CTest, same inventory as the routine
+   Ubuntu matrix plus the GUI preset's own build). The GUI smoke test actually launched
+   `kopruq_verification_gui.exe` (with `windeployqt` having deployed the Qt6 platform plugin and
+   runtime DLLs next to it), confirmed it stayed alive for 5 seconds (not an immediate
+   platform-plugin-missing crash), then closed it cleanly. No existing regression test was
+   touched, modified, or disabled by this milestone.
 
 ### GUI-1 implementation note (2026-10-20)
 User decision for the Qt6/CI verification-strategy question raised in GUI-0: **option (b)** --

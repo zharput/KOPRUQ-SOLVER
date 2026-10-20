@@ -1228,18 +1228,35 @@ deployment/risks/future work/tracking). Key findings, condensed:
   element types.
 No code was written in GUI-0, per the task's explicit instruction.
 
+## GUI-1 — main window, four-area dark layout (2026-10-20)
+**COMPLETE AND VERIFIED.** User chose option (b) for the GUI-0 verification-strategy question:
+manual `release.yml` (Windows) dispatch after each GUI milestone. Implemented
+`apps/verification-gui/` (`MainWindow` + `FileInputPanel`/`AnalysisControlPanel`/
+`ExecutionLogPanel`/`ResultsComparisonPanel`, dark QSS) exactly per the approved reference layout,
+no business logic (buttons disabled, no QProcess/dialog/comparison wiring -- GUI-2 onward). Build
+is opt-in and fully isolated from the every-push Ubuntu `ci.yml`: a new `"gui"` vcpkg manifest
+feature (`qtbase`) is only fetched when `-DVCPKG_MANIFEST_FEATURES=gui` is passed, which only the
+new `ninja-gui-release` preset does.
+
+Three manually-dispatched `release.yml` runs were needed to reach green, each catching a real
+defect (see `docs/SOLVER_ROADMAP.md`'s "GUI-1 verification" entry for full detail): an MSVC-only
+`auto*`-binding-a-lambda compile error (`6d7bc82`), a missing `testPresets` entry for the new
+preset (`9c74ba9`), then **PASS** on run `39406148285` -- all five Windows presets green,
+**220/220 tests**, and the GUI smoke test confirmed `kopruq_verification_gui.exe` actually
+launches (with `windeployqt`-deployed Qt6 runtime/platform-plugin), stays alive 5s, and closes
+cleanly. No existing regression test was touched.
+
 ## Next autonomous action
 Phase 3.2, Phase 4, Phase 5 (5.1-5.6), Phase 6 (6.1, 6.1b, 6.2, 6.2b; 6.3 cancelled), Phase 7A,
 7B (including ETMP thermal wiring), 7C, 7D, 7M, 7S(1) and 7T are all complete and verified -- CI
 run `39265009361`, commit `a92f045`, all three matrix jobs (gcc-debug, gcc-asan, gcc-release)
-`success`. GUI-0 (Qt 6 Verification GUI audit) is also complete (see above), **stopped for
-approval per that task's own instruction** -- awaiting a decision on the Qt6/CI verification
-strategy (roadmap section 14) before GUI-1 can start. Other candidate next steps (unrelated to the
+`success`. GUI-0 and GUI-1 (Qt 6 Verification GUI) are also complete and verified (see above).
+Per the GUI task's own "stop for approval after each milestone" instruction, development is
+paused awaiting approval to start **GUI-2 — file selection and validation** (QFileDialog wiring,
+extension/existence checks, QSettings persistence). Other candidate next steps (unrelated to the
 GUI, say which, or propose a different scope):
 1. **Phase 7 (production solver, unrelated to MIDAS import)**: sparse direct/iterative strategy,
    optional SuiteSparse, profiling/parallelism -- still not started.
 2. Extend rigid-link support to ModalSolver/ResponseSpectrumSolver, or cut a `v0.1.0` release tag.
 3. Confirm MIDAS's GTMP T1/T2 sign convention (e.g. from the user, who may have access to the
    official API manual) to unblock gradient-temperature import, if ever needed.
-4. The user's pasted "RAPID Qt 6 VERIFICATION GUI" task (native Qt 6 Widgets front end over the
-   existing CLI) is queued but not started -- it was interrupted by the "7C/7D first" instruction.

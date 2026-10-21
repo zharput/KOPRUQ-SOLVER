@@ -452,7 +452,7 @@ Karşılaştır / Raporu Dışa Aktar), (3) an execution-status panel
 | GUI-4 | MIDAS Excel reference parsing (4 files) | **COMPLETE (verified, release.yml run `39435756925`, 2026-10-20)** |
 | GUI-5 | Comparison engine, PASS/FAIL/N-A/UNSUPPORTED, tables | **COMPLETE (verified, release.yml run `39468392733`, 2026-10-20)** |
 | GUI-6 | XLSX verification report export | **COMPLETE (verified, release.yml run `39548523252`, 2026-10-21)** |
-| GUI-7 | Cross-platform build/release validation (Windows + Ubuntu) | NOT STARTED |
+| GUI-7 | Cross-platform build/release validation (Windows + Ubuntu) | **IMPLEMENTED, PENDING CI VERIFICATION** |
 
 No milestone is marked COMPLETE without its stated acceptance tests passing; GUI-0's own
 "acceptance" is this audit plus the two documentation updates it produces.
@@ -511,19 +511,47 @@ case explicitly and visibly reported, and every existing FEM regression test lef
 passing.
 
 ### 13. Windows and Ubuntu deployment
-Windows: existing `release.yml` (MSVC, `windows-2022`) is the natural home for a real `.exe` plus
-Qt6 runtime DLL deployment (`windeployqt` or vcpkg's `applocal` DLL copying, already used for the
-existing CLI's dependencies per that workflow's comments) -- but that workflow is manual-dispatch/
-tag-only today, specifically because every-push Windows CI exhausted the GitHub Free plan's
-monthly Actions-minute allowance earlier in this project's history (see `ci.yml`'s header comment
-and `docs/DEVELOPMENT_STATUS.md`). Ubuntu: `ci.yml` runs on every push today but only builds the
-existing GCC/Clang targets; adding Qt6 there means either a new vcpkg port compiled from source
-(Qt6 is a very large, slow source build -- likely impractical for a per-push job) or an `apt-get
-install qt6-base-dev` system-package path (fast, but makes the Ubuntu CI build depend on a system
-package instead of the project's pinned-baseline vcpkg toolchain, a deliberate inconsistency that
-should be called out explicitly wherever it is introduced, not silently mixed in). **Section 14
-names this as the central open risk**, since it determines whether the GUI can be built/verified
-automatically at all before GUI-7.
+**Implemented in GUI-7 (2026-10-21).** Both platforms are verified via the same manual-dispatch-
+only `release.yml` used for every prior GUI milestone (never added to every-push `ci.yml`, for
+the Actions-minute-budget reasons recorded throughout this document):
+
+- **Windows** (`ninja-gui-release`, existing `build-test` job, `windows-2022`): `windeployqt`
+  deploys the Qt6 platform plugin (`qwindows.dll`) and runtime DLLs next to
+  `kopruq_verification_gui.exe`; vcpkg's `applocal` step (already used for the CLI's own
+  dependencies) copies any other linked DLLs. Without this, the exe cannot even start -- Qt
+  Widgets apps fail immediately with "could not load the Qt platform plugin" if the plugin isn't
+  deployed alongside the binary. A real `.exe` is uploaded as the `kopruq-verification-gui-
+  windows-x64` artifact.
+- **Ubuntu** (`gcc-gui-release`, new `build-test-linux-gui` job, `ubuntu-latest`): the GUI has no
+  Windows-specific code (confirmed: no `_MSC_VER`/`Windows.h`/`__declspec`, same as the rest of
+  the project per `ci.yml`'s own header comment), so the identical C++20 source builds under GCC
+  unchanged. Qt6 is still fetched via vcpkg's `"gui"` manifest feature (never a system
+  `apt-get install qt6-base-dev` package, avoiding the toolchain inconsistency flagged in the
+  prior revision of this section) -- so both platforms build Qt6 from the exact same pinned
+  vcpkg baseline. A Qt Widgets app needs a real (or virtual) X server to open at all on Linux; CI
+  has no display, so the launch smoke test runs under `xvfb-run` (`xvfb` + a handful of
+  `libxcb-*`/`libxkbcommon-x11-0` runtime packages installed via `apt-get`, needed by Qt's xcb
+  platform plugin itself -- these are runtime shared libraries the plugin `dlopen`s, not a
+  parallel Qt installation, so this does not reintroduce the system-Qt inconsistency). A real
+  Linux executable is uploaded as the `kopruq-verification-gui-linux-x64` artifact.
+- **For an end user running the GUI outside CI** (the actual deployment scenario this section is
+  about): the Windows `.exe` needs its `windeployqt`-populated folder shipped alongside it (not
+  just the bare exe); the Linux binary needs a real X11 (or Wayland-via-XWayland) desktop session
+  -- no offscreen/headless mode is configured for normal use, only for the CI smoke test. Neither
+  platform's binary is statically linked against Qt.
+
+### GUI-7 implementation note (2026-10-21)
+New `gcc-gui-release` CMake preset (Ubuntu GCC Release, `KOPRUQ_BUILD_GUI=ON`,
+`VCPKG_MANIFEST_FEATURES=gui` -- identical gating discipline to `ninja-gui-release`, so
+`ci.yml`'s every-push Ubuntu matrix still never requests `qtbase`/`xlnt`). New
+`build-test-linux-gui` job in `release.yml` (manual-dispatch-only, same workflow as the Windows
+job): builds and full-CTests the GUI target on Ubuntu, then runs the same "launches and stays
+alive for 5s" smoke test as Windows, but under `xvfb-run` since Qt Widgets needs a real or
+virtual X server to open at all on Linux. No application code changed -- the GUI already had no
+Windows-specific code (same property `ci.yml`'s own header comment already relies on for the
+rest of the project), so the identical sources build under GCC unchanged. Full deployment
+requirements for both platforms are now documented in section 13 above, replacing its earlier
+"risk, not yet resolved" framing.
 
 ### GUI-6 verification (2026-10-21)
 **COMPLETE on the first dispatch.** `release.yml` run `39548523252`: all five Windows presets
@@ -757,6 +785,10 @@ crash rather than a false pass. GUI-1's actual pass/fail is therefore determined
 manually-dispatched `release.yml` run, not asserted here.
 
 ### 14. Risks and limitations
+**Resolved by GUI-7 (2026-10-21):** this section's original "central open risk" (no CI path built
+Qt6 at all) was resolved per the user's 2026-10-20 decision (option b, manual `release.yml`
+dispatch) and is now exercised for both Windows and Ubuntu -- see section 13. The bullets below
+are kept as the historical record of the question as it stood during GUI-0/GUI-1, not rewritten.
 - **No local build verification is currently possible in this development environment**: `cmake`
   is not on `PATH` here (confirmed this session), so every GUI milestone's "application compiles/
   opens" acceptance criterion can only be verified through CI, not interactively, for as long as

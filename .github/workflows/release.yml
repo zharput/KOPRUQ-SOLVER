@@ -188,3 +188,96 @@ jobs:
             analyze-*.txt
             analyze-*.log
           if-no-files-found: ignore
+
+  # GUI-7: Ubuntu build of the Qt6 verification GUI, same manual-dispatch-only reasoning as the
+  # Windows gui preset above -- a separate job (not folded into build-test's matrix) because it
+  # needs a different OS entirely. The GUI itself has no Windows-specific code, so this is the
+  # cross-platform half of GUI-7's acceptance criteria. Qt6 Widgets needs an actual X server to
+  # even open on Linux (no headless/offscreen fallback is assumed here); xvfb-run provides a
+  # virtual one so the launch smoke test is real, not skipped.
+  build-test-linux-gui:
+    name: gcc-gui-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Ninja and Qt6/X11 runtime packages
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y ninja-build xvfb \
+            libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 \
+            libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 \
+            libxcb-xinerama0 libxcb-xfixes0 libgl1 libfontconfig1 libfreetype6
+
+      - name: Set vcpkg paths
+        run: |
+          echo "VCPKG_ROOT=$GITHUB_WORKSPACE/vcpkg" >> "$GITHUB_ENV"
+          echo "VCPKG_DEFAULT_BINARY_CACHE=$GITHUB_WORKSPACE/vcpkg-bincache" >> "$GITHUB_ENV"
+
+      - name: Restore vcpkg tool cache
+        uses: actions/cache@v4
+        with:
+          path: vcpkg
+          key: vcpkg-tool-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}
+
+      - name: Restore vcpkg binary cache
+        uses: actions/cache@v4
+        with:
+          path: vcpkg-bincache
+          key: vcpkg-${{ runner.os }}-gcc-gui-release-${{ hashFiles('vcpkg.json') }}
+
+      - name: Bootstrap vcpkg at the manifest baseline
+        run: |
+          mkdir -p vcpkg-bincache
+          if [ ! -x vcpkg/vcpkg ]; then
+            git clone --quiet https://github.com/microsoft/vcpkg.git vcpkg
+            baseline=$(jq -r '."builtin-baseline"' vcpkg.json)
+            git -C vcpkg checkout --quiet "$baseline"
+            ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
+          fi
+
+      - name: Configure
+        run: cmake --preset gcc-gui-release
+
+      - name: Build
+        run: cmake --build --preset gcc-gui-release
+
+      - name: Test inventory
+        run: ctest --preset gcc-gui-release -N
+
+      - name: Test
+        run: ctest --preset gcc-gui-release --output-junit ctest-junit.xml
+
+      - name: GUI smoke test under xvfb (launches, stays alive, closed cleanly)
+        run: |
+          exe="build/linux-gui-release/kopruq_verification_gui"
+          if [ ! -x "$exe" ]; then echo "$exe was not built"; exit 1; fi
+          xvfb-run -a "$exe" &
+          pid=$!
+          sleep 5
+          if ! kill -0 "$pid" 2>/dev/null; then
+            echo "GUI process exited on its own within 5s -- treat as a crash, not success"
+            exit 1
+          fi
+          kill "$pid"
+          wait "$pid" 2>/dev/null || true
+          echo "GUI launched and stayed alive for 5s, then was closed cleanly."
+
+      - name: Upload GUI executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: kopruq-verification-gui-linux-x64
+          path: |
+            build/linux-gui-release/kopruq_verification_gui
+            build/linux-gui-release/resources/
+          if-no-files-found: error
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-gcc-gui-release
+          path: |
+            build/linux-gui-release/ctest-junit.xml
+            build/linux-gui-release/Testing/Temporary/LastTest.log
+          if-no-files-found: ignore

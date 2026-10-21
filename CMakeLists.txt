@@ -46,7 +46,11 @@ if(KOPRUQ_BUILD_GUI)
   # verification/: Qt-independent (GUI-4 Excel reading today; ResultMatcher/ComparisonEngine/
   # VerificationReportExporter land here in later milestones) -- gated the same way as the GUI
   # itself, since xlnt is only ever fetched via the "gui" vcpkg feature.
-  find_package(xlnt CONFIG REQUIRED)
+  # xlnt's installed CMake package config is "Xlnt" (capital X, confirmed from its own "find_package(Xlnt
+  # CONFIG REQUIRED)" usage note) -- Windows's case-insensitive filesystem tolerated the lowercase
+  # spelling silently; Linux's case-sensitive filesystem does not (GUI-7, 2026-10-21). The imported
+  # target itself is still lowercase xlnt::xlnt.
+  find_package(Xlnt CONFIG REQUIRED)
   add_library(kopruq_verification STATIC
     verification/ExcelReferenceReader.cpp
     verification/ComparisonEngine.cpp

@@ -35,6 +35,14 @@ CategoryComparison matchDisplacements(const nlohmann::json& results, const Refer
 CategoryComparison matchReactions(const nlohmann::json& results, const ReferenceTable& ref, const ToleranceSettings& tol);
 CategoryComparison matchBeamForces(const nlohmann::json& results, const ReferenceTable& ref, const ToleranceSettings& tol);
 
+struct CategoryStats { int total{}, pass{}, fail{}, na{}; double maxAbsDiff{}, maxAbsDiffPercent{}; };
+
+// Shared by the GUI's Özet tab (MainWindow::onCompare) and VerificationReportExporter's Summary
+// sheet -- one implementation, so the two can never disagree (per the task spec: never maintain
+// separate, inconsistent comparison calculations for the GUI and the report). `na` folds in both
+// NotApplicable and Unsupported rows, matching the approved UI's single N/A tile.
+CategoryStats summarizeCategory(const std::vector<ComparisonRow>& rows);
+
 // Elastic links: Phase 7B's importer unconditionally rejects every MIDAS ELNK record
 // (non-coincident-node elastic links are a real formulation gap in SpringLink, not a missing-
 // data gap -- see MidasJsonImporter.hpp), so no element in results.json can ever correspond to

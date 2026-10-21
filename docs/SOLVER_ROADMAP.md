@@ -451,7 +451,7 @@ Karşılaştır / Raporu Dışa Aktar), (3) an execution-status panel
 | GUI-3 | Solver execution via QProcess + real CLI, async, results.json discovery | **COMPLETE (verified, release.yml run `39428529324`, 2026-10-20)** |
 | GUI-4 | MIDAS Excel reference parsing (4 files) | **COMPLETE (verified, release.yml run `39435756925`, 2026-10-20)** |
 | GUI-5 | Comparison engine, PASS/FAIL/N-A/UNSUPPORTED, tables | **COMPLETE (verified, release.yml run `39468392733`, 2026-10-20)** |
-| GUI-6 | XLSX verification report export | NOT STARTED |
+| GUI-6 | XLSX verification report export | **IMPLEMENTED, PENDING CI VERIFICATION** |
 | GUI-7 | Cross-platform build/release validation (Windows + Ubuntu) | NOT STARTED |
 
 No milestone is marked COMPLETE without its stated acceptance tests passing; GUI-0's own
@@ -524,6 +524,32 @@ package instead of the project's pinned-baseline vcpkg toolchain, a deliberate i
 should be called out explicitly wherever it is introduced, not silently mixed in). **Section 14
 names this as the central open risk**, since it determines whether the GUI can be built/verified
 automatically at all before GUI-7.
+
+### GUI-6 implementation note (2026-10-21)
+New `verification/VerificationReportExporter.{h,cpp}`: writes
+`KOPRUQ_SOLVER_Verification_Report.xlsx` with six worksheets (Summary, Displacements, Reactions,
+Beam Forces, Elastic Links, Diagnostics) via `xlnt`'s write API (reusing the same A1-reference
+helper pattern already proven safe in `ExcelReferenceReader`). Per the task spec's explicit
+requirement ("do not maintain separate, inconsistent comparison calculations for the GUI and
+report"), this file **never recomputes a comparison** -- `ReportData` carries exactly the
+`ComparisonRow`s and diagnostics `MainWindow::onCompare()` already produced and showed on screen
+(now cached as members so `onCompare()` doesn't have to re-run for `onExport()` to use them), and
+the Summary sheet's category totals come from the same `summarizeCategory()` GUI-5's Özet tab
+uses (moved to `ResultMatcher.h` so both call sites share one implementation, never two
+independently-written versions that could silently drift apart). Summary metadata includes the
+source model/Excel filenames, solver version (read from `results.json`'s own
+`metadata.solver_version`, not re-derived), the tolerance settings used, and the comparison's
+execution timestamp. `MainWindow::onExport()` prompts a save location via `QFileDialog`, defaults
+to `KOPRUQ_SOLVER_Verification_Report.xlsx` in the user's Documents folder, and is enabled only
+after at least one real comparison has run. **Simplification, disclosed rather than silent**: all
+worksheet text uses ASCII-only labels (e.g. "Basarili" not "Başarılı") rather than the GUI's
+Turkish UTF-8 labels, to avoid an unverifiable encoding risk in `xlnt`'s write path with no local
+build to check it against -- the GUI itself remains fully Turkish; only the exported file's
+static header text is ASCII, and the actual data (ids, load case names, numeric values) is
+written verbatim regardless. New `tests/unit/verification_report_exporter_tests.cpp` (5 tests):
+round-trip readability, Summary sheet metadata/category-totals correctness, all six worksheets
+present, Unsupported rows leave numeric cells blank rather than a fabricated 0, and a graceful
+(non-crashing) failure on an unwritable path.
 
 ### GUI-5 verification (2026-10-20)
 **COMPLETE on the first dispatch.** `release.yml` run `39468392733`: all five Windows presets

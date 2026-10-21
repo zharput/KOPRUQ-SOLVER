@@ -1,4 +1,5 @@
 #include "ResultMatcher.h"
+#include <algorithm>
 #include <array>
 #include <map>
 
@@ -187,6 +188,23 @@ CategoryComparison markElasticLinksUnsupported(const ReferenceTable& ref) {
         "olmayan düğümler) Phase 7B içe aktarıcısı tarafından kabul edilmiyor (gerçek bir "
         "formülasyon sınırı, eksik veri değil).");
   return out;
+}
+
+CategoryStats summarizeCategory(const std::vector<ComparisonRow>& rows) {
+  CategoryStats s;
+  s.total = static_cast<int>(rows.size());
+  for (const auto& r : rows) {
+    switch (r.result.status) {
+      case ComparisonStatus::Pass: ++s.pass; break;
+      case ComparisonStatus::Fail: ++s.fail; break;
+      default: ++s.na; break;
+    }
+    if (r.result.status == ComparisonStatus::Pass || r.result.status == ComparisonStatus::Fail) {
+      s.maxAbsDiff = std::max(s.maxAbsDiff, r.result.absDiff);
+      s.maxAbsDiffPercent = std::max(s.maxAbsDiffPercent, r.result.relDiff * 100.0);
+    }
+  }
+  return s;
 }
 
 } // namespace kopruq::verification

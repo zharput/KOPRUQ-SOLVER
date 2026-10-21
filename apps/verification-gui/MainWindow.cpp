@@ -6,10 +6,12 @@
 #include "SolverRunner.h"
 #include "ExcelReferenceReader.h"
 #include "ResultMatcher.h"
+#include "VerificationReportExporter.h"
 #include <QCloseEvent>
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
+#include <QFileDialog>
 #include <QFileInfo>
 #include <QSplitter>
 #include <QStandardPaths>
@@ -74,25 +76,6 @@ void populateBeamOrLinkTable(QTableWidget* table, const std::vector<ComparisonRo
   }
 }
 
-struct CategoryStats { int total{}, pass{}, fail{}, na{}; double maxAbsDiff{}, maxAbsDiffPercent{}; };
-
-CategoryStats summarize(const std::vector<ComparisonRow>& rows) {
-  CategoryStats s;
-  s.total = static_cast<int>(rows.size());
-  for (const auto& r : rows) {
-    switch (r.result.status) {
-      case ComparisonStatus::Pass: ++s.pass; break;
-      case ComparisonStatus::Fail: ++s.fail; break;
-      default: ++s.na; break; // NotApplicable and Unsupported both roll into the single N/A tile
-    }
-    if (r.result.status == ComparisonStatus::Pass || r.result.status == ComparisonStatus::Fail) {
-      s.maxAbsDiff = std::max(s.maxAbsDiff, r.result.absDiff);
-      s.maxAbsDiffPercent = std::max(s.maxAbsDiffPercent, r.result.relDiff * 100.0);
-    }
-  }
-  return s;
-}
-
 } // namespace
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
@@ -133,6 +116,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
   connect(analysisControlPanel_->validateButton(), &QPushButton::clicked, this, [this] { startRun(RunMode::ValidateOnly); });
   connect(analysisControlPanel_->runSolverButton(), &QPushButton::clicked, this, [this] { startRun(RunMode::Solve); });
   connect(analysisControlPanel_->compareButton(), &QPushButton::clicked, this, &MainWindow::onCompare);
+  connect(analysisControlPanel_->exportButton(), &QPushButton::clicked, this, &MainWindow::onExport);
 
   updateActionAvailability();
 }
@@ -150,7 +134,9 @@ void MainWindow::updateActionAvailability() {
   // reference file (each is individually optional, per the approved spec) -- onCompare() skips
   // and diagnoses whichever ones are missing rather than refusing to run at all.
   analysisControlPanel_->compareButton()->setEnabled(!lastResultsPath_.isEmpty() && !solverRunner_->isRunning());
-  // Export stays disabled until GUI-6 gives it something real to act on.
+  // Export needs an actual comparison to have been run at least once (GUI-6 writes the SAME
+  // cached rows, never recomputes).
+  analysisControlPanel_->exportButton()->setEnabled(hasComparisonResults_ && !solverRunner_->isRunning());
 }
 
 void MainWindow::startRun(RunMode mode) {
@@ -246,22 +232,24 @@ void MainWindow::onCompare() {
   if (const double v = resultsPanel_->absoluteToleranceField()->text().toDouble(&ok); ok && v > 0) tol.absoluteToleranceScale = v;
   if (const double v = resultsPanel_->relativeToleranceField()->text().toDouble(&ok); ok && v >= 0) tol.relativeTol = v;
 
-  struct FileSpec { FileInputPanel::Row row; ReferenceFileKind kind; const char* label; };
+  struct FileSpec { FileInputPanel::Row row; ReferenceFileKind kind; const char* label; QString* fileNameOut; };
   const FileSpec specs[] = {
-      {FileInputPanel::Row::Displacements, ReferenceFileKind::Displacements, "Displacements(Global)"},
-      {FileInputPanel::Row::Reactions, ReferenceFileKind::Reaction, "Reaction(Global)"},
-      {FileInputPanel::Row::BeamForce, ReferenceFileKind::BeamForce, "Beam Force"},
-      {FileInputPanel::Row::ElasticLink, ReferenceFileKind::ElasticLink, "Elastic Link"},
+      {FileInputPanel::Row::Displacements, ReferenceFileKind::Displacements, "Displacements(Global)", &lastDisplacementsFile_},
+      {FileInputPanel::Row::Reactions, ReferenceFileKind::Reaction, "Reaction(Global)", &lastReactionsFile_},
+      {FileInputPanel::Row::BeamForce, ReferenceFileKind::BeamForce, "Beam Force", &lastBeamForceFile_},
+      {FileInputPanel::Row::ElasticLink, ReferenceFileKind::ElasticLink, "Elastic Link", &lastElasticLinkFile_},
   };
 
   std::vector<ComparisonRow> displacementRows, reactionRows, beamForceRows, elasticLinkRows;
   QStringList allDiagnostics;
 
   for (const auto& spec : specs) {
+    *spec.fileNameOut = QString();
     if (!fileInputPanel_->isUsable(spec.row)) {
       allDiagnostics << tr("%1: dosya seçilmedi, bu kategori karşılaştırılmadı.").arg(spec.label);
       continue;
     }
+    *spec.fileNameOut = QFileInfo(fileInputPanel_->filePath(spec.row)).fileName();
     auto read = kopruq::verification::readReferenceExcel(fileInputPanel_->filePath(spec.row).toStdString(), spec.kind);
     for (const auto& d : read.diagnostics) allDiagnostics << QString::fromStdString(d);
     if (!read.table) continue;
@@ -307,7 +295,7 @@ void MainWindow::onCompare() {
   catTable->setRowCount(4);
   int totalAll = 0, passAll = 0, failAll = 0, naAll = 0;
   for (int i = 0; i < 4; ++i) {
-    const auto stats = summarize(*categories[i].rows);
+    const auto stats = kopruq::verification::summarizeCategory(*categories[i].rows);
     totalAll += stats.total; passAll += stats.pass; failAll += stats.fail; naAll += stats.na;
     const QString status = stats.total == 0 ? tr("—") : (stats.fail == 0 ? tr("PASS") : tr("FAIL"));
     int c = 0;
@@ -323,7 +311,54 @@ void MainWindow::onCompare() {
   }
   resultsPanel_->setSummaryCounts(totalAll, passAll, failAll, naAll);
 
+  // Cache exactly what was just shown, verbatim, for GUI-6's export -- never recomputed there.
+  lastDisplacementRows_ = std::move(displacementRows);
+  lastReactionRows_ = std::move(reactionRows);
+  lastBeamForceRows_ = std::move(beamForceRows);
+  lastElasticLinkRows_ = std::move(elasticLinkRows);
+  lastDiagnostics_ = allDiagnostics;
+  lastTolerance_ = tol;
+  lastSolverVersion_ = results.value("metadata", nlohmann::json::object()).value("solver_version", std::string{}).c_str();
+  lastComparisonTimestamp_ = QDateTime::currentDateTime().toString(Qt::ISODate);
+  hasComparisonResults_ = true;
+  updateActionAvailability();
+
   appendLog(tr("[%1] Karşılaştırma tamamlandı. Toplam %2, PASS %3, FAIL %4, N/A %5.")
                 .arg(QDateTime::currentDateTime().toString("HH:mm:ss"))
                 .arg(totalAll).arg(passAll).arg(failAll).arg(naAll));
+}
+
+void MainWindow::onExport() {
+  if (!hasComparisonResults_) {
+    appendLog(tr("Önce Sonuçları Karşılaştır ile bir karşılaştırma üretilmeli."));
+    return;
+  }
+  const QString defaultPath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) +
+                               "/KOPRUQ_SOLVER_Verification_Report.xlsx";
+  const QString chosen = QFileDialog::getSaveFileName(this, tr("Raporu Dışa Aktar"), defaultPath, tr("Excel dosyası (*.xlsx)"));
+  if (chosen.isEmpty()) return;
+
+  kopruq::verification::ReportData data;
+  data.displacements = lastDisplacementRows_;
+  data.reactions = lastReactionRows_;
+  data.beamForces = lastBeamForceRows_;
+  data.elasticLinks = lastElasticLinkRows_;
+  for (const auto& d : lastDiagnostics_) data.diagnostics.push_back(d.toStdString());
+  data.metadata.modelFileName = QFileInfo(fileInputPanel_->filePath(FileInputPanel::Row::MidasModel)).fileName().toStdString();
+  data.metadata.solverVersion = lastSolverVersion_.toStdString();
+  data.metadata.executionDateTimeIso = lastComparisonTimestamp_.toStdString();
+  data.metadata.displacementsFileName = lastDisplacementsFile_.toStdString();
+  data.metadata.reactionsFileName = lastReactionsFile_.toStdString();
+  data.metadata.beamForceFileName = lastBeamForceFile_.toStdString();
+  data.metadata.elasticLinkFileName = lastElasticLinkFile_.toStdString();
+  data.metadata.absoluteToleranceScale = lastTolerance_.absoluteToleranceScale;
+  data.metadata.relativeTol = lastTolerance_.relativeTol;
+
+  std::string error;
+  if (kopruq::verification::exportVerificationReport(chosen.toStdString(), data, error)) {
+    appendLog(tr("[%1] Rapor dışa aktarıldı: %2")
+                  .arg(QDateTime::currentDateTime().toString("HH:mm:ss"), chosen));
+  } else {
+    appendLog(tr("Rapor dışa aktarılamadı: %1").arg(QString::fromStdString(error)));
+  }
 }

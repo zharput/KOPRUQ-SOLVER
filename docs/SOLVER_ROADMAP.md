@@ -451,7 +451,7 @@ Karşılaştır / Raporu Dışa Aktar), (3) an execution-status panel
 | GUI-3 | Solver execution via QProcess + real CLI, async, results.json discovery | **COMPLETE (verified, release.yml run `39428529324`, 2026-10-20)** |
 | GUI-4 | MIDAS Excel reference parsing (4 files) | **COMPLETE (verified, release.yml run `39435756925`, 2026-10-20)** |
 | GUI-5 | Comparison engine, PASS/FAIL/N-A/UNSUPPORTED, tables | **COMPLETE (verified, release.yml run `39468392733`, 2026-10-20)** |
-| GUI-6 | XLSX verification report export | **IMPLEMENTED, PENDING CI VERIFICATION** |
+| GUI-6 | XLSX verification report export | **COMPLETE (verified, release.yml run `39548523252`, 2026-10-21)** |
 | GUI-7 | Cross-platform build/release validation (Windows + Ubuntu) | NOT STARTED |
 
 No milestone is marked COMPLETE without its stated acceptance tests passing; GUI-0's own
@@ -524,6 +524,13 @@ package instead of the project's pinned-baseline vcpkg toolchain, a deliberate i
 should be called out explicitly wherever it is introduced, not silently mixed in). **Section 14
 names this as the central open risk**, since it determines whether the GUI can be built/verified
 automatically at all before GUI-7.
+
+### GUI-6 verification (2026-10-21)
+**COMPLETE on the first dispatch.** `release.yml` run `39548523252`: all five Windows presets
+`success`. **242/242 tests** (237 prior + 5 new `VerificationReportExporter` tests, all passing
+-- including the row/column layout assumptions in the test file matching the writer's actual
+output exactly on the first attempt). GUI smoke test confirmed another clean 5s launch/close. No
+existing test modified or removed.
 
 ### GUI-6 implementation note (2026-10-21)
 New `verification/VerificationReportExporter.{h,cpp}`: writes

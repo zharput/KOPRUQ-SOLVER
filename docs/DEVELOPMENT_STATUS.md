@@ -1332,17 +1332,34 @@ WebSearch, never independently cross-checked against a solved result) is explici
 job, still not started -- if the real model shows systematic beam-force FAILs once compared, that
 is this milestone correctly surfacing a real question, not a GUI-5 defect.
 
+## GUI-6 — Excel verification report export (2026-10-21)
+**COMPLETE AND VERIFIED, first dispatch.** New `VerificationReportExporter` writes
+`KOPRUQ_SOLVER_Verification_Report.xlsx` (Summary/Displacements/Reactions/Beam Forces/Elastic
+Links/Diagnostics) via `xlnt`'s write API, reusing the exact same `ComparisonRow`s and
+diagnostics GUI-5 already computed and showed on screen -- no separate recomputation; the
+Summary sheet's category totals call the same `summarizeCategory()` the Özet tab uses (moved to
+`ResultMatcher.h` so both call sites share one implementation). Metadata includes source
+filenames, solver version (from `results.json` itself), tolerances used, and execution
+timestamp. `MainWindow` now caches the last comparison's rows as members so `onExport()` reuses
+them verbatim. Disclosed simplification: worksheet header labels are ASCII-only (data itself is
+written verbatim) to avoid an unverifiable `xlnt` write-encoding risk with no local build to
+check it against.
+
+Verification: `release.yml` run `39548523252`, all five Windows presets `success`. **242/242
+tests** (5 new `VerificationReportExporter` tests, all passing on the first attempt, including
+row/column layout checks against the writer's real output). GUI smoke test confirmed another
+clean 5s launch/close. No existing test modified.
+
 ## Next autonomous action
 Phase 3.2, Phase 4, Phase 5 (5.1-5.6), Phase 6 (6.1, 6.1b, 6.2, 6.2b; 6.3 cancelled), Phase 7A,
 7B (including ETMP thermal wiring), 7C, 7D, 7M, 7S(1) and 7T are all complete and verified -- CI
 run `39265009361`, commit `a92f045`, all three matrix jobs (gcc-debug, gcc-asan, gcc-release)
-`success`. GUI-0 through GUI-5 (Qt 6 Verification GUI) are also complete and verified (see above).
+`success`. GUI-0 through GUI-6 (Qt 6 Verification GUI) are also complete and verified (see above).
 Per the GUI task's own "stop for approval after each milestone" instruction, development is
-paused awaiting approval to start **GUI-6 — Excel verification report export**
-(`VerificationReportExporter`: `KOPRUQ_SOLVER_Verification_Report.xlsx` with Summary/
-Displacements/Reactions/Beam Forces/Elastic Links/Diagnostics worksheets, same comparison results
-already shown in the GUI, no separate recomputation). Other candidate next steps (unrelated to
-the GUI, say which, or propose a different scope):
+paused awaiting approval to start **GUI-7 — cross-platform build and release validation**
+(Ubuntu GCC/Clang build of the GUI target, Qt deployment documentation, end-to-end workflow
+confirmation with a real re-exported `.xlsx` sample once available). Other candidate next steps
+(unrelated to the GUI, say which, or propose a different scope):
 1. **Phase 7 (production solver, unrelated to MIDAS import)**: sparse direct/iterative strategy,
    optional SuiteSparse, profiling/parallelism -- still not started.
 2. Extend rigid-link support to ModalSolver/ResponseSpectrumSolver, or cut a `v0.1.0` release tag.

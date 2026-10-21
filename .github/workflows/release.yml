@@ -201,6 +201,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # qtbase (Debug+Release, before VCPKG_BUILD_TYPE=release) exhausted a standard GitHub-hosted
+      # runner's ~14GB free disk mid-build ("No space left on device", GUI-7 2026-10-21). Builds
+      # are now Release-only (see gcc-gui-release's VCPKG_BUILD_TYPE), but this frees several more
+      # GB by removing large preinstalled SDKs this job never uses, as cheap extra margin.
+      - name: Free disk space (remove unused preinstalled SDKs)
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+
       # qtbase builds X11/XCB/OpenGL support from source (vcpkg, not a system Qt), so it needs
       # the matching *-dev packages at configure time, not just the runtime .so files the GUI
       # smoke test needs later -- this is Qt's own standard Linux X11 build dependency list.

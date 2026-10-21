@@ -201,13 +201,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Ninja and Qt6/X11 runtime packages
+      - name: Install Ninja, Qt6/X11 runtime packages, and vcpkg's build-time autotools deps
         run: |
           sudo apt-get update -y
           sudo apt-get install -y ninja-build xvfb \
             libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 \
             libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 \
-            libxcb-xinerama0 libxcb-xfixes0 libgl1 libfontconfig1 libfreetype6
+            libxcb-xinerama0 libxcb-xfixes0 libgl1 libfontconfig1 libfreetype6 \
+            autoconf autoconf-archive automake libtool
 
       - name: Set vcpkg paths
         run: |

@@ -553,6 +553,51 @@ rest of the project), so the identical sources build under GCC unchanged. Full d
 requirements for both platforms are now documented in section 13 above, replacing its earlier
 "risk, not yet resolved" framing.
 
+### GUI-7 — session interruption, 2026-10-21 (user offline overnight)
+
+**Status at interruption: NOT YET VERIFIED. Work paused safely; nothing left uncommitted.**
+
+The Windows half of GUI-7 (`ninja-gui-release`) has passed repeatedly throughout this effort and
+is not in question. The new Ubuntu job (`gcc-gui-release`) took **eleven consecutive dispatches**
+to debug, each catching one real, distinct, correctly-diagnosed problem (converging the whole
+way, never repeating the same error) -- in order: (1) `gperf` (a qtbase build-time tool) needed
+`autoconf`/`automake`/`libtool` from apt; (2) `libxcrypt` needed `libltdl-dev`; (3) qtbase's own
+X11/XCB/OpenGL feature detection needed a full set of `-dev` packages, not just runtime `.so`s;
+(4) one remaining feature, `system_xcb_xinput`, needed `libxcb-xinput-dev`; (5) a wrong guessed
+package name (`libxcb-errors-dev`, later `libxcb-errors0-dev`) turned out to be unnecessary
+entirely -- removed; (6) qtbase (built with its full default feature set, Debug+Release) ran the
+runner out of disk ("No space left on device" mid-build) -- fixed by `VCPKG_BUILD_TYPE=release`
+plus freeing preinstalled SDK dirs; (7) even Release-only, qtbase's *default* feature set (dbus,
+sql-psql, sql-sqlite, testlib, icu, harfbuzz, brotli, network, opengl, openssl, async-io,
+sessionmanager, dnslookup, zstd -- none of which `apps/verification-gui` uses) still didn't fit;
+the actually-sustainable fix (not just more cleanup) was trimming `vcpkg.json`'s `qtbase`
+dependency to `default-features:false` + an explicit `{gui, widgets}` list (`core` is implicit,
+cannot be named explicitly -- a vcpkg manifest-schema rule that broke *every* preset, including
+Windows, until caught: fixed same session); (8) with that same run, qtbase actually finished
+building successfully (~2h) and the **real final blocker** turned out to be unrelated to any of
+the above: `find_package(xlnt CONFIG REQUIRED)` should have been `find_package(Xlnt ...)` --
+xlnt's own installed CMake package config is capitalized `Xlnt`; Windows's case-insensitive
+filesystem silently tolerated the wrong spelling the whole time, Linux's case-sensitive one did
+not. Both final fixes (the capitalization fix and the trimmed `qtbase` feature list) were
+committed together as `d4c7db4`, then a manifest-schema typo in that same commit (`"core"` listed
+explicitly) was caught and fixed as `edf6251`.
+
+**Latest dispatch, still running when the session was interrupted:** `release.yml` run
+[`39619224162`](https://github.com/zharput/KOPRUQ-SOLVER/actions/runs/39619224162) (commit
+`edf6251`). Per the user's explicit instruction, this cloud run was **left running, not
+cancelled** -- only the local polling command was stopped. **First action next session: check
+that run's outcome before doing anything else.** If it passed, this is the real first green
+`gcc-gui-release` and GUI-7 is complete (update this entry, the milestone table, and
+`DEVELOPMENT_STATUS.md` accordingly, matching every prior milestone's verified-completion
+pattern). If it failed, read the log for the actual new error (the iteration history above shows
+every failure so far has been a distinct, fixable, converging issue, not a sign of a deeper
+problem) and continue the same cycle: fix, commit, push, re-dispatch, poll.
+
+No application source code changed in this entire debugging arc -- every fix was either a CI
+workflow (`release.yml`) package list or a build configuration (`vcpkg.json`, `CMakePresets.json`,
+`CMakeLists.txt`'s `find_package` call) problem. GUI-0 through GUI-6 remain complete and verified
+exactly as recorded above; only GUI-7's Ubuntu half is outstanding.
+
 ### GUI-6 verification (2026-10-21)
 **COMPLETE on the first dispatch.** `release.yml` run `39548523252`: all five Windows presets
 `success`. **242/242 tests** (237 prior + 5 new `VerificationReportExporter` tests, all passing
@@ -579,7 +624,7 @@ to `KOPRUQ_SOLVER_Verification_Report.xlsx` in the user's Documents folder, and 
 after at least one real comparison has run. **Simplification, disclosed rather than silent**: all
 worksheet text uses ASCII-only labels (e.g. "Basarili" not "Başarılı") rather than the GUI's
 Turkish UTF-8 labels, to avoid an unverifiable encoding risk in `xlnt`'s write path with no local
-build to check it against -- the GUI itself remains fully Turkish; only the exported file's
+build to check it against -- the GUI itself rnemains fully Turkish; only the exported file's
 static header text is ASCII, and the actual data (ids, load case names, numeric values) is
 written verbatim regardless. New `tests/unit/verification_report_exporter_tests.cpp` (5 tests):
 round-trip readability, Summary sheet metadata/category-totals correctness, all six worksheets

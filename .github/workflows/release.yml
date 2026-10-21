@@ -201,14 +201,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Ninja, Qt6/X11 runtime packages, and vcpkg's build-time autotools deps
+      # qtbase builds X11/XCB/OpenGL support from source (vcpkg, not a system Qt), so it needs
+      # the matching *-dev packages at configure time, not just the runtime .so files the GUI
+      # smoke test needs later -- this is Qt's own standard Linux X11 build dependency list.
+      - name: Install Ninja, Qt6/X11 build+runtime packages, and vcpkg's autotools deps
         run: |
           sudo apt-get update -y
           sudo apt-get install -y ninja-build xvfb \
-            libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 \
-            libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 \
-            libxcb-xinerama0 libxcb-xfixes0 libgl1 libfontconfig1 libfreetype6 \
-            autoconf autoconf-archive automake libtool libltdl-dev
+            autoconf autoconf-archive automake libtool libltdl-dev \
+            libgl1-mesa-dev libegl1-mesa-dev \
+            libx11-dev libx11-xcb-dev libxext-dev libxfixes-dev libxi-dev libxrender-dev \
+            libxkbcommon-dev libxkbcommon-x11-dev \
+            libxcb1-dev libxcb-cursor-dev libxcb-glx0-dev libxcb-keysyms1-dev \
+            libxcb-image0-dev libxcb-shm0-dev libxcb-icccm4-dev libxcb-sync-dev \
+            libxcb-xfixes0-dev libxcb-shape0-dev libxcb-randr0-dev libxcb-render-util0-dev \
+            libxcb-xinerama0-dev libxcb-xkb-dev libxcb-util-dev libxcb-cursor0 \
+            libsm-dev libice-dev libfontconfig1-dev libfreetype-dev
 
       - name: Set vcpkg paths
         run: |

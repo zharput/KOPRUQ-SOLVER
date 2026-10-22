@@ -133,26 +133,67 @@ jobs:
           & $cli bogus;     if ($LASTEXITCODE -ne 2) { throw "unknown command: expected exit 2, got $LASTEXITCODE" }
           $global:LASTEXITCODE = 0
 
+      - name: GUI portable-package check (exe, CLI, Qt6 DLLs, platform plugin)
+        if: matrix.preset == 'ninja-gui-release'
+        shell: pwsh
+        run: |
+          $dir = "build/gui-release"
+          $exe = "$dir/kopruq_verification_gui.exe"
+          if (-not (Test-Path $exe)) { throw "$exe was not built" }
+          # SolverRunner::locateCli()'s very first candidate is literally
+          # <applicationDirPath>/kopruq_solver_cli.exe -- kopruq_solver_cli is an unconditional
+          # CMake target, so "cmake --build --preset ninja-gui-release" (no --target restriction)
+          # already builds it into the same directory as the GUI exe; this check matches that
+          # exact candidate so a pass here means the real GUI code will find it, not just that
+          # the file happens to exist somewhere.
+          $cli = "$dir/kopruq_solver_cli.exe"
+          if (-not (Test-Path $cli)) { throw "$cli was not built next to the GUI exe -- SolverRunner::locateCli() would not find it" }
+          foreach ($dll in @("Qt6Core.dll","Qt6Gui.dll","Qt6Widgets.dll")) {
+            if (-not (Test-Path "$dir/$dll")) { throw "$dir/$dll missing -- windeployqt did not deploy it" }
+          }
+          if (-not (Test-Path "$dir/platforms/qwindows.dll")) { throw "$dir/platforms/qwindows.dll missing -- GUI cannot start without its Qt platform plugin" }
+          "GUI exe, CLI exe, Qt6 core/gui/widgets DLLs, and the qwindows platform plugin are all present."
+
+          # The CLI itself needs no Qt/DLL deployment (Eigen/nlohmann-json are header-only), but
+          # running it from this exact package directory (the windows-2022 runner has no system
+          # Qt6 install, i.e. it already is the "clean machine" this package must work on)
+          # confirms it is genuinely standalone, not just present.
+          & $cli --version
+          if ($LASTEXITCODE -ne 0) { throw "kopruq_solver_cli.exe --version failed from the package directory, exit $LASTEXITCODE" }
+          "CLI runs standalone from the package directory on this clean runner."
+
       - name: GUI smoke test (launches, stays alive, closed cleanly)
         if: matrix.preset == 'ninja-gui-release'
         shell: pwsh
         run: |
           $exe = "build/gui-release/kopruq_verification_gui.exe"
-          if (-not (Test-Path $exe)) { throw "$exe was not built" }
           $p = Start-Process -FilePath $exe -PassThru
           Start-Sleep -Seconds 5
           if ($p.HasExited) { throw "GUI process exited on its own within 5s (exit code $($p.ExitCode)) -- treat as a crash, not success" }
           Stop-Process -Id $p.Id -Force
           "GUI launched and stayed alive for 5s, then was closed cleanly."
 
-      - name: Upload GUI executable
+      # The complete portable package: GUI exe + CLI exe (so SolverRunner::locateCli() finds it
+      # next to the GUI, per the check above) + every DLL/plugin windeployqt and vcpkg's applocal
+      # step deployed into build/gui-release + the dark.qss resource -- no debug files, no object
+      # files, no source, no test/benchmark executables. Runs on a clean machine with no system
+      # Qt6 install, by construction (that is exactly what windeployqt's deployment is for).
+      - name: Upload GUI portable package
         if: matrix.preset == 'ninja-gui-release'
         uses: actions/upload-artifact@v4
         with:
           name: kopruq-verification-gui-windows-x64
           path: |
             build/gui-release/kopruq_verification_gui.exe
+            build/gui-release/kopruq_solver_cli.exe
+            build/gui-release/*.dll
             build/gui-release/resources/
+            build/gui-release/platforms/
+            build/gui-release/styles/
+            build/gui-release/imageformats/
+            build/gui-release/generic/
+            build/gui-release/networkinformation/
+            build/gui-release/tls/
           if-no-files-found: error
 
       - name: Benchmarks

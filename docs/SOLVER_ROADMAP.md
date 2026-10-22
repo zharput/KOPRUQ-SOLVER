@@ -573,6 +573,36 @@ change). Windows and Ubuntu both now build, test, and launch the real GUI from t
 vcpkg toolchain and the same application source, with full deployment requirements documented in
 section 13.
 
+#### Windows portable package fix (2026-10-22, post-GUI-7)
+Inspecting run `39760415174`'s own `kopruq-verification-gui-windows-x64` artifact found it was
+**not actually portable**: only the bare `.exe` (300KB) and `resources/dark.qss` were uploaded,
+even though the same build's own log shows `windeployqt` genuinely deploying a complete set of
+Qt6 DLLs and plugins (`Qt6Core.dll`/`Qt6Gui.dll`/`Qt6Widgets.dll`/`Qt6Network.dll`,
+`platforms/qwindows.dll`, `styles/`, `imageformats/`, `tls/`, plus vcpkg-applocal dependencies
+like `xlnt.dll`) into `build/gui-release/` -- the `actions/upload-artifact` step's `path:` list
+simply never grabbed any of it. Separately, `kopruq_solver_cli.exe` -- needed by
+`SolverRunner::locateCli()`'s first search candidate, `<applicationDirPath>/kopruq_solver_cli.exe`
+-- was published only in the *separate* `kopruq-solver-windows-x64` artifact; a user who only
+downloaded the GUI zip would have no working "Solver'ı Çalıştır" at all. Fixed, user-approved,
+with only `release.yml` changes (no FEM/GUI/test code touched):
+- Broadened the Windows GUI upload step's `path:` to the whole deployed set:
+  `kopruq_verification_gui.exe`, `kopruq_solver_cli.exe` (already built into
+  `build/gui-release/` for free, since it is an unconditional CMake target and
+  `cmake --build --preset ninja-gui-release` builds every target, not just the GUI), every
+  `*.dll` in that directory, `resources/`, and the `platforms/`/`styles/`/`imageformats/`/
+  `generic/`/`networkinformation/`/`tls/` plugin subdirectories windeployqt populated. No debug
+  files, object files, source, or test/benchmark executables included.
+- Added an explicit pre-upload check (`GUI portable-package check`): the GUI exe, the CLI exe
+  *at the exact path `SolverRunner::locateCli()` checks first*, `Qt6Core.dll`/`Qt6Gui.dll`/
+  `Qt6Widgets.dll`, and `platforms/qwindows.dll` must all exist, or the job fails with a specific
+  message naming what's missing -- never a silent incomplete package.
+- Added a standalone CLI invocation (`kopruq_solver_cli.exe --version`) from inside the package
+  directory on the `windows-2022` runner -- which has no system-wide Qt6 install at all, i.e. it
+  already is the "clean machine" acceptance criterion -- confirming the CLI genuinely needs no
+  further runtime dependencies.
+- The existing GUI launch smoke test (stays alive 5s, closed cleanly) is unchanged, now running
+  against the complete package rather than the bare exe.
+
 The Windows half of GUI-7 (`ninja-gui-release`) has passed repeatedly throughout this effort and
 is not in question. The new Ubuntu job (`gcc-gui-release`) took **eleven consecutive dispatches**
 to debug, each catching one real, distinct, correctly-diagnosed problem (converging the whole

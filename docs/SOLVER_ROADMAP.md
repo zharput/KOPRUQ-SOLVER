@@ -452,7 +452,7 @@ Karşılaştır / Raporu Dışa Aktar), (3) an execution-status panel
 | GUI-4 | MIDAS Excel reference parsing (4 files) | **COMPLETE (verified, release.yml run `39435756925`, 2026-10-20)** |
 | GUI-5 | Comparison engine, PASS/FAIL/N-A/UNSUPPORTED, tables | **COMPLETE (verified, release.yml run `39468392733`, 2026-10-20)** |
 | GUI-6 | XLSX verification report export | **COMPLETE (verified, release.yml run `39548523252`, 2026-10-21)** |
-| GUI-7 | Cross-platform build/release validation (Windows + Ubuntu) | **IMPLEMENTED, PENDING CI VERIFICATION** |
+| GUI-7 | Cross-platform build/release validation (Windows + Ubuntu) | **COMPLETE (verified, release.yml run `39760415174`, 2026-10-22)** |
 
 No milestone is marked COMPLETE without its stated acceptance tests passing; GUI-0's own
 "acceptance" is this audit plus the two documentation updates it produces.
@@ -553,9 +553,25 @@ rest of the project), so the identical sources build under GCC unchanged. Full d
 requirements for both platforms are now documented in section 13 above, replacing its earlier
 "risk, not yet resolved" framing.
 
-### GUI-7 — Ubuntu debugging arc, 2026-10-21/22 (resumed after an overnight pause)
+### GUI-7 — COMPLETE AND VERIFIED (2026-10-22)
 
-**Status: NOT YET VERIFIED as of the latest dispatch below.**
+`release.yml` run [`39760415174`](https://github.com/zharput/KOPRUQ-SOLVER/actions/runs/39760415174)
+(commit `7bf04cb`): **all six jobs green** -- `ninja-debug`, `ninja-release`, `ninja-asan`,
+`ninja-analyze`, `ninja-gui-release` (Windows) and `gcc-gui-release` (Ubuntu). **242/242 tests**
+on both platforms. The GUI smoke test actually launched the real executable under `xvfb-run` on
+Linux and under a normal process start on Windows, confirmed alive for 5s, then closed cleanly on
+both. The Linux GUI binary cache (`vcpkg-Linux-gcc-gui-release-*`, 427MB) was finally saved
+successfully for the first time this arc, immediately after the job's first full green
+completion. This closes a debugging arc of **thirteen distinct, individually-diagnosed, real
+root-cause fixes** (full narrative below, kept for anyone who needs to touch this build
+configuration again) -- every one converging, none repeated, the last four resolving an entirely
+genuine chain of Qt6-on-Linux build/link/runtime issues (missing X11/XCB build-time `-dev`
+packages; disk space; a `qtbase` manifest-feature trim that initially went too far and had to be
+restored piece by piece with evidence from Qt's own source; and finally vcpkg's static-by-default
+Linux triplet requiring an explicit `Q_IMPORT_PLUGIN`, the arc's only application-source-code
+change). Windows and Ubuntu both now build, test, and launch the real GUI from the same pinned
+vcpkg toolchain and the same application source, with full deployment requirements documented in
+section 13.
 
 The Windows half of GUI-7 (`ninja-gui-release`) has passed repeatedly throughout this effort and
 is not in question. The new Ubuntu job (`gcc-gui-release`) took **eleven consecutive dispatches**
@@ -641,6 +657,11 @@ workflow, and `actions/cache`'s upload reservation can expire/fail silently on v
 jobs without a clear log message -- not confirmed, just the leading hypothesis. Worth watching
 once a run completes faster (post-fix (12), most dependencies should already be warm); if binary
 cache saves remain absent even on a short run, this needs its own dedicated investigation.
+**Resolved/observed (2026-10-22):** on the final green run (`39760415174`), the
+`vcpkg-Linux-gcc-gui-release-*` cache (427MB) saved successfully for the first time all arc, right
+after the job's first full success. Consistent with (though not proof of) the leading hypothesis:
+the save only completed reliably once the job ran to a genuine successful finish rather than
+failing partway through a 1-3h run.
 
 **(13)** Run `39753093766` (the `{xcb,xcb-sm,xcb-xlib,xrender}` fix): qtbase rebuilt
 (`[core,doubleconversion,fontconfig,freetype,gui,sessionmanager,thread,widgets,xcb,xcb-sm,

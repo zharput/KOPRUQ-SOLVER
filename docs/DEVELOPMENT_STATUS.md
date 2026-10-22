@@ -1350,41 +1350,42 @@ tests** (5 new `VerificationReportExporter` tests, all passing on the first atte
 row/column layout checks against the writer's real output). GUI smoke test confirmed another
 clean 5s launch/close. No existing test modified.
 
-## SESSION PAUSED 2026-10-21 (user going offline) — GUI-7 IN PROGRESS, NOT YET VERIFIED
+## GUI-7 — cross-platform build/release validation — COMPLETE (2026-10-22)
 
-**Read this section first on resume.**
+**Verified.** `release.yml` run [`39760415174`](https://github.com/zharput/KOPRUQ-SOLVER/actions/runs/39760415174)
+(commit `7bf04cb`): all six jobs green (`ninja-debug/release/asan/analyze/gui-release` on Windows,
+`gcc-gui-release` on Ubuntu). **242/242 tests on both platforms.** The real GUI executable
+launched (under `xvfb-run` on Linux), stayed alive 5s, closed cleanly, on both platforms. The
+Linux GUI vcpkg binary cache (427MB) saved successfully for the first time this arc.
 
-- **Check CI run [`39619224162`](https://github.com/zharput/KOPRUQ-SOLVER/actions/runs/39619224162)
-  (commit `edf6251`) before doing anything else.** It was deliberately left running in the cloud
-  (not cancelled) when the session paused. If it is green, GUI-7 is COMPLETE -- update
-  `docs/SOLVER_ROADMAP.md`'s GUI-7 milestone row/table and this file to match every prior GUI
-  milestone's verified-completion pattern, then report and stop for the usual approval
-  checkpoint. If it is red, read the actual log; `docs/SOLVER_ROADMAP.md`'s "GUI-7 — session
-  interruption" entry has the full history of every fix applied so far (11 dispatches, each a
-  distinct, real, converging issue -- not a sign to change approach, just continue the same
-  diagnose-fix-push-dispatch cycle).
-- **Working tree is clean of anything of mine** -- every source/doc change this session is
-  committed and pushed (HEAD is `edf6251`). The only uncommitted files are the user's own
-  pre-existing `xmidas/` MIDAS exports and two root-level `.jpg` reference screenshots, untouched
-  by this session.
-- **The user has already re-exported the four MIDAS Excel reference files as `.xlsx`**
-  (`xmidas/Beam Force.xlsx`, `Displacements(Global).xlsx`, `Elastic Link.xlsx`,
-  `Reaction(Global).xlsx` now exist, untracked, alongside the old `.xls` files) -- once GUI-7 is
-  confirmed green, these are available for the first real end-to-end manual verification of the
-  whole GUI-2..GUI-6 pipeline against actual MIDAS data (not yet attempted; CI alone cannot drive
-  an interactive file-selection/compare/export session).
-- GUI-0 through GUI-6 remain complete and verified (unaffected by any of this). No application
-  source code changed during the GUI-7 CI debugging arc -- only `release.yml`, `vcpkg.json`,
-  `CMakePresets.json`, and one `find_package` call in `CMakeLists.txt`.
+This closed a 13-fix debugging arc (gperf/libltdl/X11-XCB `-dev` packages, disk space, a `qtbase`
+manifest-feature trim that had to be restored piece by piece with evidence from Qt's own source,
+and finally a `Q_IMPORT_PLUGIN(QXcbIntegrationPlugin)` fix for vcpkg's static-by-default Linux
+triplet -- the arc's only application-source-code change). Full narrative:
+`docs/SOLVER_ROADMAP.md`'s "GUI-7" section. Separately, the user's approved CI caching
+optimization (`restore-keys` on all four `vcpkg ... cache` steps in `release.yml`) was applied in
+the same arc.
+
+**Available for next steps:** the user has already re-exported the four MIDAS Excel reference
+files as `.xlsx` (`xmidas/Beam Force.xlsx`, `Displacements(Global).xlsx`, `Elastic Link.xlsx`,
+`Reaction(Global).xlsx`, untracked alongside the old `.xls` files) -- these are ready for the
+first real end-to-end manual verification of the whole GUI-2..GUI-6 pipeline against actual MIDAS
+data, which CI alone cannot drive (needs an interactive file-selection/compare/export session).
+Not yet attempted.
+
+GUI-0 through GUI-7 are now all complete and verified. This was the QT6 VERIFICATION GUI task's
+final milestone.
 
 ## Next autonomous action
 Phase 3.2, Phase 4, Phase 5 (5.1-5.6), Phase 6 (6.1, 6.1b, 6.2, 6.2b; 6.3 cancelled), Phase 7A,
 7B (including ETMP thermal wiring), 7C, 7D, 7M, 7S(1) and 7T are all complete and verified -- CI
 run `39265009361`, commit `a92f045`, all three matrix jobs (gcc-debug, gcc-asan, gcc-release)
-`success`. GUI-0 through GUI-6 (Qt 6 Verification GUI) are also complete and verified (see above);
-GUI-7 is in progress, see the session-paused note directly above -- **resume there first**, not
-with a new task. Other candidate next steps (unrelated to the GUI, say which, or propose a
-different scope) once GUI-7 is confirmed:
+`success`. GUI-0 through GUI-7 (Qt 6 Verification GUI, the entire QT6 VERIFICATION GUI task) are
+now all complete and verified (see above). Per the task's own "stop for approval after each
+milestone" instruction, development is paused at this final milestone. Natural next step, if
+desired: a real end-to-end manual verification session against the user's own re-exported
+`.xlsx` files (see above) -- not yet performed, since it needs interactive use of the GUI itself.
+Other candidate next steps (unrelated to the GUI, say which, or propose a different scope):
 1. **Phase 7 (production solver, unrelated to MIDAS import)**: sparse direct/iterative strategy,
    optional SuiteSparse, profiling/parallelism -- still not started.
 2. Extend rigid-link support to ModalSolver/ResponseSpectrumSolver, or cut a `v0.1.0` release tag.

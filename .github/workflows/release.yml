@@ -67,12 +67,16 @@ jobs:
         with:
           path: vcpkg
           key: vcpkg-tool-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-tool-${{ runner.os }}-
 
       - name: Restore vcpkg binary cache
         uses: actions/cache@v4
         with:
           path: vcpkg-bincache
           key: vcpkg-${{ runner.os }}-${{ matrix.preset }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-${{ runner.os }}-${{ matrix.preset }}-
 
       - name: Bootstrap vcpkg at the manifest baseline
         shell: pwsh
@@ -241,12 +245,16 @@ jobs:
         with:
           path: vcpkg
           key: vcpkg-tool-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-tool-${{ runner.os }}-
 
       - name: Restore vcpkg binary cache
         uses: actions/cache@v4
         with:
           path: vcpkg-bincache
           key: vcpkg-${{ runner.os }}-gcc-gui-release-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-${{ runner.os }}-gcc-gui-release-
 
       - name: Bootstrap vcpkg at the manifest baseline
         run: |

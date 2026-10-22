@@ -586,17 +586,25 @@ explicitly) was caught and fixed as `edf6251`. The session paused overnight with
 **(9) Resumed 2026-10-22:** run `39619224162` finished (while offline) as a genuine new failure,
 not a repeat -- for the first time, qtbase **and** xlnt both built and linked successfully, and
 the GUI target itself failed to *compile*: `QProcess::ExitStatus` was undeclared in
-`MainWindow.h`/`SolverRunner.h`/their moc output, even though `<QProcess>` is included. Root
-cause: trimming `qtbase` to the bare `{gui, widgets}` feature pair (fix (7) above) had also
-silently dropped `network` -- which, despite the name, is a QtCore-level feature
-(`QT_FEATURE_network`) gating the socket-notifier infrastructure `QProcess` itself depends on
-internally, not just the `QtNetwork` module's own classes (which this GUI never uses directly).
-Confirmed by cross-checking Bitcoin Core's own vcpkg manifest for its minimal Qt6 GUI build,
-which independently includes `network` in an otherwise similarly-trimmed `qtbase` feature list.
-Fixed by adding `network` back to the requested feature list (`{gui, widgets, network}`) --
-still excluding every one of qtbase's genuinely disk-heavy, unused default features (dbus,
-sql-psql, sql-sqlite, testlib, icu, harfbuzz, brotli, opengl, openssl, async-io, sessionmanager,
-dnslookup, zstd), so the disk-budget fix from (7) is not undone.
+`MainWindow.h`/`SolverRunner.h`/their moc output, even though `<QProcess>` is included. First
+hypothesis: trimming `qtbase` to the bare `{gui, widgets}` feature pair (fix (7) above) had
+silently dropped `network`, cross-checked against Bitcoin Core's own minimal-Qt6 vcpkg manifest
+(which includes `network`) -- added `{gui, widgets, network}` and re-dispatched (run
+`39726773483`).
+
+**(10)** That hypothesis was wrong: qtbase rebuilt with `network` included (confirmed from the
+log: `qtbase[core,doubleconversion,gui,network,widgets]`) and hit the **identical**
+`QProcess::ExitStatus` error again. Root-caused properly this time by reading Qt's own
+`src/corelib/configure.cmake` directly: the `"process"` feature (i.e. `QProcess` itself) has
+`CONDITION QT_FEATURE_thread OR NOT UNIX` -- on Linux this means `QProcess` does not exist at all
+without `thread` explicitly enabled; `network` was never part of its condition. Bitcoin Core's
+inclusion of `network` was for its own actual `QtNetwork` usage, unrelated to this. Fixed by
+replacing `network` with `thread` in the requested feature list (`{gui, widgets, thread}`) -- this
+is now the third attempt at this specific line, but the first one actually backed by reading Qt's
+own source rather than cross-project inference. Still excludes every one of qtbase's genuinely
+disk-heavy, unused default features (dbus, sql-psql, sql-sqlite, testlib, icu, harfbuzz, brotli,
+network, opengl, openssl, async-io, sessionmanager, dnslookup, zstd), so the disk-budget fix from
+(7) is not undone.
 
 **Latest dispatch (after fix 9):** check `docs/DEVELOPMENT_STATUS.md`'s "Next autonomous action"
 or the commit log for the current run ID and its outcome -- this entry is the historical debugging

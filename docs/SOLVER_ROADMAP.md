@@ -603,6 +603,24 @@ with only `release.yml` changes (no FEM/GUI/test code touched):
 - The existing GUI launch smoke test (stays alive 5s, closed cleanly) is unchanged, now running
   against the complete package rather than the bare exe.
 
+**Verified, `release.yml` run [`39780356141`](https://github.com/zharput/KOPRUQ-SOLVER/actions/runs/39780356141)
+(commit `99055ac`): all six jobs green**, including a clean re-run of `gcc-gui-release` (now
+genuinely fast off the warm cache from the prior GUI-7 run). The `kopruq-verification-gui-
+windows-x64` artifact is **23 files, 20.3MB** -- `kopruq_verification_gui.exe`,
+`kopruq_solver_cli.exe` (same directory, matching `SolverRunner::locateCli()`'s first candidate
+exactly), `Qt6Core.dll`/`Qt6Gui.dll`/`Qt6Widgets.dll`/`Qt6Network.dll`, `platforms/qwindows.dll`,
+`styles/qmodernwindowsstyle.dll`, `imageformats/{qgif,qico}.dll`,
+`networkinformation/qnetworklistmanager.dll`, `generic/qtuiotouchplugin.dll`,
+`tls/{qcertonlybackend,qschannelbackend}.dll`, vcpkg-applocal deps (`xlnt.dll`, `z.dll`,
+`pcre2-16.dll`, `double-conversion.dll`, `md4c.dll`, plus ANGLE/D3D compiler runtime DLLs Qt's
+own deployment pulled in), and `resources/dark.qss` -- no debug files, object files, source, or
+test/benchmark executables. Downloaded and inspected the zip directly (not just trusted the CI
+log) to confirm this. All eight of the user's acceptance criteria passed: GUI exe present, CLI
+exe present, Qt6 DLLs present, Qt platform plugin present, GUI launches and closes cleanly on the
+`windows-2022` runner (which has no system-wide Qt6 install -- already the "clean machine"
+criterion), CLI runs standalone (`--version`) from the package directory on that same runner,
+**242/242 tests** passed, and the zip artifact is complete.
+
 The Windows half of GUI-7 (`ninja-gui-release`) has passed repeatedly throughout this effort and
 is not in question. The new Ubuntu job (`gcc-gui-release`) took **eleven consecutive dispatches**
 to debug, each catching one real, distinct, correctly-diagnosed problem (converging the whole

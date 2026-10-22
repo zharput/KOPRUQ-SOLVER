@@ -1376,6 +1376,27 @@ Not yet attempted.
 GUI-0 through GUI-7 are now all complete and verified. This was the QT6 VERIFICATION GUI task's
 final milestone.
 
+## Windows portable GUI package — COMPLETE (2026-10-22, post-GUI-7)
+The published `kopruq-verification-gui-windows-x64` artifact was initially just the bare 300KB
+exe + `resources/dark.qss` (the `windeployqt` output `build/gui-release/` actually contained was
+never uploaded) and lacked `kopruq_solver_cli.exe` entirely. Fixed, user-approved,
+`release.yml`-only: broadened the upload to the full deployed set and added explicit pre-upload
+checks (GUI exe, CLI exe at `SolverRunner::locateCli()`'s exact first candidate path, core Qt6
+DLLs, `platforms/qwindows.dll` all required or the job fails naming what's missing) plus a
+standalone `kopruq_solver_cli.exe --version` invocation on the `windows-2022` runner (no system
+Qt6 install -- already the target "clean machine").
+
+**Verified**, `release.yml` run [`39780356141`](https://github.com/zharput/KOPRUQ-SOLVER/actions/runs/39780356141)
+(commit `99055ac`): all six jobs green, **242/242 tests**. Downloaded and inspected the zip
+directly: **23 files, 20.3MB** -- both exes (same directory), all Qt6 DLLs, every plugin
+subdirectory `windeployqt` populated, `xlnt.dll` and other vcpkg-applocal deps, `resources/`; no
+debug/object/source/test files. All eight user-specified acceptance criteria passed. Full detail:
+`docs/SOLVER_ROADMAP.md`'s "Windows portable package fix" entry.
+
+**Download**: GitHub → repo → Actions → the `release.yml` run above → Artifacts →
+`kopruq-verification-gui-windows-x64` → extract the zip anywhere and run
+`kopruq_verification_gui.exe` directly; no installer, no separate Qt6 install needed.
+
 ## Next autonomous action
 Phase 3.2, Phase 4, Phase 5 (5.1-5.6), Phase 6 (6.1, 6.1b, 6.2, 6.2b; 6.3 cancelled), Phase 7A,
 7B (including ETMP thermal wiring), 7C, 7D, 7M, 7S(1) and 7T are all complete and verified -- CI

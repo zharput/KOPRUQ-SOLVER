@@ -73,6 +73,13 @@ if(KOPRUQ_BUILD_GUI)
     apps/verification-gui/ResultsComparisonPanel.cpp
     apps/verification-gui/SolverRunner.cpp)
   target_link_libraries(kopruq_verification_gui PRIVATE kopruq_solver_io Qt6::Widgets kopruq_verification)
+  # vcpkg's x64-linux triplet is static by default (x64-windows is dynamic), so there is no
+  # libqxcb.so to load at runtime -- the xcb platform plugin must be linked in statically and
+  # registered via Q_IMPORT_PLUGIN (apps/verification-gui/main.cpp). Harmless/inert on Windows,
+  # where windeployqt's dynamic qwindows.dll is unaffected by this.
+  if(UNIX AND NOT APPLE)
+    target_link_libraries(kopruq_verification_gui PRIVATE Qt6::QXcbIntegrationPlugin)
+  endif()
   set(CMAKE_AUTOMOC OFF)
   add_custom_command(TARGET kopruq_verification_gui POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory

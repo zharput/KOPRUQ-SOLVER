@@ -642,12 +642,34 @@ jobs without a clear log message -- not confirmed, just the leading hypothesis. 
 once a run completes faster (post-fix (12), most dependencies should already be warm); if binary
 cache saves remain absent even on a short run, this needs its own dedicated investigation.
 
-**Latest dispatch (after fix 12):** check `docs/DEVELOPMENT_STATUS.md`'s "Next autonomous action"
+**(13)** Run `39753093766` (the `{xcb,xcb-sm,xcb-xlib,xrender}` fix): qtbase rebuilt
+(`[core,doubleconversion,fontconfig,freetype,gui,sessionmanager,thread,widgets,xcb,xcb-sm,
+xcb-xlib,xkb,xkbcommon-x11,xlib,xrender]`, vcpkg correctly pulling in `xkb`/`xkbcommon-x11`/`xlib`
+transitively), configured cleanly with **no X11/XCB feature errors at all this time**, and all 242
+tests passed again -- but `libqxcb.so` still didn't exist anywhere, confirmed by a direct `find`
+across the entire `vcpkg_installed` tree. **This is the real, final root cause**: vcpkg's
+`triplets/x64-linux.cmake` sets `VCPKG_LIBRARY_LINKAGE static` by default (`x64-windows.cmake`
+defaults to `dynamic`) -- so on Linux there never was a shared-object platform plugin to find or
+point `QT_PLUGIN_PATH` at in the first place; `QXcbIntegrationPlugin` is a **static** library
+baked into `Qt6::Gui`, and a statically-linked Qt application must register it explicitly via
+`Q_IMPORT_PLUGIN` (Qt's own build-time note, "Using static linking will disable the use of
+dynamically loaded plugins. Make sure to import all needed static plugins...", seen but not acted
+on in an earlier run's log) plus link against the plugin's own CMake target. Fixed by adding
+`#if defined(Q_OS_LINUX) ... Q_IMPORT_PLUGIN(QXcbIntegrationPlugin) #endif` to
+`apps/verification-gui/main.cpp` and `if(UNIX AND NOT APPLE) target_link_libraries(... PRIVATE
+Qt6::QXcbIntegrationPlugin)` in `CMakeLists.txt` -- both inert on Windows, which keeps loading its
+plugin dynamically via `windeployqt`'s deployed `qwindows.dll`, unaffected by any of this. The
+now-unnecessary `QT_PLUGIN_PATH`-searching logic from fix (11) was removed from the smoke-test
+step in `release.yml`, since a static build has no `.so` to locate at all. This is the first
+application-source-code change in the entire GUI-7 debugging arc (everything through fix (12) was
+CI/build-configuration only).
+
+**Latest dispatch (after fix 13):** check `docs/DEVELOPMENT_STATUS.md`'s "Next autonomous action"
 or the commit log for the current run ID and its outcome -- this entry is the historical debugging
 narrative, not necessarily the latest status.
 
-No application source code changed in this entire debugging arc -- every fix was either a CI
-workflow (`release.yml`) package list or a build configuration (`vcpkg.json`, `CMakePresets.json`,
+Beyond fix (13) above, no application source code changed in this debugging arc -- every other fix
+was either a CI workflow (`release.yml`) package list or a build configuration (`vcpkg.json`, `CMakePresets.json`,
 `CMakeLists.txt`'s `find_package` call) problem. GUI-0 through GUI-6 remain complete and verified
 exactly as recorded above; only GUI-7's Ubuntu half is outstanding.
 

@@ -282,15 +282,9 @@ jobs:
         run: |
           exe="build/linux-gui-release/kopruq_verification_gui"
           if [ ! -x "$exe" ]; then echo "$exe was not built"; exit 1; fi
-          # Unlike Windows (windeployqt copies the Qt platform plugin next to the exe), nothing
-          # deploys libqxcb.so next to this binary -- Qt refuses to start without it ("could not
-          # find the Qt platform plugin 'xcb'"). Locate it dynamically inside vcpkg's own install
-          # tree rather than guessing the exact layout, and point QT_PLUGIN_PATH at its parent
-          # "plugins" directory (the standard Qt plugin-root layout: plugins/platforms/libqxcb.so).
-          xcb_plugin=$(find build/linux-gui-release/vcpkg_installed -name "libqxcb.so" | head -1)
-          if [ -z "$xcb_plugin" ]; then echo "libqxcb.so not found anywhere under vcpkg_installed"; exit 1; fi
-          export QT_PLUGIN_PATH="$(dirname "$(dirname "$xcb_plugin")")"
-          echo "QT_PLUGIN_PATH=$QT_PLUGIN_PATH"
+          # vcpkg's x64-linux triplet links statically by default, so there is no libqxcb.so to
+          # locate or point QT_PLUGIN_PATH at -- the xcb platform plugin is linked directly into
+          # this binary and registered via Q_IMPORT_PLUGIN (apps/verification-gui/main.cpp).
           xvfb-run -a "$exe" &
           pid=$!
           sleep 5

@@ -553,9 +553,9 @@ rest of the project), so the identical sources build under GCC unchanged. Full d
 requirements for both platforms are now documented in section 13 above, replacing its earlier
 "risk, not yet resolved" framing.
 
-### GUI-7 — session interruption, 2026-10-21 (user offline overnight)
+### GUI-7 — Ubuntu debugging arc, 2026-10-21/22 (resumed after an overnight pause)
 
-**Status at interruption: NOT YET VERIFIED. Work paused safely; nothing left uncommitted.**
+**Status: NOT YET VERIFIED as of the latest dispatch below.**
 
 The Windows half of GUI-7 (`ninja-gui-release`) has passed repeatedly throughout this effort and
 is not in question. The new Ubuntu job (`gcc-gui-release`) took **eleven consecutive dispatches**
@@ -580,18 +580,27 @@ xlnt's own installed CMake package config is capitalized `Xlnt`; Windows's case-
 filesystem silently tolerated the wrong spelling the whole time, Linux's case-sensitive one did
 not. Both final fixes (the capitalization fix and the trimmed `qtbase` feature list) were
 committed together as `d4c7db4`, then a manifest-schema typo in that same commit (`"core"` listed
-explicitly) was caught and fixed as `edf6251`.
+explicitly) was caught and fixed as `edf6251`. The session paused overnight with CI run
+`39619224162` (commit `edf6251`) deliberately left running in the cloud, not cancelled.
 
-**Latest dispatch, still running when the session was interrupted:** `release.yml` run
-[`39619224162`](https://github.com/zharput/KOPRUQ-SOLVER/actions/runs/39619224162) (commit
-`edf6251`). Per the user's explicit instruction, this cloud run was **left running, not
-cancelled** -- only the local polling command was stopped. **First action next session: check
-that run's outcome before doing anything else.** If it passed, this is the real first green
-`gcc-gui-release` and GUI-7 is complete (update this entry, the milestone table, and
-`DEVELOPMENT_STATUS.md` accordingly, matching every prior milestone's verified-completion
-pattern). If it failed, read the log for the actual new error (the iteration history above shows
-every failure so far has been a distinct, fixable, converging issue, not a sign of a deeper
-problem) and continue the same cycle: fix, commit, push, re-dispatch, poll.
+**(9) Resumed 2026-10-22:** run `39619224162` finished (while offline) as a genuine new failure,
+not a repeat -- for the first time, qtbase **and** xlnt both built and linked successfully, and
+the GUI target itself failed to *compile*: `QProcess::ExitStatus` was undeclared in
+`MainWindow.h`/`SolverRunner.h`/their moc output, even though `<QProcess>` is included. Root
+cause: trimming `qtbase` to the bare `{gui, widgets}` feature pair (fix (7) above) had also
+silently dropped `network` -- which, despite the name, is a QtCore-level feature
+(`QT_FEATURE_network`) gating the socket-notifier infrastructure `QProcess` itself depends on
+internally, not just the `QtNetwork` module's own classes (which this GUI never uses directly).
+Confirmed by cross-checking Bitcoin Core's own vcpkg manifest for its minimal Qt6 GUI build,
+which independently includes `network` in an otherwise similarly-trimmed `qtbase` feature list.
+Fixed by adding `network` back to the requested feature list (`{gui, widgets, network}`) --
+still excluding every one of qtbase's genuinely disk-heavy, unused default features (dbus,
+sql-psql, sql-sqlite, testlib, icu, harfbuzz, brotli, opengl, openssl, async-io, sessionmanager,
+dnslookup, zstd), so the disk-budget fix from (7) is not undone.
+
+**Latest dispatch (after fix 9):** check `docs/DEVELOPMENT_STATUS.md`'s "Next autonomous action"
+or the commit log for the current run ID and its outcome -- this entry is the historical debugging
+narrative, not necessarily the latest status.
 
 No application source code changed in this entire debugging arc -- every fix was either a CI
 workflow (`release.yml`) package list or a build configuration (`vcpkg.json`, `CMakePresets.json`,

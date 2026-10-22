@@ -619,7 +619,30 @@ vcpkg's `plugins/platforms` next to the installed binary, mirroring `windeployqt
 Windows) -- noted here as a GUI-7 deployment-documentation item, not yet automated into the
 CMake build the way `windeployqt` is for Windows.
 
-**Latest dispatch (after fix 11):** check `docs/DEVELOPMENT_STATUS.md`'s "Next autonomous action"
+**(12)** Run `39743255847` (user-approved cache `restore-keys` optimization + the plugin-path
+smoke-test fix): the `QT_PLUGIN_PATH` fix correctly reported `libqxcb.so not found anywhere under
+vcpkg_installed` -- the plugin genuinely was never built at all. Root-caused by reading vcpkg's
+`ports/qtbase/vcpkg.json` and `portfile.cmake` directly: on Linux, qtbase's own **default**
+feature list includes `{xcb, xcb-sm, xcb-xlib, xrender}` (each `platform: linux`-conditioned) --
+none of which our minimal `{gui, widgets, thread}` list requested. Without `xcb`, the portfile
+passes `-DINPUT_xcb=no` to Qt's own build, which disables `QXcbIntegrationPlugin` entirely
+regardless of which system X11/XCB `-dev` packages are installed (fix (3)/(4)'s apt packages were
+necessary but not sufficient). Added a third, Linux-platform-filtered `qtbase` dependency entry
+requesting exactly vcpkg's own proven-good Linux default X11 set: `{xcb, xcb-sm, xcb-xlib,
+xrender}`.
+
+**Open question noted for the CI-optimization task, not yet resolved:** despite the approved
+`restore-keys` fix, `GET /repos/.../actions/caches` shows **zero** `vcpkg-Linux-gcc-gui-release-*`
+entries have ever been saved, across the entire multi-day debugging arc -- while
+`vcpkg-tool-Linux-*` (same job, same `actions/cache@v4` mechanism, smaller/faster-to-save) and
+every Windows GUI cache entry (300-580MB, saving reliably every run) both work normally. Possible
+cause: the Linux GUI job has consistently run far longer (1-3+ hours) than any other job in this
+workflow, and `actions/cache`'s upload reservation can expire/fail silently on very long-running
+jobs without a clear log message -- not confirmed, just the leading hypothesis. Worth watching
+once a run completes faster (post-fix (12), most dependencies should already be warm); if binary
+cache saves remain absent even on a short run, this needs its own dedicated investigation.
+
+**Latest dispatch (after fix 12):** check `docs/DEVELOPMENT_STATUS.md`'s "Next autonomous action"
 or the commit log for the current run ID and its outcome -- this entry is the historical debugging
 narrative, not necessarily the latest status.
 

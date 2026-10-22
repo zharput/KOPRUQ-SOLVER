@@ -606,7 +606,20 @@ disk-heavy, unused default features (dbus, sql-psql, sql-sqlite, testlib, icu, h
 network, opengl, openssl, async-io, sessionmanager, dnslookup, zstd), so the disk-budget fix from
 (7) is not undone.
 
-**Latest dispatch (after fix 9):** check `docs/DEVELOPMENT_STATUS.md`'s "Next autonomous action"
+**(11)** Run `39736079075` (the `thread` fix, plus the approved cache `restore-keys` change):
+qtbase built, the GUI target **compiled and linked successfully**, and **all 242 tests passed**
+-- the first time any of that happened on Linux. Only the launch smoke test itself failed:
+`qt.qpa.plugin: Could not find the Qt platform plugin "xcb" in ""`. Unlike Windows (`windeployqt`
+copies the platform plugin next to the exe), nothing deploys `libqxcb.so` anywhere Qt's default
+search path would find it on Linux. Fixed in the CI script itself (not a build/dependency
+problem): `find`s `libqxcb.so` dynamically inside `vcpkg_installed` (no layout guessing) and
+exports `QT_PLUGIN_PATH` to its parent `plugins` directory before launching under `xvfb-run`. A
+real end-user Linux deployment would need the same handling (either set `QT_PLUGIN_PATH` or copy
+vcpkg's `plugins/platforms` next to the installed binary, mirroring `windeployqt`'s output on
+Windows) -- noted here as a GUI-7 deployment-documentation item, not yet automated into the
+CMake build the way `windeployqt` is for Windows.
+
+**Latest dispatch (after fix 11):** check `docs/DEVELOPMENT_STATUS.md`'s "Next autonomous action"
 or the commit log for the current run ID and its outcome -- this entry is the historical debugging
 narrative, not necessarily the latest status.
 

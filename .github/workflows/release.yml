@@ -187,6 +187,7 @@ jobs:
             build/gui-release/kopruq_verification_gui.exe
             build/gui-release/kopruq_solver_cli.exe
             build/gui-release/*.dll
+            !build/gui-release/gtest*.dll
             build/gui-release/resources/
             build/gui-release/platforms/
             build/gui-release/styles/

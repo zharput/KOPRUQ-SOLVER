@@ -23,6 +23,31 @@ record the current policy in this document too:
   restrictive approval-gated rule governs.
 
 ## Current priority
+**MIDAS NX JSON doğrulama (verification/models/01-04) — CNLD ve Ecm Tablo 3.1
+düzeltmeleri commit edildi (`c14bf08`, 2026-11-16), push/CI başlatılmadı.**
+Gerçek MIDAS JSON+Excel referans çiftleri (`verification/models/`) ile
+solver çıktıları elle karşılaştırıldı: (1) `MidasJsonImporter` `CNLD`
+(düğüm noktası yükü) kayıtlarını hiç okumuyordu — kök neden bulundu,
+`BMLD`/`ETMP` ile aynı desende eklendi, mevcut `NodalLoad` yapısına
+bağlandı. (2) İsimli beton gradeleri (ör. C35/45) için Ecm, EN1992-1-1'in
+sürekli formülü yerine Tablo 3.1'in sabit değeriyle (34 GPa) hesaplanacak
+şekilde değiştirildi — kullanıcı onayıyla, Model 04'teki (basit kiriş,
+yayılı yük) MIDAS referans deplasmanıyla neredeyse tam örtüşme (%2,13'ten
+%0,019'a) ile sayısal olarak doğrulandı; MIDAS'ın kendi dokümantasyonuna
+erişim denendi ama engellendi (403/Dropbox), bu yüzden karar yalnızca
+sayısal kanıta dayanıyor, açıkça belirtilerek. Model 02/03 (konsol uç
+yükleri) kuvvet/moment/reaksiyonları MIDAS ile tam örtüşüyor; kalan ~%4-5
+deplasman farkı, zaten bilinen ve henüz uygulanmamış kesme deformasyonu
+(Timoshenko, Asy/Asz) eksikliğiyle yön ve büyüklük olarak tutarlı.
+**Model 01 (Konsol_Fx) hâlâ bloke:** referans Excel dosyaları kendi
+içinde tutarsız (sabit 1,5 kN·m iç moment ama sıfır mesnet momenti) ve
+klasörde başka bir modele ait kalıntı log dosyası bulundu — kullanıcıdan
+dosyaların yeniden dışa aktarılması bekleniyor. CTest: 241/246 PASS
+(2 yeni test eklendi; kalan 5 başarısızlık önceden teşhis edilmiş,
+ilgisiz `xmidas/deneme1.json` eksikliği). Sıradaki adım: Model 05-11'in
+sırayla incelenmesi ve kesme deformasyonu uygulamasının ayrı onayla ele
+alınması.
+
 **Qt6 Verification GUI V2.0 revizyonu — yerel olarak derlendi ve test edildi,
 commit/push ve CI henüz onay bekliyor (2026-11-16).** Kullanıcının detaylı
 "KOPRUQ-SOLVER — Qt6 Verification GUI V2.0 Revizyonu" talimatına göre:

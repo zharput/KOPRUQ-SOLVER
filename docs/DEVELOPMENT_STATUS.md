@@ -1397,6 +1397,26 @@ debug/object/source/test files. All eight user-specified acceptance criteria pas
 `kopruq-verification-gui-windows-x64` → extract the zip anywhere and run
 `kopruq_verification_gui.exe` directly; no installer, no separate Qt6 install needed.
 
+## Per-category "Karşılaştır" checkbox (2026-11-16, post-GUI-7)
+User-requested GUI-5 refinement: each of the four Excel reference rows in `FileInputPanel` now
+has its own "Karşılaştır" checkbox (not the MIDAS model row -- it isn't a comparison category).
+A checkbox is enabled only when its row's file is actually usable (right extension, exists on
+disk); it defaults to checked the moment a file newly becomes usable, and is force-unchecked
+whenever the file stops being usable -- but if the user manually unchecks an already-usable row,
+that choice is preserved across redundant `revalidate()` calls (e.g. re-selecting the same path).
+`MainWindow::onCompare()` now skips a category when its file is selected but unchecked, logging a
+distinct diagnostic ("... dosya seçili ama \"Karşılaştır\" işaretli değil...") rather than the
+"not selected" one. This lets the user keep all four paths filled in across runs but choose, run
+by run, exactly which categories actually get compared (e.g. only Beam Force) without re-browsing
+for files each time. `verification/` (the comparison engine itself) is unchanged -- this is a
+GUI-only filter on which categories get invoked at all; Elastic Link was already optional (no
+file required) and remains so, now with the same explicit per-run control as the other three.
+Built and smoke-tested locally (`scripts/configure.ps1 Gui` / `build.ps1 Gui` / `run-gui.ps1`);
+local `ctest` showed 4 pre-existing, unrelated failures (`Cli.MidasNxJsonFormatOption`,
+`MidasJsonImporter.*`) because the user's local `xmidas/deneme1.json` had been deleted from the
+working tree since GUI-7 (still present in git HEAD, so CI is unaffected) -- not caused by this
+change and not touched here.
+
 ## Next autonomous action
 Phase 3.2, Phase 4, Phase 5 (5.1-5.6), Phase 6 (6.1, 6.1b, 6.2, 6.2b; 6.3 cancelled), Phase 7A,
 7B (including ETMP thermal wiring), 7C, 7D, 7M, 7S(1) and 7T are all complete and verified -- CI

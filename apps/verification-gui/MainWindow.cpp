@@ -249,6 +249,10 @@ void MainWindow::onCompare() {
       allDiagnostics << tr("%1: dosya seçilmedi, bu kategori karşılaştırılmadı.").arg(spec.label);
       continue;
     }
+    if (!fileInputPanel_->isIncludedInComparison(spec.row)) {
+      allDiagnostics << tr("%1: dosya seçili ama \"Karşılaştır\" işaretli değil, bu kategori atlandı.").arg(spec.label);
+      continue;
+    }
     *spec.fileNameOut = QFileInfo(fileInputPanel_->filePath(spec.row)).fileName();
     auto read = kopruq::verification::readReferenceExcel(fileInputPanel_->filePath(spec.row).toStdString(), spec.kind);
     for (const auto& d : read.diagnostics) allDiagnostics << QString::fromStdString(d);

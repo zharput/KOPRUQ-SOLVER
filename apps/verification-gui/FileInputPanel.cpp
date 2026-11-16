@@ -78,6 +78,16 @@ FileInputPanel::FileInputPanel(QWidget* parent) : QGroupBox(tr("1. Girdi Dosyala
     statusLabels_[i] = status;
     statuses_[i] = Status::NotSelected;
 
+    // The MIDAS model itself is never a comparison category (it's what gets solved, not
+    // something GUI-5 compares against a reference file), so it alone has no checkbox -- only
+    // the four Excel reference rows let the user pick which ones to actually compare.
+    if (row != Row::MidasModel) {
+      auto* include = new QCheckBox(tr("Karşılaştır"), this);
+      include->setEnabled(false);
+      grid->addWidget(include, gridRow, 4);
+      includeCheckBoxes_[i] = include;
+    }
+
     connect(browse, &QPushButton::clicked, this, [this, row] { browseFor(row); });
   }
 
@@ -119,7 +129,23 @@ void FileInputPanel::revalidate(Row row) {
   statusLabels_[i]->setText(statusText(s));
   statusLabels_[i]->setStyleSheet(QStringLiteral("color: %1; font-weight: 600;").arg(statusColor(s)));
   statusLabels_[i]->setToolTip(path);
+
+  if (QCheckBox* cb = includeCheckBoxes_[i]) {
+    const bool nowUsable = (s == Status::Selected);
+    const bool wasEnabled = cb->isEnabled();
+    if (nowUsable && !wasEnabled) cb->setChecked(true); // newly selectable -- default to including it
+    if (!nowUsable) cb->setChecked(false);               // can't compare a file that isn't there
+    cb->setEnabled(nowUsable);
+    // If it was already enabled and stays enabled (e.g. revalidate() re-run on the same path),
+    // the user's own checked/unchecked choice is left exactly as they set it.
+  }
+
   emit selectionChanged();
+}
+
+bool FileInputPanel::isIncludedInComparison(Row row) const {
+  const QCheckBox* cb = includeCheckBoxes_[static_cast<std::size_t>(row)];
+  return cb && cb->isEnabled() && cb->isChecked();
 }
 
 void FileInputPanel::restorePersistedPaths() {

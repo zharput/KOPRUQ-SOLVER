@@ -7,6 +7,7 @@
 // structurally-correct model: that is the "Modeli Doğrula" action's job (GUI-3, once the CLI is
 // wired via QProcess), not this panel's. Reporting a file as "Valid" here, before anything has
 // actually read it, would be exactly the kind of simulated success CLAUDE.md forbids.
+#include <QCheckBox>
 #include <QGroupBox>
 #include <QLineEdit>
 #include <QLabel>
@@ -25,6 +26,9 @@ public:
   QLineEdit* pathField(Row row) const { return pathFields_[static_cast<std::size_t>(row)]; }
   QPushButton* browseButton(Row row) const { return browseButtons_[static_cast<std::size_t>(row)]; }
   QLabel* statusLabel(Row row) const { return statusLabels_[static_cast<std::size_t>(row)]; }
+  // Null for Row::MidasModel -- the model isn't itself a comparison category, so it has no
+  // "include in comparison" checkbox.
+  QCheckBox* includeCheckBox(Row row) const { return includeCheckBoxes_[static_cast<std::size_t>(row)]; }
 
   QString filePath(Row row) const { return pathField(row)->text(); }
   Status status(Row row) const { return statuses_[static_cast<std::size_t>(row)]; }
@@ -35,6 +39,13 @@ public:
   // The one required input (area 2's "Modeli Doğrula"/"Solver'ı Çalıştır" prerequisite); the
   // four Excel reference files are each individually optional, per the approved spec.
   bool hasRequiredModel() const { return isUsable(Row::MidasModel); }
+
+  // A usable file AND its "Karşılaştır" checkbox is checked -- lets the user pick exactly which
+  // already-selected reference files actually get compared on a given run (e.g. keep all four
+  // paths filled in but only tick Beam Force this time), without having to clear the others'
+  // paths. Always false for Row::MidasModel (it has no checkbox -- it's the model, not a
+  // comparison category).
+  bool isIncludedInComparison(Row row) const;
 
 signals:
   // Emitted whenever any row's path or validity changes, so the main window can react (e.g.
@@ -53,5 +64,6 @@ private:
   std::array<QLineEdit*, kRowCount> pathFields_{};
   std::array<QPushButton*, kRowCount> browseButtons_{};
   std::array<QLabel*, kRowCount> statusLabels_{};
+  std::array<QCheckBox*, kRowCount> includeCheckBoxes_{}; // null for Row::MidasModel
   std::array<Status, kRowCount> statuses_{};
 };

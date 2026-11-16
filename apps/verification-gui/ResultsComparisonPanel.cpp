@@ -1,4 +1,6 @@
 #include "ResultsComparisonPanel.h"
+#include "IconProvider.h"
+#include "PanelHeader.h"
 #include <QFont>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -47,8 +49,9 @@ QWidget* ResultsComparisonPanel::buildSummaryTab() {
 ResultsComparisonPanel::ResultsComparisonPanel(QWidget* parent) : QWidget(parent) {
   auto* outer = new QVBoxLayout(this);
 
-  auto* group = new QGroupBox(tr("4. Sonuç Karşılaştırma Tabloları"), this);
+  auto* group = new QGroupBox(this);
   auto* groupLayout = new QVBoxLayout(group);
+  groupLayout->addWidget(makePanelHeader("chart-column", tr("4. Sonuç Karşılaştırma Tabloları"), group));
   tabs_ = new QTabWidget(group);
 
   tabs_->addTab(buildSummaryTab(), tr("Özet"));
@@ -79,6 +82,11 @@ ResultsComparisonPanel::ResultsComparisonPanel(QWidget* parent) : QWidget(parent
 
   auto* settingsStrip = new QGroupBox(this);
   auto* settingsLayout = new QHBoxLayout(settingsStrip);
+  auto* settingsIcon = new QLabel(settingsStrip);
+  settingsIcon->setPixmap(icons::tintedPixmap("settings", QColor("#38BDF8"), 17));
+  settingsIcon->setFixedSize(17, 17);
+  settingsLayout->addWidget(settingsIcon);
+  settingsLayout->addSpacing(9);
   settingsLayout->addWidget(new QLabel(tr("Karşılaştırma Ayarları"), settingsStrip));
   settingsLayout->addSpacing(16);
   settingsLayout->addWidget(new QLabel(tr("Mutlak Tolerans:"), settingsStrip));

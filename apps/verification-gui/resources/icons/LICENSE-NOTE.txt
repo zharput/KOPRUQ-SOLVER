@@ -1,0 +1,4 @@
+These SVG icons were drawn from scratch for KOPRUQ-SOLVER (V2.1 icon/visual
+revision), in a plain, thin-stroke style similar to the Lucide icon set
+(https://lucide.dev, ISC license), but are not copies or derivatives of any
+Lucide source file -- no Lucide file or license text is bundled here.

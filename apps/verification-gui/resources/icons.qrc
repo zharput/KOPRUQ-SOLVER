@@ -1,0 +1,22 @@
+<!-- V2.1: hand-drawn, Lucide-style (simple, thin-stroke, 24x24) monochrome line icons, NOT
+     extracted or copied from the Lucide icon set itself (so no Lucide ISC license file is
+     bundled here; see resources/icons/LICENSE-NOTE.txt). Compiled into the binary via Qt's
+     Resource System (rcc) so icons never depend on a resources folder being deployed next to
+     the exe at runtime, unlike dark.qss, which is still loaded from disk (see main.cpp). -->
+<RCC>
+  <qresource prefix="/icons">
+    <file alias="circle-check.svg">icons/circle-check.svg</file>
+    <file alias="play.svg">icons/play.svg</file>
+    <file alias="arrow-left-right.svg">icons/arrow-left-right.svg</file>
+    <file alias="file-text.svg">icons/file-text.svg</file>
+    <file alias="folder-open.svg">icons/folder-open.svg</file>
+    <file alias="activity.svg">icons/activity.svg</file>
+    <file alias="box.svg">icons/box.svg</file>
+    <file alias="chart-column.svg">icons/chart-column.svg</file>
+    <file alias="settings.svg">icons/settings.svg</file>
+    <file alias="check.svg">icons/check.svg</file>
+    <file alias="x-circle.svg">icons/x-circle.svg</file>
+    <file alias="alert-triangle.svg">icons/alert-triangle.svg</file>
+    <file alias="info-circle.svg">icons/info-circle.svg</file>
+  </qresource>
+</RCC>

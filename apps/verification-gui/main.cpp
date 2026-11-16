@@ -23,17 +23,15 @@ namespace {
 // Loads the QSS copied next to the executable by CMake's POST_BUILD step; falls back to a
 // minimal inline dark theme if the resources directory wasn't deployed (e.g. run from the build
 // tree before a packaging step), so the app is still usable rather than failing to start.
-// V2.0: the QSS references the checkmark PNG (also copied by the same POST_BUILD step) via a
-// {CHECK_ICON} placeholder, substituted here with an absolute, forward-slash path -- Qt's QSS
-// url() needs a real file path (no data: URI support) and a relative path is unreliable since
-// the GUI's working directory isn't guaranteed to be its own install directory.
+// V2.1: every icon the QSS itself references (the checkbox checkmark) is now a Qt resource
+// (:/icons/check.svg, compiled in via icons.qrc), so no runtime path substitution is needed here
+// any more -- only the .qss text itself still comes from disk.
 QString loadStylesheet() {
   const QString dir = QCoreApplication::applicationDirPath();
   const QString path = dir + "/resources/dark.qss";
-  const QString checkIcon = QDir::fromNativeSeparators(dir + "/resources/check.png");
   QFile file(path);
   if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-    return QTextStream(&file).readAll().replace("{CHECK_ICON}", checkIcon);
+    return QTextStream(&file).readAll();
   }
   return "QWidget { background-color: #0B1220; color: #E5EAF2; }";
 }

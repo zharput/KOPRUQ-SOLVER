@@ -1416,6 +1416,21 @@ WebSearch, never independently cross-checked against a solved result) is explici
 job, still not started -- if the real model shows systematic beam-force FAILs once compared, that
 is this milestone correctly surfacing a real question, not a GUI-5 defect.
 
+**Confirmed against real data (2026-11-16, GUI V2.1 session):** ran the GUI's actual "Sonuçları
+Karşılaştır" against model 05 (Cerceve-1)'s genuine (user re-exported, byte-signature-verified
+real OOXML) `.xlsx` reference files -- 900 total, 757 PASS, 143 FAIL, 0 N/A. Reproduced the exact
+same match independently in Python (reading the same `.xlsx` cells and `results.json` fields the
+production `ResultMatcher` reads) to attribute every FAIL: **Deplasmanlar 300/300 PASS, Mesnet
+Tepkimeleri 24/24 PASS, all 143 FAILs are in Kiriş İç Kuvvetleri (Beam Force)**, and every one of
+those 143 is a magnitude-exact, sign-opposite pair (e.g. element 31, I end: MIDAS Axial=-11750,
+solver=+11750; Shear-z=-4425.2785 vs +4425.278698; element 31, J end: MIDAS Moment-y=-4037.32925
+vs +4037.3292658) -- never a real magnitude discrepancy. This is exactly the above open question
+surfacing on real data, not a GUI/ComparisonEngine/ResultMatcher defect: per explicit user
+decision this session, left unresolved (no sign-convention flip added) until Phase 7E
+independently verifies MIDAS's actual I/J-end axial/shear/moment sign convention; `displacementAbsTol`
+and reaction comparisons needed no changes and are genuinely verified against this model's real
+reference data.
+
 ## GUI-6 — Excel verification report export (2026-10-21)
 **COMPLETE AND VERIFIED, first dispatch.** New `VerificationReportExporter` writes
 `KOPRUQ_SOLVER_Verification_Report.xlsx` (Summary/Displacements/Reactions/Beam Forces/Elastic

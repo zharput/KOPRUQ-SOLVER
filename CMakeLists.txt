@@ -41,7 +41,10 @@ target_link_libraries(kopruq_solver_benchmark PRIVATE kopruq_solver_core)
 # build rather than part of every push.
 option(KOPRUQ_BUILD_GUI "Build the Qt6 Widgets MIDAS verification GUI (apps/verification-gui)" OFF)
 if(KOPRUQ_BUILD_GUI)
-  find_package(Qt6 CONFIG REQUIRED COMPONENTS Widgets)
+  # V2.1: Svg is needed for QSvgRenderer (apps/verification-gui/IconProvider.cpp rasterizes and
+  # tints the embedded line-icon SVGs at runtime) -- requires vcpkg's "qtsvg" port, added to the
+  # "gui" manifest feature below.
+  find_package(Qt6 CONFIG REQUIRED COMPONENTS Widgets Svg)
 
   # verification/: Qt-independent (GUI-4 Excel reading today; ResultMatcher/ComparisonEngine/
   # VerificationReportExporter land here in later milestones) -- gated the same way as the GUI
@@ -64,6 +67,7 @@ if(KOPRUQ_BUILD_GUI)
   endif()
 
   set(CMAKE_AUTOMOC ON)
+  set(CMAKE_AUTORCC ON) # compiles apps/verification-gui/resources/icons.qrc into the binary
   add_executable(kopruq_verification_gui
     apps/verification-gui/main.cpp
     apps/verification-gui/MainWindow.cpp
@@ -72,8 +76,11 @@ if(KOPRUQ_BUILD_GUI)
     apps/verification-gui/ExecutionLogPanel.cpp
     apps/verification-gui/ResultsComparisonPanel.cpp
     apps/verification-gui/ModelInfoPanel.cpp
-    apps/verification-gui/SolverRunner.cpp)
-  target_link_libraries(kopruq_verification_gui PRIVATE kopruq_solver_io Qt6::Widgets kopruq_verification)
+    apps/verification-gui/SolverRunner.cpp
+    apps/verification-gui/IconProvider.cpp
+    apps/verification-gui/PanelHeader.cpp
+    apps/verification-gui/resources/icons.qrc)
+  target_link_libraries(kopruq_verification_gui PRIVATE kopruq_solver_io Qt6::Widgets Qt6::Svg kopruq_verification)
   # vcpkg's x64-linux triplet is static by default (x64-windows is dynamic), so there is no
   # libqxcb.so to load at runtime -- the xcb platform plugin must be linked in statically and
   # registered via Q_IMPORT_PLUGIN (apps/verification-gui/main.cpp). Harmless/inert on Windows,
@@ -82,6 +89,7 @@ if(KOPRUQ_BUILD_GUI)
     target_link_libraries(kopruq_verification_gui PRIVATE Qt6::QXcbIntegrationPlugin)
   endif()
   set(CMAKE_AUTOMOC OFF)
+  set(CMAKE_AUTORCC OFF)
   add_custom_command(TARGET kopruq_verification_gui POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
             ${PROJECT_SOURCE_DIR}/apps/verification-gui/resources

@@ -1,4 +1,5 @@
 #include "ModelInfoPanel.h"
+#include "PanelHeader.h"
 #include <QGridLayout>
 #include <QVBoxLayout>
 
@@ -13,8 +14,9 @@ QLabel* addRow(QGridLayout* grid, int row, const QString& label, QWidget* parent
 }
 }
 
-ModelInfoPanel::ModelInfoPanel(QWidget* parent) : QGroupBox(tr("Model Bilgileri (JSON)"), parent) {
+ModelInfoPanel::ModelInfoPanel(QWidget* parent) : QGroupBox(parent) {
   auto* outer = new QVBoxLayout(this);
+  outer->addWidget(makePanelHeader("box", tr("Model Bilgileri (JSON)"), this));
   auto* grid = new QGridLayout();
   grid->setHorizontalSpacing(12);
   grid->setVerticalSpacing(4);

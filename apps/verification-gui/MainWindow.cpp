@@ -130,10 +130,10 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     if (row == FileInputPanel::Row::MidasModel) onModelRowChanged();
     else onReferenceRowChanged();
   });
-  connect(analysisControlPanel_->validateButton(), &QPushButton::clicked, this, [this] { startRun(RunMode::ValidateOnly); });
-  connect(analysisControlPanel_->runSolverButton(), &QPushButton::clicked, this, [this] { startRun(RunMode::Solve); });
-  connect(analysisControlPanel_->compareButton(), &QPushButton::clicked, this, &MainWindow::onCompare);
-  connect(analysisControlPanel_->exportButton(), &QPushButton::clicked, this, &MainWindow::onExport);
+  connect(analysisControlPanel_->validateButton(), &QToolButton::clicked, this, [this] { startRun(RunMode::ValidateOnly); });
+  connect(analysisControlPanel_->runSolverButton(), &QToolButton::clicked, this, [this] { startRun(RunMode::Solve); });
+  connect(analysisControlPanel_->compareButton(), &QToolButton::clicked, this, &MainWindow::onCompare);
+  connect(analysisControlPanel_->exportButton(), &QToolButton::clicked, this, &MainWindow::onExport);
   connect(resultsPanel_->absoluteToleranceField(), &QLineEdit::textChanged, this, [this](const QString&) { onToleranceChanged(); });
   connect(resultsPanel_->relativeToleranceField(), &QLineEdit::textChanged, this, [this](const QString&) { onToleranceChanged(); });
 
@@ -154,7 +154,7 @@ void MainWindow::applyWorkflowState() {
   analysisControlPanel_->compareButton()->setEnabled(!busy && state_ >= WorkflowState::Solved);
   analysisControlPanel_->exportButton()->setEnabled(!busy && state_ >= WorkflowState::Compared);
 
-  QPushButton* primary = nullptr;
+  QToolButton* primary = nullptr;
   if (!busy) {
     switch (state_) {
       case WorkflowState::InputReady: if (hasModel) primary = analysisControlPanel_->validateButton(); break;

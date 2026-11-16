@@ -1,9 +1,11 @@
 #include "FileInputPanel.h"
+#include "PanelHeader.h"
 #include <QDir>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QGridLayout>
 #include <QSettings>
+#include <QVBoxLayout>
 
 namespace {
 struct RowSpec {
@@ -50,8 +52,12 @@ QString statusColor(FileInputPanel::Status s) {
 }
 }
 
-FileInputPanel::FileInputPanel(QWidget* parent) : QGroupBox(tr("1. Girdi Dosyaları"), parent) {
-  auto* grid = new QGridLayout(this);
+FileInputPanel::FileInputPanel(QWidget* parent) : QGroupBox(parent) {
+  auto* outer = new QVBoxLayout(this);
+  outer->addWidget(makePanelHeader("folder-open", tr("1. Girdi Dosyaları"), this));
+
+  auto* grid = new QGridLayout();
+  outer->addLayout(grid);
   grid->setHorizontalSpacing(8);
   grid->setVerticalSpacing(6);
   grid->setColumnStretch(1, 1);

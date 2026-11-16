@@ -3,8 +3,10 @@
    Window #0B1220, Panel #131F31, Panel Border #29384E, Table #0D1523,
    Primary Blue #2563EB, Primary Hover #3B82F6, Text Primary #E5EAF2,
    Text Secondary #A6B2C3, Success #22C55E, Warning #F59E0B, Error #EF4444,
-   Disabled Background #1C293C. {CHECK_ICON} is substituted by main.cpp with
-   an absolute path to resources/check.png at load time. */
+   Disabled Background #1C293C. V2.1: the checkbox checkmark is now
+   :/icons/check.svg, compiled into the binary via icons.qrc (Qt's QSS
+   url() can address Qt resource paths directly), replacing the older
+   {CHECK_ICON}-placeholder substitution of an on-disk check.png. */
 
 * {
   font-family: "Segoe UI", "Noto Sans", sans-serif;
@@ -78,10 +80,39 @@ QPushButton[primary="true"]:hover:!disabled {
   background-color: #3B82F6;
 }
 
-#stepSidebar QPushButton {
-  text-align: left;
+/* V2.1: the sidebar's four step buttons are QToolButton (icon above text via
+   Qt::ToolButtonTextUnderIcon), styled the same as QPushButton above since QSS
+   selectors don't cascade across unrelated widget classes. */
+QToolButton {
+  background-color: #1C293C;
+  border: 1px solid #29384E;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+}
+
+QToolButton:hover:!disabled {
+  background-color: #263150;
+}
+
+QToolButton:disabled {
+  color: #5c6680;
+}
+
+QToolButton[primary="true"] {
+  background-color: #2563EB;
+  border: 1px solid #2563EB;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+QToolButton[primary="true"]:hover:!disabled {
+  background-color: #3B82F6;
+}
+
+#stepSidebar QToolButton {
   padding: 6px 12px;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 QCheckBox {
@@ -103,7 +134,7 @@ QCheckBox::indicator:unchecked:hover {
 QCheckBox::indicator:checked {
   background-color: #2563EB;
   border: 1px solid #2563EB;
-  image: url({CHECK_ICON});
+  image: url(:/icons/check.svg);
 }
 
 QCheckBox::indicator:disabled {

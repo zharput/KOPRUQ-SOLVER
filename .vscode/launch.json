@@ -1,1 +1,4 @@
-{"version":"0.2.0","configurations":[{"name":"KOPRUQ Solver CLI","type":"cppvsdbg","request":"launch","program":"${workspaceFolder}/build/debug/kopruq_solver_cli.exe","args":["--help"],"cwd":"${workspaceFolder}"}]}
+{"version":"0.2.0","configurations":[
+  {"name":"KOPRUQ Solver CLI","type":"cppvsdbg","request":"launch","program":"${workspaceFolder}/build/debug/kopruq_solver_cli.exe","args":["--help"],"cwd":"${workspaceFolder}"},
+  {"name":"Verification GUI","type":"cppvsdbg","request":"launch","program":"${workspaceFolder}/build/gui-release/kopruq_verification_gui.exe","args":[],"cwd":"${workspaceFolder}/build/gui-release","preLaunchTask":"Build GUI"}
+]}

@@ -1,1 +1,5 @@
-{"version":"2.0.0","tasks":[{"label":"Build KOPRUQ Solver","type":"shell","command":"powershell","args":["-ExecutionPolicy","Bypass","-File","${workspaceFolder}/scripts/build.ps1"]}]}
+{"version":"2.0.0","tasks":[
+  {"label":"Build KOPRUQ Solver","type":"shell","command":"powershell","args":["-ExecutionPolicy","Bypass","-File","${workspaceFolder}/scripts/build.ps1"]},
+  {"label":"Build GUI","type":"shell","command":"powershell","args":["-ExecutionPolicy","Bypass","-File","${workspaceFolder}/scripts/build.ps1","Gui"],"group":"build"},
+  {"label":"Run GUI","type":"shell","command":"powershell","args":["-ExecutionPolicy","Bypass","-File","${workspaceFolder}/scripts/run-gui.ps1"],"dependsOn":"Build GUI","group":{"kind":"build","isDefault":true},"presentation":{"reveal":"always","panel":"shared"}}
+]}

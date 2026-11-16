@@ -35,7 +35,13 @@ namespace kopruq::io::midas { inline constexpr double kPi = 3.141592653589793238
 
 namespace kopruq::io::midas {
 
-struct ResolvedSectionProperties { Real area{}, IH{}, IB{}, J{}; };
+// AsH/AsB: effective (Timoshenko) shear area [m^2] for shear resisted in the same sense as
+// IH/IB respectively -- i.e. AsH is the shear area for a transverse shear force along H
+// (companion to the bending stiffness IH), AsB the shear area for a force along B (companion
+// to IB). Computed via each shape's classical shear correction factor k (As = k*A), per
+// Timoshenko & Goodier, "Theory of Elasticity" -- NOT MIDAS-specific, same sourcing standard
+// as the J formulas above. See MidasJsonImporter.hpp for how AsH/AsB map onto Beam3D's Asy/Asz.
+struct ResolvedSectionProperties { Real area{}, IH{}, IB{}, J{}, AsH{}, AsB{}; };
 
 namespace detail {
 // Saint-Venant torsion constant, solid rectangle (a = longer side, b = shorter side),
@@ -46,6 +52,16 @@ inline Real solidRectangleTorsion(Real a, Real b) {
   const Real r = b / a;
   return a * b * b * b * (Real(1)/3 - Real(0.21) * r * (Real(1) - r*r*r*r/12));
 }
+// Timoshenko shear correction factor for a solid rectangular cross-section: k = 5/6,
+// independent of the H/B aspect ratio (Timoshenko & Goodier, "Theory of Elasticity",
+// S3.1 beam shear). Applies identically to shear along either H or B.
+inline constexpr Real kRectangularShearFactor = Real(5) / Real(6);
+// Timoshenko shear correction factor for a solid circular cross-section: the classical,
+// Poisson-ratio-independent approximation k = 0.9 (Timoshenko & Goodier; also the default
+// used by common structural FE codes for solid circular sections). The more precise
+// Cowper(1966) factor is Poisson-ratio-dependent; the constant approximation is used here
+// since MidasSectionLibrary resolves geometry only, not material properties.
+inline constexpr Real kCircularShearFactor = Real(0.9);
 } // namespace detail
 
 inline ResolvedSectionProperties solidRectangle(Real H, Real B) {
@@ -55,6 +71,7 @@ inline ResolvedSectionProperties solidRectangle(Real H, Real B) {
   p.IH = B * H * H * H / 12;   // resists bending from a load along H
   p.IB = H * B * B * B / 12;   // resists bending from a load along B
   p.J = detail::solidRectangleTorsion(std::max(H, B), std::min(H, B));
+  p.AsH = p.AsB = detail::kRectangularShearFactor * p.area;
   return p;
 }
 
@@ -65,6 +82,7 @@ inline ResolvedSectionProperties solidCircle(Real D) {
   p.area = Real(kPi) * r * r;
   p.IH = p.IB = Real(kPi) * D * D * D * D / 64;   // Iyy = Izz for a circle, exact
   p.J = Real(kPi) * D * D * D * D / 32;            // polar moment == torsion constant, exact for a circle
+  p.AsH = p.AsB = detail::kCircularShearFactor * p.area;
   return p;
 }
 
@@ -84,6 +102,15 @@ inline ResolvedSectionProperties hollowBox(Real H, Real B, Real tw, Real tf) {
   const Real Am = (B - tw) * (H - tf);                     // midline-enclosed area
   const Real sumSoverT = 2*(H - tf)/tw + 2*(B - tw)/tf;     // midline perimeter / thickness, Bredt's formula
   p.J = 4 * Am * Am / sumSoverT;
+  // Shear area approximation: for a shear force along H, only the two webs (thickness tw,
+  // parallel to H) are assumed to carry it, using their clear (web) height H-tf; symmetric
+  // approximation for a force along B using the two flanges (thickness tf, clear width B-tw).
+  // Standard thin-walled "shear carried by the parallel walls only" engineering approximation
+  // (e.g. as used for I/box sections generally) -- coarser than the exact rectangle/circle
+  // factors above, flagged accordingly; this shape is not exercised by any currently verified
+  // model (01-05 all use SB), so it is not yet empirically cross-checked against MIDAS.
+  p.AsH = 2 * tw * (H - tf);
+  p.AsB = 2 * tf * (B - tw);
   return p;
 }
 

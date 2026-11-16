@@ -30,10 +30,13 @@
 //
 // Disclosed, not silent, substitutions (MidasImportReport::assumptions):
 // material Poisson's ratio/unit weight (MidasMaterialLibrary.hpp);
-// Timoshenko shear areas are NOT derived even when SECT_BEFORE's
-// USE_SHEAR_DEFORM is true (no shear-area formulas implemented yet in
-// MidasSectionLibrary.hpp) -- sections import as Euler-Bernoulli
-// (Asy=Asz=0), and this gap is recorded, not hidden.
+// Timoshenko shear areas, when SECT_BEFORE's USE_SHEAR_DEFORM is true, are
+// derived from each shape's classical shear correction factor
+// (MidasSectionLibrary.hpp: 5/6 for SB rectangles, 0.9 for SR circles, a
+// coarser web/flange-area approximation for B hollow boxes) -- not read
+// from MIDAS directly (MIDAS exports no effective shear area for a DBUSER
+// section), and this substitution is recorded, not hidden. Sections with
+// USE_SHEAR_DEFORM false still import as Euler-Bernoulli (Asy=Asz=0).
 //
 // NOT executed in this phase (recorded in report, not silently dropped):
 // EIGV/SPLC/SPFC (modal/response-spectrum requests) are present in many
@@ -147,9 +150,15 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
         // local x-z plane -- i.e. exactly the bending H's depth resists. Symmetrically
         // Iz = IB. This mapping follows from the now-confirmed MIDAS orientation convention,
         // not an independent guess, but is still flagged for Phase 7E empirical cross-check.
-        out.input.model.sections.push_back(Section{id, p.area, /*Iy=*/p.IH, /*Iz=*/p.IB, p.J, 0, 0});
+        // Asy (y-bending plane, uses Iz=IB per Section.hpp) <- AsB; Asz (z-bending plane,
+        // uses Iy=IH) <- AsH -- same IH/IB <-> Iy/Iz correspondence as above, applied to the
+        // companion shear areas. Asy=Asz=0 (Euler-Bernoulli) when USE_SHEAR_DEFORM is false,
+        // matching MIDAS's own per-section flag rather than always applying shear deformation.
+        const Real Asy = useShear ? p.AsB : Real(0);
+        const Real Asz = useShear ? p.AsH : Real(0);
+        out.input.model.sections.push_back(Section{id, p.area, /*Iy=*/p.IH, /*Iz=*/p.IB, p.J, Asy, Asz});
         if (useShear)
-          out.report.assumptions.push_back("section " + it.key() + ": USE_SHEAR_DEFORM is set in the source but shear-area formulas are not yet implemented; imported as Euler-Bernoulli (Asy=Asz=0)");
+          out.report.assumptions.push_back("section " + it.key() + ": USE_SHEAR_DEFORM is set in the source; shear areas computed from the shape's classical Timoshenko shear correction factor (see MidasSectionLibrary.hpp), not read from MIDAS directly (MIDAS does not export an effective shear area for a DBUSER section)");
       } catch (const std::exception& e) {
         out.report.rejected.push_back("section " + it.key() + ": " + e.what());
       }

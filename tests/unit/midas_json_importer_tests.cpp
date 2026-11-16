@@ -12,6 +12,7 @@
 //   = 5 rejected entries (GTMP/BTMP are not present in this sample, so
 //   their own rejection path is not exercised here).
 #include <gtest/gtest.h>
+#include <algorithm>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -60,6 +61,42 @@ TEST(MidasJsonImporter, ImportCountsMatchIndependentlyComputedTotals) {
     for (const auto& t : lc.thermal) EXPECT_DOUBLE_EQ(t.uniform_delta_t, 40.0);
   }
   EXPECT_TRUE(foundTu);
+}
+
+// GUI-5.1 (ModelInfoPanel): elastic_links_rejected and the node bounding box are purely
+// informational report fields (not used by the solve itself), added for the GUI's "Model
+// Bilgileri (JSON)" panel to show real, independently-derivable numbers rather than fabricating
+// anything it cannot find in the import report.
+TEST(MidasJsonImporter, ReportsElasticLinkRejectionCountAndNodeBoundingBox) {
+  auto result = importMidasJson(loadSample());
+  const auto& r = result.report;
+
+  int elnkRejections = 0;
+  for (const auto& msg : r.rejected)
+    if (msg.find("elastic link") != std::string::npos) ++elnkRejections;
+  EXPECT_EQ(r.elastic_links_rejected, static_cast<std::size_t>(elnkRejections));
+  EXPECT_EQ(r.elastic_links_rejected, 4u);
+
+  ASSERT_TRUE(r.hasBoundingBox);
+  // Independently recomputed from the same real sample, not read back from the importer itself.
+  double minX = 0, maxX = 0, minY = 0, maxY = 0, minZ = 0, maxZ = 0;
+  bool first = true;
+  for (const auto& n : result.input.model.nodes) {
+    if (first) { minX = maxX = n.x; minY = maxY = n.y; minZ = maxZ = n.z; first = false; continue; }
+    minX = std::min(minX, n.x); maxX = std::max(maxX, n.x);
+    minY = std::min(minY, n.y); maxY = std::max(maxY, n.y);
+    minZ = std::min(minZ, n.z); maxZ = std::max(maxZ, n.z);
+  }
+  EXPECT_DOUBLE_EQ(r.minX, minX); EXPECT_DOUBLE_EQ(r.maxX, maxX);
+  EXPECT_DOUBLE_EQ(r.minY, minY); EXPECT_DOUBLE_EQ(r.maxY, maxY);
+  EXPECT_DOUBLE_EQ(r.minZ, minZ); EXPECT_DOUBLE_EQ(r.maxZ, maxZ);
+}
+
+TEST(MidasJsonImporter, EmptyNodeSetHasNoBoundingBox) {
+  auto doc = nlohmann::json::parse(R"json({"DBG":{"UNIT":{"1":{"FORCE":"KN","DIST":"M"}},"NODE":{}}})json");
+  auto empty = importMidasJson(doc);
+  EXPECT_FALSE(empty.report.hasBoundingBox);
+  EXPECT_EQ(empty.report.nodes, 0u);
 }
 
 TEST(MidasJsonImporter, ImportedModelPassesValidation) {

@@ -1,23 +1,40 @@
 #include "AnalysisControlPanel.h"
-#include <QGridLayout>
+#include <QStyle>
+#include <QVBoxLayout>
 
-AnalysisControlPanel::AnalysisControlPanel(QWidget* parent) : QGroupBox(tr("2. İşlemler"), parent) {
-  auto* grid = new QGridLayout(this);
-  grid->setHorizontalSpacing(8);
+namespace {
+QPushButton* makeStepButton(const QString& text, QWidget* parent) {
+  auto* b = new QPushButton(text, parent);
+  b->setMinimumHeight(56);
+  b->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+  b->setEnabled(false); // nothing is wired until MainWindow's state machine says otherwise
+  return b;
+}
+}
 
-  validateButton_ = new QPushButton(tr("Modeli Doğrula"), this);
-  runSolverButton_ = new QPushButton(tr("Solver'ı Çalıştır"), this);
-  runSolverButton_->setObjectName("primaryAction");
-  compareButton_ = new QPushButton(tr("Sonuçları Karşılaştır"), this);
-  exportButton_ = new QPushButton(tr("Raporu Dışa Aktar"), this);
+AnalysisControlPanel::AnalysisControlPanel(QWidget* parent) : QWidget(parent) {
+  setObjectName("stepSidebar");
+  setFixedWidth(200);
 
-  // GUI-1 has no prerequisite tracking yet -- buttons are not yet wired to any action, so they
-  // start disabled rather than appearing clickable with nothing behind them (CLAUDE.md: never
-  // simulate a successful operation).
-  for (auto* b : {validateButton_, runSolverButton_, compareButton_, exportButton_}) b->setEnabled(false);
+  auto* layout = new QVBoxLayout(this);
+  layout->setContentsMargins(12, 16, 12, 16);
+  layout->setSpacing(10);
 
-  grid->addWidget(validateButton_, 0, 0);
-  grid->addWidget(runSolverButton_, 0, 1);
-  grid->addWidget(compareButton_, 0, 2);
-  grid->addWidget(exportButton_, 0, 3);
+  validateButton_ = makeStepButton(tr("1. Modeli Doğrula"), this);
+  runSolverButton_ = makeStepButton(tr("2. Solver'ı Çalıştır"), this);
+  compareButton_ = makeStepButton(tr("3. Sonuçları Karşılaştır"), this);
+  exportButton_ = makeStepButton(tr("4. Raporu Dışa Aktar"), this);
+
+  for (auto* b : {validateButton_, runSolverButton_, compareButton_, exportButton_}) layout->addWidget(b);
+  layout->addStretch(1);
+}
+
+void AnalysisControlPanel::setPrimaryButton(QPushButton* button) {
+  for (auto* b : {validateButton_, runSolverButton_, compareButton_, exportButton_}) {
+    const bool isPrimary = (b == button);
+    if (b->property("primary").toBool() == isPrimary) continue; // avoid needless re-polish
+    b->setProperty("primary", isPrimary);
+    b->style()->unpolish(b);
+    b->style()->polish(b);
+  }
 }

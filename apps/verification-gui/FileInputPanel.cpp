@@ -86,6 +86,7 @@ FileInputPanel::FileInputPanel(QWidget* parent) : QGroupBox(tr("1. Girdi Dosyala
       include->setEnabled(false);
       grid->addWidget(include, gridRow, 4);
       includeCheckBoxes_[i] = include;
+      connect(include, &QCheckBox::toggled, this, [this, row](bool) { emit rowChanged(row); });
     }
 
     connect(browse, &QPushButton::clicked, this, [this, row] { browseFor(row); });
@@ -141,6 +142,7 @@ void FileInputPanel::revalidate(Row row) {
   }
 
   emit selectionChanged();
+  emit rowChanged(row);
 }
 
 bool FileInputPanel::isIncludedInComparison(Row row) const {

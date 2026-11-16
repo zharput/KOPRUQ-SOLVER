@@ -71,6 +71,7 @@ if(KOPRUQ_BUILD_GUI)
     apps/verification-gui/AnalysisControlPanel.cpp
     apps/verification-gui/ExecutionLogPanel.cpp
     apps/verification-gui/ResultsComparisonPanel.cpp
+    apps/verification-gui/ModelInfoPanel.cpp
     apps/verification-gui/SolverRunner.cpp)
   target_link_libraries(kopruq_verification_gui PRIVATE kopruq_solver_io Qt6::Widgets kopruq_verification)
   # vcpkg's x64-linux triplet is static by default (x64-windows is dynamic), so there is no

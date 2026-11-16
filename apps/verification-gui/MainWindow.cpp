@@ -13,6 +13,7 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QRegularExpression>
 #include <QSplitter>
 #include <QStandardPaths>
 #include <QTableWidget>
@@ -52,6 +53,8 @@ void populateNodeBasedTable(QTableWidget* table, const std::vector<ComparisonRow
     table->setItem(i, c++, new QTableWidgetItem(hasNumbers ? QString::number(r.result.relDiff * 100.0, 'f', 3) + "%" : QString()));
     table->setItem(i, c++, new QTableWidgetItem(QString::fromStdString(r.unit)));
     table->setItem(i, c++, new QTableWidgetItem(statusText(r.result.status)));
+    for (int col = 0; col < table->columnCount(); ++col)
+      if (auto* item = table->item(i, col)) item->setFlags(item->flags() & ~Qt::ItemIsEditable);
   }
 }
 
@@ -73,6 +76,8 @@ void populateBeamOrLinkTable(QTableWidget* table, const std::vector<ComparisonRo
     table->setItem(i, c++, new QTableWidgetItem(hasNumbers ? fmt(r.result.signedDiff) : QString()));
     table->setItem(i, c++, new QTableWidgetItem(QString::fromStdString(r.unit)));
     table->setItem(i, c++, new QTableWidgetItem(statusText(r.result.status)));
+    for (int col = 0; col < table->columnCount(); ++col)
+      if (auto* item = table->item(i, col)) item->setFlags(item->flags() & ~Qt::ItemIsEditable);
   }
 }
 
@@ -80,45 +85,59 @@ void populateBeamOrLinkTable(QTableWidget* table, const std::vector<ComparisonRo
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
   setWindowTitle(tr("KOPRUQ-SOLVER | MIDAS Verification Tool"));
-  setMinimumSize(1100, 720);
+  setMinimumSize(1200, 760);
+
+  // V2.0 layout: a fixed-width step sidebar on the far left; everything else in a right column
+  // split top (Girdi Dosyaları + Çalışma Durumu) / bottom (Model Bilgileri + Sonuç tabloları).
+  analysisControlPanel_ = new AnalysisControlPanel(this);
 
   fileInputPanel_ = new FileInputPanel(this);
-
-  auto* rightColumn = new QWidget(this);
-  auto* rightLayout = new QVBoxLayout(rightColumn);
-  rightLayout->setContentsMargins(0, 0, 0, 0);
-  analysisControlPanel_ = new AnalysisControlPanel(rightColumn);
-  executionLogPanel_ = new ExecutionLogPanel(rightColumn);
-  rightLayout->addWidget(analysisControlPanel_);
-  rightLayout->addWidget(executionLogPanel_, 1);
-
+  executionLogPanel_ = new ExecutionLogPanel(this);
   auto* topSplitter = new QSplitter(Qt::Horizontal, this);
   topSplitter->addWidget(fileInputPanel_);
-  topSplitter->addWidget(rightColumn);
+  topSplitter->addWidget(executionLogPanel_);
   topSplitter->setStretchFactor(0, 3);
-  topSplitter->setStretchFactor(1, 2);
+  topSplitter->setStretchFactor(1, 3); // Çalışma Durumu is at least as wide as Girdi Dosyaları
 
+  modelInfoPanel_ = new ModelInfoPanel(this);
   resultsPanel_ = new ResultsComparisonPanel(this);
+  auto* bottomSplitter = new QSplitter(Qt::Horizontal, this);
+  bottomSplitter->addWidget(modelInfoPanel_);
+  bottomSplitter->addWidget(resultsPanel_);
+  bottomSplitter->setStretchFactor(0, 1);
+  bottomSplitter->setStretchFactor(1, 3);
 
-  auto* mainSplitter = new QSplitter(Qt::Vertical, this);
-  mainSplitter->addWidget(topSplitter);
-  mainSplitter->addWidget(resultsPanel_);
-  mainSplitter->setStretchFactor(0, 1);
-  mainSplitter->setStretchFactor(1, 2);
+  auto* rightSplitter = new QSplitter(Qt::Vertical, this);
+  rightSplitter->addWidget(topSplitter);
+  rightSplitter->addWidget(bottomSplitter);
+  rightSplitter->setStretchFactor(0, 1);
+  rightSplitter->setStretchFactor(1, 2);
 
-  setCentralWidget(mainSplitter);
+  auto* central = new QWidget(this);
+  auto* centralLayout = new QHBoxLayout(central);
+  centralLayout->setContentsMargins(0, 0, 0, 0);
+  centralLayout->setSpacing(0);
+  centralLayout->addWidget(analysisControlPanel_);
+  centralLayout->addWidget(rightSplitter, 1);
+  setCentralWidget(central);
 
   solverRunner_ = new SolverRunner(this);
-  connect(solverRunner_, &SolverRunner::logLine, this, &MainWindow::appendLog);
+  connect(solverRunner_, &SolverRunner::logLine, this, &MainWindow::onSolverLogLine);
   connect(solverRunner_, &SolverRunner::finished, this, &MainWindow::onRunFinished);
+  connect(solverRunner_, &SolverRunner::started, this, &MainWindow::applyWorkflowState);
 
-  connect(fileInputPanel_, &FileInputPanel::selectionChanged, this, &MainWindow::updateActionAvailability);
+  connect(fileInputPanel_, &FileInputPanel::rowChanged, this, [this](FileInputPanel::Row row) {
+    if (row == FileInputPanel::Row::MidasModel) onModelRowChanged();
+    else onReferenceRowChanged();
+  });
   connect(analysisControlPanel_->validateButton(), &QPushButton::clicked, this, [this] { startRun(RunMode::ValidateOnly); });
   connect(analysisControlPanel_->runSolverButton(), &QPushButton::clicked, this, [this] { startRun(RunMode::Solve); });
   connect(analysisControlPanel_->compareButton(), &QPushButton::clicked, this, &MainWindow::onCompare);
   connect(analysisControlPanel_->exportButton(), &QPushButton::clicked, this, &MainWindow::onExport);
+  connect(resultsPanel_->absoluteToleranceField(), &QLineEdit::textChanged, this, [this](const QString&) { onToleranceChanged(); });
+  connect(resultsPanel_->relativeToleranceField(), &QLineEdit::textChanged, this, [this](const QString&) { onToleranceChanged(); });
 
-  updateActionAvailability();
+  applyWorkflowState();
 }
 
 void MainWindow::closeEvent(QCloseEvent* event) {
@@ -126,27 +145,89 @@ void MainWindow::closeEvent(QCloseEvent* event) {
   event->accept();
 }
 
-void MainWindow::updateActionAvailability() {
-  const bool ready = fileInputPanel_->hasRequiredModel() && !solverRunner_->isRunning();
-  analysisControlPanel_->validateButton()->setEnabled(ready);
-  analysisControlPanel_->runSolverButton()->setEnabled(ready);
-  // Compare needs an actual results.json from a prior solve; it does not require every Excel
-  // reference file (each is individually optional, per the approved spec) -- onCompare() skips
-  // and diagnoses whichever ones are missing rather than refusing to run at all.
-  analysisControlPanel_->compareButton()->setEnabled(!lastResultsPath_.isEmpty() && !solverRunner_->isRunning());
-  // Export needs an actual comparison to have been run at least once (GUI-6 writes the SAME
-  // cached rows, never recomputes).
-  analysisControlPanel_->exportButton()->setEnabled(hasComparisonResults_ && !solverRunner_->isRunning());
+void MainWindow::applyWorkflowState() {
+  const bool busy = solverRunner_->isRunning();
+  const bool hasModel = fileInputPanel_->hasRequiredModel();
+
+  analysisControlPanel_->validateButton()->setEnabled(!busy && hasModel);
+  analysisControlPanel_->runSolverButton()->setEnabled(!busy && hasModel && state_ >= WorkflowState::Validated);
+  analysisControlPanel_->compareButton()->setEnabled(!busy && state_ >= WorkflowState::Solved);
+  analysisControlPanel_->exportButton()->setEnabled(!busy && state_ >= WorkflowState::Compared);
+
+  QPushButton* primary = nullptr;
+  if (!busy) {
+    switch (state_) {
+      case WorkflowState::InputReady: if (hasModel) primary = analysisControlPanel_->validateButton(); break;
+      case WorkflowState::Validated: primary = analysisControlPanel_->runSolverButton(); break;
+      case WorkflowState::Solved: primary = analysisControlPanel_->compareButton(); break;
+      case WorkflowState::Compared: primary = analysisControlPanel_->exportButton(); break;
+    }
+  }
+  analysisControlPanel_->setPrimaryButton(primary);
+}
+
+void MainWindow::invalidateComparison() {
+  lastDisplacementRows_.clear();
+  lastReactionRows_.clear();
+  lastBeamForceRows_.clear();
+  lastElasticLinkRows_.clear();
+  lastDiagnostics_.clear();
+  resultsPanel_->displacementsTable()->setRowCount(0);
+  resultsPanel_->reactionsTable()->setRowCount(0);
+  resultsPanel_->beamForcesTable()->setRowCount(0);
+  resultsPanel_->elasticLinksTable()->setRowCount(0);
+  resultsPanel_->diagnosticsTable()->setRowCount(0);
+  resultsPanel_->categoryTable()->setRowCount(0);
+  resultsPanel_->setSummaryCounts(0, 0, 0, 0);
+  if (state_ == WorkflowState::Compared) state_ = WorkflowState::Solved;
+  applyWorkflowState();
+}
+
+void MainWindow::invalidateSolveAndBeyond() {
+  invalidateComparison();
+  lastResultsPath_.clear();
+  if (state_ == WorkflowState::Solved) state_ = WorkflowState::Validated;
+  applyWorkflowState();
+}
+
+void MainWindow::fullReset() {
+  invalidateSolveAndBeyond();
+  state_ = WorkflowState::InputReady;
+  modelInfo_ = ModelInfoPanel::Info{};
+  modelInfoPanel_->reset();
+  applyWorkflowState();
+}
+
+void MainWindow::onModelRowChanged() {
+  // "Eski model sonuçları yeni modelle asla karşılaştırılmamalı" -- any prior validate/solve/
+  // compare result belonged to whatever file was selected before, so a full reset is the only
+  // safe response to the MIDAS model row itself changing.
+  fullReset();
+  appendLog(tr("Model dosyası değişti, durum sıfırlandı."), /*Info*/ 0);
+}
+
+void MainWindow::onReferenceRowChanged() {
+  // An Excel row's path or its "Karşılaştır" checkbox changed -- the model and any solve results
+  // are still perfectly valid, only a previously-run comparison is now potentially stale.
+  invalidateComparison();
+}
+
+void MainWindow::onToleranceChanged() {
+  invalidateComparison();
 }
 
 void MainWindow::startRun(RunMode mode) {
   if (!fileInputPanel_->hasRequiredModel()) {
-    appendLog(tr("MIDAS NX Model (JSON) seçilmeden çalıştırılamaz."));
+    appendLog(tr("MIDAS NX Model (JSON) seçilmeden çalıştırılamaz."), /*Error*/ 3);
+    return;
+  }
+  if (mode == RunMode::Solve && state_ < WorkflowState::Validated) {
+    appendLog(tr("Önce Modeli Doğrula ile model geçerliliği onaylanmalı."), /*Warning*/ 2);
     return;
   }
   const QString cli = SolverRunner::locateCli();
   if (cli.isEmpty()) {
-    appendLog(tr("kopruq_solver_cli bulunamadı (GUI yanında veya PATH'te değil)."));
+    appendLog(tr("kopruq_solver_cli bulunamadı (GUI yanında veya PATH'te değil)."), /*Error*/ 3);
     return;
   }
 
@@ -156,9 +237,8 @@ void MainWindow::startRun(RunMode mode) {
   const QString outputPath = workDir + "/" + QFileInfo(modelPath).completeBaseName() + ".results.json";
 
   activeRunMode_ = mode;
-  analysisControlPanel_->validateButton()->setEnabled(false);
-  analysisControlPanel_->runSolverButton()->setEnabled(false);
   executionLogPanel_->progressBar()->setRange(0, 0); // indeterminate -- the CLI exposes no granular progress
+  applyWorkflowState(); // disables everything while busy
 
   const QString label = (mode == RunMode::ValidateOnly) ? tr("Modeli Doğrula") : tr("Solver'ı Çalıştır");
   solverRunner_->run(cli, modelPath, "midas-nx-json", outputPath, label);
@@ -170,7 +250,7 @@ void MainWindow::onRunFinished(int exitCode, QProcess::ExitStatus status, const 
 
   if (status == QProcess::CrashExit) {
     executionLogPanel_->progressBar()->setValue(0);
-    appendLog(tr("[%1] İşlem beklenmedik şekilde sonlandı.").arg(ts));
+    appendLog(tr("[%1] İşlem beklenmedik şekilde sonlandı.").arg(ts), /*Error*/ 3);
   } else if (activeRunMode_ == RunMode::ValidateOnly) {
     // The CLI has no separate "validate only" mode: exit code 3 means the model itself was
     // rejected before any solve was attempted (invalid), anything else (0 or 1) means the model
@@ -178,37 +258,94 @@ void MainWindow::onRunFinished(int exitCode, QProcess::ExitStatus status, const 
     // succeeded, since that is "Solver'ı Çalıştır"'s claim to make, not this one's.
     if (exitCode == 3) {
       executionLogPanel_->progressBar()->setValue(0);
-      appendLog(tr("[%1] Model GEÇERSİZ -- ayrıntılar için günlüğe bakın.").arg(ts));
+      appendLog(tr("[%1] Model GEÇERSİZ -- ayrıntılar için günlüğe bakın.").arg(ts), /*Error*/ 3);
+      modelInfoPanel_->setStatus(tr("Model geçersiz."), /*isError=*/true);
+      state_ = WorkflowState::InputReady;
     } else {
       executionLogPanel_->progressBar()->setValue(100);
-      appendLog(tr("[%1] Model geçerli (okunabildi ve kabul edildi).").arg(ts));
+      appendLog(tr("[%1] Model geçerli (okunabildi ve kabul edildi).").arg(ts), /*Success*/ 1);
+      modelInfo_.modelName = QFileInfo(fileInputPanel_->filePath(FileInputPanel::Row::MidasModel)).completeBaseName();
+      modelInfo_.hasModelName = true;
+      modelInfo_.unitSystem = tr("kN - m (KOPRUQ-SOLVER dahili)");
+      modelInfo_.hasUnitSystem = true;
+      modelInfoPanel_->setData(modelInfo_);
+      modelInfoPanel_->setStatus(tr("Model geçerli. Analize hazır."), /*isError=*/false);
+      appendLog(tr("[%1] MIDAS yük kombinasyonları desteklenmiyor (Yük Kombinasyonu Sayısı: N/A).").arg(ts), /*Warning*/ 2);
+      state_ = WorkflowState::Validated;
     }
   } else {
     if (exitCode == 0) {
       lastResultsPath_ = outputPath;
       executionLogPanel_->progressBar()->setValue(100);
-      appendLog(tr("[%1] Analiz tamamlandı. Sonuçlar: %2").arg(ts, outputPath));
+      appendLog(tr("[%1] Analiz tamamlandı. Sonuçlar: %2").arg(ts, outputPath), /*Success*/ 1);
+      state_ = WorkflowState::Solved;
     } else if (exitCode == 1 && QFileInfo::exists(outputPath)) {
       // Per the CLI's documented contract, exit 1 still writes results (a load case that failed
       // to solve, not a crash) -- the file exists and is recorded, but this is not success.
       lastResultsPath_ = outputPath;
       executionLogPanel_->progressBar()->setValue(0);
-      appendLog(tr("[%1] Analiz BAŞARISIZ (sonuçlar yine de yazıldı): %2").arg(ts, outputPath));
+      appendLog(tr("[%1] Analiz BAŞARISIZ (sonuçlar yine de yazıldı): %2").arg(ts, outputPath), /*Error*/ 3);
+      state_ = WorkflowState::Validated; // "Solver başarısızsa üçüncü aşamaya geçilmemeli"
     } else {
       executionLogPanel_->progressBar()->setValue(0);
-      appendLog(tr("[%1] Analiz BAŞARISIZ (çıkış kodu %2).").arg(ts).arg(exitCode));
+      appendLog(tr("[%1] Analiz BAŞARISIZ (çıkış kodu %2).").arg(ts).arg(exitCode), /*Error*/ 3);
+      state_ = WorkflowState::Validated;
     }
   }
-  updateActionAvailability();
+  applyWorkflowState();
 }
 
-void MainWindow::appendLog(const QString& line) {
-  executionLogPanel_->log()->appendPlainText(line);
+void MainWindow::onSolverLogLine(const QString& line) {
+  static const QRegularExpression importRe(
+      "midas-nx-json import: (\\d+) nodes, (\\d+) beams, (\\d+) materials, (\\d+) sections, "
+      "(\\d+) supports, (\\d+) rigid links, (\\d+) load cases, (\\d+) member loads, "
+      "(\\d+) thermal loads, (\\d+) elastic links rejected");
+  static const QRegularExpression boundsRe(
+      R"(midas-nx-json bounds: X\[([-\d.eE]+),([-\d.eE]+)\] Y\[([-\d.eE]+),([-\d.eE]+)\] Z\[([-\d.eE]+),([-\d.eE]+)\])");
+
+  if (const auto m = importRe.match(line); m.hasMatch()) {
+    modelInfo_.nodeCount = m.captured(1).toLong(); modelInfo_.hasNodeCount = true;
+    modelInfo_.elementCount = m.captured(2).toLong(); modelInfo_.hasElementCount = true;
+    modelInfo_.materialCount = m.captured(3).toLong(); modelInfo_.hasMaterialCount = true;
+    modelInfo_.sectionCount = m.captured(4).toLong(); modelInfo_.hasSectionCount = true;
+    modelInfo_.loadCaseCount = m.captured(7).toLong(); modelInfo_.hasLoadCaseCount = true;
+    modelInfo_.elasticLinkCount = m.captured(10).toLong(); modelInfo_.hasElasticLinkCount = true;
+    // combinationCount is deliberately never set here -- MIDAS load combinations are not parsed
+    // by the importer at all, so ModelInfoPanel keeps showing "N/A" for it, not a guess.
+    modelInfoPanel_->setData(modelInfo_);
+  } else if (const auto b = boundsRe.match(line); b.hasMatch()) {
+    const double minX = b.captured(1).toDouble(), maxX = b.captured(2).toDouble();
+    const double minY = b.captured(3).toDouble(), maxY = b.captured(4).toDouble();
+    const double minZ = b.captured(5).toDouble(), maxZ = b.captured(6).toDouble();
+    modelInfo_.extentX = maxX - minX;
+    modelInfo_.extentY = maxY - minY;
+    modelInfo_.extentZ = maxZ - minZ;
+    modelInfo_.hasExtents = true;
+    modelInfoPanel_->setData(modelInfo_);
+  }
+
+  int level = 0; // Info
+  if (line.contains(QStringLiteral("[rejected]")) || line.contains(QStringLiteral("[assumed]"))) level = 2; // Warning
+  else if (line.contains(QStringLiteral("BAŞARISIZ")) || line.contains(QStringLiteral("GEÇERSİZ")) || line.contains(QStringLiteral("hata"), Qt::CaseInsensitive)) level = 3; // Error
+  appendLog(line, level);
+}
+
+void MainWindow::appendLog(const QString& line, int level) {
+  executionLogPanel_->appendLine(line, static_cast<ExecutionLogPanel::Level>(level));
 }
 
 void MainWindow::onCompare() {
-  if (lastResultsPath_.isEmpty()) {
-    appendLog(tr("Önce Solver'ı Çalıştır ile bir sonuç üretilmeli."));
+  if (state_ < WorkflowState::Solved || lastResultsPath_.isEmpty()) {
+    appendLog(tr("Önce Solver'ı Çalıştır ile bir sonuç üretilmeli."), /*Warning*/ 2);
+    return;
+  }
+
+  const bool anyChecked = fileInputPanel_->isIncludedInComparison(FileInputPanel::Row::Displacements) ||
+                           fileInputPanel_->isIncludedInComparison(FileInputPanel::Row::Reactions) ||
+                           fileInputPanel_->isIncludedInComparison(FileInputPanel::Row::BeamForce) ||
+                           fileInputPanel_->isIncludedInComparison(FileInputPanel::Row::ElasticLink);
+  if (!anyChecked) {
+    appendLog(tr("En az bir Excel referans dosyası seçilip \"Karşılaştır\" işaretlenmeli."), /*Warning*/ 2);
     return;
   }
 
@@ -216,13 +353,13 @@ void MainWindow::onCompare() {
   {
     std::ifstream in(lastResultsPath_.toStdString(), std::ios::binary);
     if (!in) {
-      appendLog(tr("Sonuç dosyası açılamadı: %1").arg(lastResultsPath_));
+      appendLog(tr("Sonuç dosyası açılamadı: %1").arg(lastResultsPath_), /*Error*/ 3);
       return;
     }
     try {
       in >> results;
     } catch (const std::exception& e) {
-      appendLog(tr("Sonuç dosyası (results.json) ayrıştırılamadı: %1").arg(QString::fromStdString(e.what())));
+      appendLog(tr("Sonuç dosyası (results.json) ayrıştırılamadı: %1").arg(QString::fromStdString(e.what())), /*Error*/ 3);
       return;
     }
   }
@@ -287,6 +424,8 @@ void MainWindow::onCompare() {
     diag->setItem(i, 1, new QTableWidgetItem(tr("GUI-5")));
     diag->setItem(i, 2, new QTableWidgetItem(allDiagnostics[i]));
     diag->setItem(i, 3, new QTableWidgetItem(tr("Bilgi")));
+    for (int col = 0; col < diag->columnCount(); ++col)
+      if (auto* item = diag->item(i, col)) item->setFlags(item->flags() & ~Qt::ItemIsEditable);
   }
 
   const struct { const char* name; const std::vector<ComparisonRow>* rows; } categories[] = {
@@ -312,6 +451,8 @@ void MainWindow::onCompare() {
     catTable->setItem(i, c++, new QTableWidgetItem(QString::number(stats.maxAbsDiffPercent, 'f', 3) + "%"));
     catTable->setItem(i, c++, new QTableWidgetItem(status));
     catTable->setItem(i, c++, new QTableWidgetItem(tr("İlgili sekmeye bakın")));
+    for (int col = 0; col < catTable->columnCount(); ++col)
+      if (auto* item = catTable->item(i, col)) item->setFlags(item->flags() & ~Qt::ItemIsEditable);
   }
   resultsPanel_->setSummaryCounts(totalAll, passAll, failAll, naAll);
 
@@ -324,17 +465,18 @@ void MainWindow::onCompare() {
   lastTolerance_ = tol;
   lastSolverVersion_ = results.value("metadata", nlohmann::json::object()).value("solver_version", std::string{}).c_str();
   lastComparisonTimestamp_ = QDateTime::currentDateTime().toString(Qt::ISODate);
-  hasComparisonResults_ = true;
-  updateActionAvailability();
+  state_ = WorkflowState::Compared;
+  applyWorkflowState();
 
   appendLog(tr("[%1] Karşılaştırma tamamlandı. Toplam %2, PASS %3, FAIL %4, N/A %5.")
                 .arg(QDateTime::currentDateTime().toString("HH:mm:ss"))
-                .arg(totalAll).arg(passAll).arg(failAll).arg(naAll));
+                .arg(totalAll).arg(passAll).arg(failAll).arg(naAll),
+            failAll > 0 ? /*Warning*/ 2 : /*Success*/ 1);
 }
 
 void MainWindow::onExport() {
-  if (!hasComparisonResults_) {
-    appendLog(tr("Önce Sonuçları Karşılaştır ile bir karşılaştırma üretilmeli."));
+  if (state_ < WorkflowState::Compared) {
+    appendLog(tr("Önce Sonuçları Karşılaştır ile bir karşılaştırma üretilmeli."), /*Warning*/ 2);
     return;
   }
   const QString defaultPath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) +
@@ -342,27 +484,28 @@ void MainWindow::onExport() {
   const QString chosen = QFileDialog::getSaveFileName(this, tr("Raporu Dışa Aktar"), defaultPath, tr("Excel dosyası (*.xlsx)"));
   if (chosen.isEmpty()) return;
 
-  kopruq::verification::ReportData data;
-  data.displacements = lastDisplacementRows_;
-  data.reactions = lastReactionRows_;
-  data.beamForces = lastBeamForceRows_;
-  data.elasticLinks = lastElasticLinkRows_;
-  for (const auto& d : lastDiagnostics_) data.diagnostics.push_back(d.toStdString());
-  data.metadata.modelFileName = QFileInfo(fileInputPanel_->filePath(FileInputPanel::Row::MidasModel)).fileName().toStdString();
-  data.metadata.solverVersion = lastSolverVersion_.toStdString();
-  data.metadata.executionDateTimeIso = lastComparisonTimestamp_.toStdString();
-  data.metadata.displacementsFileName = lastDisplacementsFile_.toStdString();
-  data.metadata.reactionsFileName = lastReactionsFile_.toStdString();
-  data.metadata.beamForceFileName = lastBeamForceFile_.toStdString();
-  data.metadata.elasticLinkFileName = lastElasticLinkFile_.toStdString();
-  data.metadata.absoluteToleranceScale = lastTolerance_.absoluteToleranceScale;
-  data.metadata.relativeTol = lastTolerance_.relativeTol;
+  kopruq::verification::ReportData reportData;
+  reportData.displacements = lastDisplacementRows_;
+  reportData.reactions = lastReactionRows_;
+  reportData.beamForces = lastBeamForceRows_;
+  reportData.elasticLinks = lastElasticLinkRows_;
+  for (const auto& d : lastDiagnostics_) reportData.diagnostics.push_back(d.toStdString());
+  reportData.metadata.modelFileName = QFileInfo(fileInputPanel_->filePath(FileInputPanel::Row::MidasModel)).fileName().toStdString();
+  reportData.metadata.solverVersion = lastSolverVersion_.toStdString();
+  reportData.metadata.executionDateTimeIso = lastComparisonTimestamp_.toStdString();
+  reportData.metadata.displacementsFileName = lastDisplacementsFile_.toStdString();
+  reportData.metadata.reactionsFileName = lastReactionsFile_.toStdString();
+  reportData.metadata.beamForceFileName = lastBeamForceFile_.toStdString();
+  reportData.metadata.elasticLinkFileName = lastElasticLinkFile_.toStdString();
+  reportData.metadata.absoluteToleranceScale = lastTolerance_.absoluteToleranceScale;
+  reportData.metadata.relativeTol = lastTolerance_.relativeTol;
 
   std::string error;
-  if (kopruq::verification::exportVerificationReport(chosen.toStdString(), data, error)) {
+  if (kopruq::verification::exportVerificationReport(chosen.toStdString(), reportData, error)) {
     appendLog(tr("[%1] Rapor dışa aktarıldı: %2")
-                  .arg(QDateTime::currentDateTime().toString("HH:mm:ss"), chosen));
+                  .arg(QDateTime::currentDateTime().toString("HH:mm:ss"), chosen),
+              /*Success*/ 1);
   } else {
-    appendLog(tr("Rapor dışa aktarılamadı: %1").arg(QString::fromStdString(error)));
+    appendLog(tr("Rapor dışa aktarılamadı: %1").arg(QString::fromStdString(error)), /*Error*/ 3);
   }
 }

@@ -52,6 +52,12 @@ signals:
   // enable "Modeli Doğrula" once a usable MIDAS model is selected -- GUI-3's concern, not
   // decided here).
   void selectionChanged();
+  // Same moment as selectionChanged(), but names *which* row changed (path OR its "Karşılaştır"
+  // checkbox) -- MainWindow's workflow-state machine reacts very differently to the MIDAS model
+  // row changing (full reset back to step 1) than to an Excel row or checkbox changing (only the
+  // comparison step is invalidated, model/solve results are kept) -- see V2.0's state-reset
+  // rules.
+  void rowChanged(Row row);
 
 private:
   static constexpr std::size_t kRowCount = static_cast<std::size_t>(Row::Count);

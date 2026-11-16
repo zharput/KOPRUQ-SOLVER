@@ -23,6 +23,31 @@ record the current policy in this document too:
   restrictive approval-gated rule governs.
 
 ## Current priority
+**Qt6 Verification GUI V2.0 revizyonu — yerel olarak derlendi ve test edildi,
+commit/push ve CI henüz onay bekliyor (2026-11-16).** Kullanıcının detaylı
+"KOPRUQ-SOLVER — Qt6 Verification GUI V2.0 Revizyonu" talimatına göre:
+sol tarafta sabit genişlikte 4 adımlı sıralı iş akışı sidebar'ı
+(`AnalysisControlPanel`, artık `QWidget` tabanlı), yeni "Model Bilgileri
+(JSON)" paneli (`ModelInfoPanel`, CLI'nin `reportMidasImport()` çıktısından
+ayrıştırılan gerçek düğüm/eleman/malzeme/kesit/yük durumu sayıları ve
+düğüm koordinatlarından hesaplanan model boyutları; desteklenmeyen alanlar
+"N/A"), checkbox görünürlük hatası düzeltmesi (Fusion stili + açık mavi
+arka plan + beyaz check.png görseli), yeni renk paleti
+(`#0B1220`/`#131F31`/`#2563EB`/vb.), `MainWindow`'da açık bir
+`WorkflowState` makinesi (InputReady→Validated→Solved→Compared) ve
+JSON-dosyası-değişince tam sıfırlama / Excel-veya-checkbox-değişince
+yalnızca karşılaştırmayı geçersiz kılma kuralları uygulandı. Backend'e
+yalnızca katkısal iki alan eklendi: `MidasImportReport::elastic_links_rejected`
+ve düğüm sınır kutusu (bounding box) — ikisi de yeni, bağımsız hesaplanan
+GoogleTest doğrulamalarıyla (`ReportsElasticLinkRejectionCountAndNodeBoundingBox`,
+`EmptyNodeSetHasNoBoundingBox`) kontrol edildi. Mevcut solver/karşılaştırma
+algoritmaları değiştirilmedi. Yerel Windows derlemesi (`ninja-gui-release`)
+temiz (uyarı yok), yerel CTest 244 testten 239'u PASS; kalan 5 başarısızlık
+önceden var olan, bu oturumla ilgisiz `xmidas/deneme1.json` eksikliği
+yüzünden (kullanıcının kendi yerel dosya yönetimi, git HEAD'de hâlâ
+izleniyor, dokunulmadı). Windows paketleme/`release.yml` bu görevde
+bilinçli olarak değiştirilmedi.
+
 **Phase 7B's MIDAS ETMP (uniform temperature) wiring — COMPLETE/verified
 (CI run `39247142910`, 219/219 Debug/Release/ASan, 2026-10-19).** Per the
 user's explicit follow-up request, the MIDAS importer now uses Phase 7T's

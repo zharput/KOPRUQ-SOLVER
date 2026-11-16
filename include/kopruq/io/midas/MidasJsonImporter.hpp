@@ -56,10 +56,15 @@ namespace kopruq::io::midas {
 
 struct MidasImportReport {
   std::size_t nodes{}, beams{}, materials{}, sections{}, supports{}, rigid_links{}, load_cases{}, member_loads{}, thermal_loads{};
+  std::size_t elastic_links_rejected{}; // ELNK records present but rejected outright (not a count of anything imported)
   std::vector<std::string> assumptions; // disclosed substitutions, e.g. "material 1: poisson_ratio=0.2 (...)"
   std::vector<std::string> rejected;    // records explicitly not imported, with the reason
   std::map<Id, Id> originalToInternalNodeId;    // identity mapping in this importer (MIDAS IDs preserved), kept
   std::map<Id, Id> originalToInternalElementId; // explicit for the "preserve original IDs" requirement
+  // Node coordinate bounding box, purely informational (e.g. for a GUI's model-summary display)
+  // -- not used anywhere in the solve itself. Left at zero/false if there are no nodes at all.
+  bool hasBoundingBox{false};
+  Real minX{}, maxX{}, minY{}, maxY{}, minZ{}, maxZ{};
 };
 
 struct MidasImportResult { ModelInput input; MidasImportReport report; };
@@ -85,8 +90,19 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
     for (auto it = dbg.at("NODE").begin(); it != dbg.at("NODE").end(); ++it) {
       const Id id = detail::parseId(it.key());
       const auto& v = it.value();
-      out.input.model.nodes.push_back(Node{id, v.at("X").get<Real>(), v.at("Y").get<Real>(), v.at("Z").get<Real>()});
+      const Real x = v.at("X").get<Real>(), y = v.at("Y").get<Real>(), z = v.at("Z").get<Real>();
+      out.input.model.nodes.push_back(Node{id, x, y, z});
       out.report.originalToInternalNodeId[id] = id;
+      if (!out.report.hasBoundingBox) {
+        out.report.minX = out.report.maxX = x;
+        out.report.minY = out.report.maxY = y;
+        out.report.minZ = out.report.maxZ = z;
+        out.report.hasBoundingBox = true;
+      } else {
+        out.report.minX = std::min(out.report.minX, x); out.report.maxX = std::max(out.report.maxX, x);
+        out.report.minY = std::min(out.report.minY, y); out.report.maxY = std::max(out.report.maxY, y);
+        out.report.minZ = std::min(out.report.minZ, z); out.report.maxZ = std::max(out.report.maxZ, z);
+      }
     }
   out.report.nodes = out.input.model.nodes.size();
 
@@ -166,8 +182,10 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
 
   // --- ELNK: rejected outright (non-coincident elastic links, SpringLink requires coincident nodes) ---
   if (dbg.contains("ELNK"))
-    for (auto it = dbg.at("ELNK").begin(); it != dbg.at("ELNK").end(); ++it)
+    for (auto it = dbg.at("ELNK").begin(); it != dbg.at("ELNK").end(); ++it) {
       out.report.rejected.push_back("elastic link " + it.key() + ": ELNK is not yet supported (SpringLink, Phase 5.4, requires coincident nodes; see docs/MIDAS_JSON_DATA_AUDIT.md 4.5)");
+      ++out.report.elastic_links_rejected;
+    }
 
   // --- ELEM (BEAM only) ---
   if (dbg.contains("ELEM"))

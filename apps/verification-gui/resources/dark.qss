@@ -1,51 +1,62 @@
-/* KOPRUQ-SOLVER -- MIDAS Verification Tool, compact dark theme.
-   Palette matches the approved reference layout (repo root,
-   KOPRUQ-SOLVER_menu_qt6.jpg): deep navy background, slightly lighter
-   panels, blue accent on the primary action. */
+/* KOPRUQ-SOLVER -- MIDAS Verification Tool, V2.0 dark theme.
+   Palette per the approved V2.0 revision spec:
+   Window #0B1220, Panel #131F31, Panel Border #29384E, Table #0D1523,
+   Primary Blue #2563EB, Primary Hover #3B82F6, Text Primary #E5EAF2,
+   Text Secondary #A6B2C3, Success #22C55E, Warning #F59E0B, Error #EF4444,
+   Disabled Background #1C293C. {CHECK_ICON} is substituted by main.cpp with
+   an absolute path to resources/check.png at load time. */
 
 * {
   font-family: "Segoe UI", "Noto Sans", sans-serif;
-  font-size: 10pt;
-  color: #e4e8f1;
+  font-size: 12px;
+  color: #E5EAF2;
 }
 
 QMainWindow, QWidget {
-  background-color: #0f1420;
+  background-color: #0B1220;
 }
 
 QGroupBox {
-  background-color: #151c2c;
-  border: 1px solid #262f45;
+  background-color: #131F31;
+  border: 1px solid #29384E;
   border-radius: 6px;
   margin-top: 14px;
   padding: 8px;
   font-weight: 600;
+  font-size: 14px;
 }
 
 QGroupBox::title {
   subcontrol-origin: margin;
   left: 10px;
   padding: 0 4px;
-  color: #9fb0d0;
+  color: #A6B2C3;
 }
 
-QLineEdit, QPlainTextEdit, QTableWidget, QTableView {
-  background-color: #0b0f18;
-  border: 1px solid #262f45;
+#stepSidebar {
+  background-color: #131F31;
+  border-right: 1px solid #29384E;
+}
+
+QLineEdit, QPlainTextEdit, QTextEdit, QTableWidget, QTableView {
+  background-color: #0D1523;
+  border: 1px solid #29384E;
   border-radius: 4px;
   padding: 4px;
-  selection-background-color: #2f6fed;
+  selection-background-color: #2563EB;
+  font-size: 13px;
 }
 
 QLineEdit:read-only {
-  color: #b7c2db;
+  color: #A6B2C3;
 }
 
 QPushButton {
-  background-color: #1c2538;
-  border: 1px solid #2d3850;
-  border-radius: 4px;
+  background-color: #1C293C;
+  border: 1px solid #29384E;
+  border-radius: 6px;
   padding: 6px 14px;
+  font-size: 13px;
 }
 
 QPushButton:hover:!disabled {
@@ -56,26 +67,59 @@ QPushButton:disabled {
   color: #5c6680;
 }
 
-QPushButton#primaryAction {
-  background-color: #2f6fed;
-  border: 1px solid #2f6fed;
+QPushButton[primary="true"] {
+  background-color: #2563EB;
+  border: 1px solid #2563EB;
   color: #ffffff;
   font-weight: 600;
 }
 
-QPushButton#primaryAction:hover:!disabled {
-  background-color: #4c82f0;
+QPushButton[primary="true"]:hover:!disabled {
+  background-color: #3B82F6;
+}
+
+#stepSidebar QPushButton {
+  text-align: left;
+  padding: 6px 12px;
+  font-size: 14px;
+}
+
+QCheckBox {
+  spacing: 6px;
+}
+
+QCheckBox::indicator {
+  width: 17px;
+  height: 17px;
+  border-radius: 3px;
+  border: 1px solid #A6B2C3;
+  background-color: #0D1523;
+}
+
+QCheckBox::indicator:unchecked:hover {
+  border: 1px solid #3B82F6;
+}
+
+QCheckBox::indicator:checked {
+  background-color: #2563EB;
+  border: 1px solid #2563EB;
+  image: url({CHECK_ICON});
+}
+
+QCheckBox::indicator:disabled {
+  background-color: #1C293C;
+  border: 1px solid #29384E;
 }
 
 QTabWidget::pane {
-  border: 1px solid #262f45;
+  border: 1px solid #29384E;
   border-radius: 6px;
   top: -1px;
 }
 
 QTabBar::tab {
-  background-color: #151c2c;
-  border: 1px solid #262f45;
+  background-color: #131F31;
+  border: 1px solid #29384E;
   border-bottom: none;
   padding: 6px 14px;
   margin-right: 2px;
@@ -84,30 +128,30 @@ QTabBar::tab {
 }
 
 QTabBar::tab:selected {
-  background-color: #2f6fed;
+  background-color: #2563EB;
   color: #ffffff;
 }
 
 QHeaderView::section {
-  background-color: #1c2538;
-  border: 1px solid #262f45;
+  background-color: #1C293C;
+  border: 1px solid #29384E;
   padding: 4px;
 }
 
 QProgressBar {
-  background-color: #0b0f18;
-  border: 1px solid #262f45;
+  background-color: #0D1523;
+  border: 1px solid #29384E;
   border-radius: 4px;
   text-align: center;
 }
 
 QProgressBar::chunk {
-  background-color: #2f6fed;
+  background-color: #2563EB;
   border-radius: 3px;
 }
 
 QSplitter::handle {
-  background-color: #0f1420;
+  background-color: #0B1220;
 }
 
 QLabel#statusBadge {

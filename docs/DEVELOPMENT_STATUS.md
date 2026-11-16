@@ -23,30 +23,64 @@ record the current policy in this document too:
   restrictive approval-gated rule governs.
 
 ## Current priority
-**MIDAS NX JSON doğrulama (verification/models/01-04) — CNLD ve Ecm Tablo 3.1
-düzeltmeleri commit edildi (`c14bf08`, 2026-11-16), push/CI başlatılmadı.**
-Gerçek MIDAS JSON+Excel referans çiftleri (`verification/models/`) ile
-solver çıktıları elle karşılaştırıldı: (1) `MidasJsonImporter` `CNLD`
-(düğüm noktası yükü) kayıtlarını hiç okumuyordu — kök neden bulundu,
-`BMLD`/`ETMP` ile aynı desende eklendi, mevcut `NodalLoad` yapısına
-bağlandı. (2) İsimli beton gradeleri (ör. C35/45) için Ecm, EN1992-1-1'in
-sürekli formülü yerine Tablo 3.1'in sabit değeriyle (34 GPa) hesaplanacak
-şekilde değiştirildi — kullanıcı onayıyla, Model 04'teki (basit kiriş,
-yayılı yük) MIDAS referans deplasmanıyla neredeyse tam örtüşme (%2,13'ten
-%0,019'a) ile sayısal olarak doğrulandı; MIDAS'ın kendi dokümantasyonuna
-erişim denendi ama engellendi (403/Dropbox), bu yüzden karar yalnızca
-sayısal kanıta dayanıyor, açıkça belirtilerek. Model 02/03 (konsol uç
-yükleri) kuvvet/moment/reaksiyonları MIDAS ile tam örtüşüyor; kalan ~%4-5
-deplasman farkı, zaten bilinen ve henüz uygulanmamış kesme deformasyonu
-(Timoshenko, Asy/Asz) eksikliğiyle yön ve büyüklük olarak tutarlı.
-**Model 01 (Konsol_Fx) hâlâ bloke:** referans Excel dosyaları kendi
-içinde tutarsız (sabit 1,5 kN·m iç moment ama sıfır mesnet momenti) ve
-klasörde başka bir modele ait kalıntı log dosyası bulundu — kullanıcıdan
-dosyaların yeniden dışa aktarılması bekleniyor. CTest: 241/246 PASS
-(2 yeni test eklendi; kalan 5 başarısızlık önceden teşhis edilmiş,
-ilgisiz `xmidas/deneme1.json` eksikliği). Sıradaki adım: Model 05-11'in
-sırayla incelenmesi ve kesme deformasyonu uygulamasının ayrı onayla ele
-alınması.
+**MIDAS NX JSON doğrulama (verification/models/01-05) — CNLD/Ecm Tablo 3.1
+düzeltmeleri (`c14bf08`, `170db49`) ve Timoshenko kesme deformasyonu
+MIDAS import'una bağlandı (`723ec78`, 2026-11-16), push/CI başlatılmadı.**
+
+Kullanıcı modelleri 01-05'i MIDAS NX'te yeniden çalıştırıp `.xls`
+(Excel 97-2003) formatında taze referans export'ları aldı; dosya adları
+klasör adlarıyla eşleşecek şekilde yeniden düzenlendi. Tüm 5 model
+`xlrd` ile okunarak ve solver'ın `midas-nx-json` CLI çıkışıyla elle
+karşılaştırıldı:
+
+- **Model 02 (Konsol_Fy), 03 (Konsol_Fz), 04 (Basit Kiriş Uniform):**
+  Reaksiyonlar, eleman kesme/moment dağılımları MIDAS ile tam örtüşüyor.
+  Deplasman karşılaştırması kesme deformasyonu eklenmeden önce: Model 02
+  %4,63 fark, Model 03 %0,033 fark, Model 04 %0,019 fark (FORCE) /
+  %0,041 fark (POINT) — farkın yönü ve büyüklüğü, o zaman henüz
+  uygulanmamış Timoshenko kesme deformasyonu eksikliğiyle tutarlıydı.
+
+- **Kesme deformasyonu (Timoshenko) MIDAS import'una bağlandı** (kullanıcı
+  onayıyla, 2026-11-16): `MidasSectionLibrary.hpp`'ye her DBUSER şekli
+  için klasik Timoshenko kesme düzeltme faktörüyle AsH/AsB eklendi (SB
+  dikdörtgen: 5/6, izotropik; SR daire: 0,9; B kutu kesit: gövde/başlık
+  alanı yaklaşımı, henüz doğrulanmış bir modelde kullanılmıyor).
+  `MidasJsonImporter.hpp`, `SECT_BEFORE.USE_SHEAR_DEFORM` true olduğunda
+  bunları `Section::Asy/Asz`'ye bağlıyor (Asy←AsB, Asz←AsH, mevcut
+  Iy=IH/Iz=IB eşleşmesiyle aynı mantıkla); flag false ise hâlâ
+  Euler-Bernoulli (Asy=Asz=0). Sonuç: Model 02'nin farkı %4,63'ten
+  %1,89'a düştü; Model 03/04 (zaten neredeyse tam örtüşen) %0,23'lük
+  küçük bir aşırı düzeltmeye kaydı. Fark tam sıfıra zorlanmadı —
+  kalan ~%0,2-1,9 fark, kullanılan kesme düzeltme faktörünün MIDAS'ın
+  kendi (bilinmeyen) değerinden küçük bir farkı olabileceğini gösteriyor,
+  sayısal kanıt bu şekilde raporlanıyor.
+
+- **Model 01 (Konsol_Fx) — bloke, kullanıcı talimatıyla mevcut veriyle
+  ilerlendi:** Kullanıcı modeli yeniden çalıştırdı (taze export,
+  2026-11-16 12:54-12:59), ancak aynı anomali tekrarlanıyor: tüm 4
+  elemanda sabit Moment-y=-1,5 kN·m, Shear-z=0, ama mesnet MY=0 — saf
+  eksenel yük altında bu denge koşuluyla açıklanamaz. Bu artık **export
+  corruption değil** (önceki hipotez geçersiz); MIDAS'ın kendi
+  çıktısında tekrarlanabilir bir denge ihlali olarak kayda geçiyor.
+  Solver'ın kendi sonucu (sıfır moment, pür eksenel) denge açısından
+  doğru; bu modelin referans verisiyle sayısal eşleşme aranmıyor.
+
+- **Model 05 (Cerceve-1) — bloke, kullanıcı talimatıyla mevcut veriyle
+  ilerlendi:** Geometrik olarak tam simetrik portal çerçeve (iki kolon,
+  5 m, aynı kesit/malzeme, ikisi de ankastre), FORCE yük durumu da
+  simetrik (kirişte tekdüze yayılı yük). Solver, beklenen simetrik
+  sonucu veriyor (FZ=11750/11750, MY=±7555,77 — iç denge tanılamaları
+  makine hassasiyetinde). MIDAS referansı **asimetrik**: FZ=10799,7/
+  12700,3, MY=9898,957/-395,95 (toplam FZ=23500 tutuyor ama dağılım
+  simetrik değil). Model 01'den bağımsız, ikinci bir MIDAS referans
+  verisi tutarsızlığı; sayısal formülasyon bu asimetrik sonuca
+  zorlanmadı.
+
+CTest (Release ve Debug, ayrı ayrı çalıştırıldı): 225/230 PASS (6 yeni
+test eklendi — `midas_section_shear_area_tests.cpp`,
+`midas_json_importer_shear_tests.cpp`; kalan 5 başarısızlık önceden
+teşhis edilmiş, ilgisiz `xmidas/deneme1.json` eksikliği, bu oturumda
+değişmedi). Kullanıcı talimatıyla **model 06-11'e geçilmedi.**
 
 **Qt6 Verification GUI V2.0 revizyonu — yerel olarak derlendi ve test edildi,
 commit/push ve CI henüz onay bekliyor (2026-11-16).** Kullanıcının detaylı

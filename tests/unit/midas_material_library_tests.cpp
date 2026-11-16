@@ -34,6 +34,27 @@ TEST(MidasMaterialLibrary, C45_55GivesAHigherModulusThanC35_45) {
   EXPECT_GT(b.material.elastic_modulus, a.material.elastic_modulus);
 }
 
+// Phase 7B requalification (2026-11-16): named grades in EN1992-1-1 Table 3.1 use that
+// table's fixed/rounded Ecm, not the continuous fck-based formula -- see
+// MidasMaterialLibrary.hpp's header comment for the empirical cross-check against real
+// MIDAS reference results that motivated this (verification/models/04, user-approved).
+TEST(MidasMaterialLibrary, NamedGradeInTable3_1UsesFixedEcmNotTheFormula) {
+  auto r = resolveConcreteGradeMaterial(1, "EN04(RC)", 35.0, "C35/45");
+  EXPECT_DOUBLE_EQ(r.material.elastic_modulus, 34.0e6); // 34 GPa -> kN/m^2
+  ASSERT_EQ(r.assumptions.size(), 4u);
+  EXPECT_NE(r.assumptions[0].source.find("Table 3.1"), std::string::npos);
+}
+
+TEST(MidasMaterialLibrary, GradeNotInTableFallsBackToFormula) {
+  // Same fck as the C35/45 case above, but a grade name not in the Table 3.1 lookup --
+  // must reproduce the pre-existing formula-derived value, not the table's 34 GPa.
+  auto withoutTable = resolveConcreteGradeMaterial(1, "EN04(RC)", 35.0, "NOT-A-TABLE-GRADE");
+  auto noGradeAtAll = resolveConcreteGradeMaterial(1, "EN04(RC)", 35.0);
+  EXPECT_DOUBLE_EQ(withoutTable.material.elastic_modulus, noGradeAtAll.material.elastic_modulus);
+  EXPECT_NE(withoutTable.material.elastic_modulus, 34.0e6);
+  EXPECT_NE(withoutTable.assumptions[0].source.find("not in the EN1992-1-1 Table 3.1"), std::string::npos);
+}
+
 TEST(MidasMaterialLibrary, RejectsUnsupportedCodeFamily) {
   EXPECT_THROW(resolveConcreteGradeMaterial(1, "ACI318(RC)", 35.0), std::invalid_argument);
   EXPECT_THROW(resolveConcreteGradeMaterial(1, "EN04(STEEL)", 35.0), std::invalid_argument);

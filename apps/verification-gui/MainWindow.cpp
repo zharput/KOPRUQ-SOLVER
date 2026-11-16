@@ -298,8 +298,8 @@ void MainWindow::onRunFinished(int exitCode, QProcess::ExitStatus status, const 
 void MainWindow::onSolverLogLine(const QString& line) {
   static const QRegularExpression importRe(
       "midas-nx-json import: (\\d+) nodes, (\\d+) beams, (\\d+) materials, (\\d+) sections, "
-      "(\\d+) supports, (\\d+) rigid links, (\\d+) load cases, (\\d+) member loads, "
-      "(\\d+) thermal loads, (\\d+) elastic links rejected");
+      "(\\d+) supports, (\\d+) rigid links, (\\d+) load cases, (\\d+) nodal loads, "
+      "(\\d+) member loads, (\\d+) thermal loads, (\\d+) elastic links rejected");
   static const QRegularExpression boundsRe(
       R"(midas-nx-json bounds: X\[([-\d.eE]+),([-\d.eE]+)\] Y\[([-\d.eE]+),([-\d.eE]+)\] Z\[([-\d.eE]+),([-\d.eE]+)\])");
 
@@ -309,7 +309,7 @@ void MainWindow::onSolverLogLine(const QString& line) {
     modelInfo_.materialCount = m.captured(3).toLong(); modelInfo_.hasMaterialCount = true;
     modelInfo_.sectionCount = m.captured(4).toLong(); modelInfo_.hasSectionCount = true;
     modelInfo_.loadCaseCount = m.captured(7).toLong(); modelInfo_.hasLoadCaseCount = true;
-    modelInfo_.elasticLinkCount = m.captured(10).toLong(); modelInfo_.hasElasticLinkCount = true;
+    modelInfo_.elasticLinkCount = m.captured(11).toLong(); modelInfo_.hasElasticLinkCount = true;
     // combinationCount is deliberately never set here -- MIDAS load combinations are not parsed
     // by the importer at all, so ModelInfoPanel keeps showing "N/A" for it, not a guess.
     modelInfoPanel_->setData(modelInfo_);

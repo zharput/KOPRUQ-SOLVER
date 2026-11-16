@@ -9,7 +9,8 @@
 // (TYPE="BEAM" only), MATL/MATD (TYPE="CONC", grade-named via a
 // EN..(RC) code family only), SECT (SECTTYPE="DBUSER", shapes SB/B/SR
 // only), CONS (point restraints), RIGD (master/slave rigid links), BODF
-// (self-weight, direction must be exactly global -Z), BMLD
+// (self-weight, direction must be exactly global -Z), CNLD (concentrated
+// nodal loads FX/FY/FZ/MX/MY/MZ, global axes), BMLD
 // (CMD="BEAM", TYPE="UNILOAD", DIRECTION="GZ" uniform member loads),
 // ETMP (uniform element temperature -- maps directly onto
 // MemberThermalLoad::uniform_delta_t, Phase 7T; TEMP is already a
@@ -56,6 +57,7 @@ namespace kopruq::io::midas {
 
 struct MidasImportReport {
   std::size_t nodes{}, beams{}, materials{}, sections{}, supports{}, rigid_links{}, load_cases{}, member_loads{}, thermal_loads{};
+  std::size_t nodal_loads{}; // CNLD records imported (concentrated nodal forces/moments)
   std::size_t elastic_links_rejected{}; // ELNK records present but rejected outright (not a count of anything imported)
   std::vector<std::string> assumptions; // disclosed substitutions, e.g. "material 1: poisson_ratio=0.2 (...)"
   std::vector<std::string> rejected;    // records explicitly not imported, with the reason
@@ -116,8 +118,9 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
       const auto& matd = dbg.at("MATD").at(it.key());
       try {
         const std::string codeName = matd.at("DATA1").at("CODENAME").get<std::string>();
+        const std::string gradeName = matd.at("DATA1").value("CODEMATLNAME", std::string());
         const Real fckKNm2 = matd.at("DATA1").at("DESIGN").at("C_FC").get<Real>();
-        auto resolved = resolveConcreteGradeMaterial(id, codeName, fckKNm2 / 1000.0); // kN/m^2 -> MPa
+        auto resolved = resolveConcreteGradeMaterial(id, codeName, fckKNm2 / 1000.0, gradeName); // kN/m^2 -> MPa
         out.input.model.materials.push_back(resolved.material);
         for (const auto& a : resolved.assumptions)
           out.report.assumptions.push_back("material " + it.key() + " (" + a.field + "): " + a.value + " -- " + a.source);
@@ -236,6 +239,25 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
         continue;
       }
       caseFor(lc).self_weight = 1.0;
+    }
+
+  // --- CNLD (concentrated nodal loads: FX/FY/FZ/MX/MY/MZ, global axes -- MIDAS does not offer a
+  // local-axis option for nodal loads, unlike BMLD's member loads) ---
+  if (dbg.contains("CNLD"))
+    for (auto it = dbg.at("CNLD").begin(); it != dbg.at("CNLD").end(); ++it) {
+      const Id node = detail::parseId(it.key());
+      for (const auto& item : it.value().at("ITEMS")) {
+        const std::string lc = item.at("LCNAME").get<std::string>();
+        NodalLoad nl; nl.node = node;
+        nl.values(0) = item.value("FX", Real(0));
+        nl.values(1) = item.value("FY", Real(0));
+        nl.values(2) = item.value("FZ", Real(0));
+        nl.values(3) = item.value("MX", Real(0));
+        nl.values(4) = item.value("MY", Real(0));
+        nl.values(5) = item.value("MZ", Real(0));
+        caseFor(lc).nodal.push_back(nl);
+        ++out.report.nodal_loads;
+      }
     }
 
   // --- BMLD (uniform member loads, CMD=BEAM, TYPE=UNILOAD, DIRECTION=GZ only) ---

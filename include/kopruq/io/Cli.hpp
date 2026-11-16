@@ -65,9 +65,9 @@ inline bool parseArgs(const char* command, const std::vector<std::string>& args,
 inline void reportMidasImport(const midas::MidasImportReport& r, std::ostream& err) {
   err << "midas-nx-json import: " << r.nodes << " nodes, " << r.beams << " beams, " << r.materials
       << " materials, " << r.sections << " sections, " << r.supports << " supports, "
-      << r.rigid_links << " rigid links, " << r.load_cases << " load cases, " << r.member_loads
-      << " member loads, " << r.thermal_loads << " thermal loads, " << r.elastic_links_rejected
-      << " elastic links rejected\n";
+      << r.rigid_links << " rigid links, " << r.load_cases << " load cases, " << r.nodal_loads
+      << " nodal loads, " << r.member_loads << " member loads, " << r.thermal_loads
+      << " thermal loads, " << r.elastic_links_rejected << " elastic links rejected\n";
   if (r.hasBoundingBox) {
     err << "midas-nx-json bounds: X[" << r.minX << "," << r.maxX << "] Y[" << r.minY << "," << r.maxY
         << "] Z[" << r.minZ << "," << r.maxZ << "]\n";

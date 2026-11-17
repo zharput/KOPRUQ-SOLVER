@@ -155,10 +155,12 @@ void ModelViewerWidget::applyCameraMatrix() {
 
   const float yaw = qDegreesToRadians(yawDeg_);
   const float pitch = qDegreesToRadians(pitchDeg_);
-  const QVector3D eye = target_ + distance_ * QVector3D(std::cos(pitch) * std::cos(yaw), std::sin(pitch), std::cos(pitch) * std::sin(yaw));
+  // KOPRUQ-SOLVER's global axes are UX/UY/UZ with Z vertical (CLAUDE.md) -- yaw sweeps the
+  // horizontal XY plane, pitch lifts the eye along Z, and Z is the up vector for every view.
+  const QVector3D eye = target_ + distance_ * QVector3D(std::cos(pitch) * std::cos(yaw), std::cos(pitch) * std::sin(yaw), std::sin(pitch));
 
   QMatrix4x4 view;
-  view.lookAt(eye, target_, QVector3D(0, 1, 0)); // Y is the consistent vertical axis for every view
+  view.lookAt(eye, target_, QVector3D(0, 0, 1)); // Z is the consistent vertical axis for every view
 
   lastMvp_ = proj * view;
   glMatrixMode(GL_PROJECTION);
@@ -238,21 +240,22 @@ void ModelViewerWidget::drawSupports(float s) {
     const QVector3D& p = node->pos;
     const SupportKind kind = classifyRestraint(restraint);
     switch (kind) {
+      // Symbols hang below the node along -Z (KOPRUQ-SOLVER's vertical axis), in the X/Z plane.
       case SupportKind::Fixed: {
         glBegin(GL_LINE_LOOP);
-        glVertex3f(p.x()-s, p.y()-s, p.z()); glVertex3f(p.x()+s, p.y()-s, p.z());
-        glVertex3f(p.x()+s, p.y()-s, p.z()+2*s); glVertex3f(p.x()-s, p.y()-s, p.z()+2*s);
+        glVertex3f(p.x()-s, p.y(), p.z()-s); glVertex3f(p.x()+s, p.y(), p.z()-s);
+        glVertex3f(p.x()+s, p.y(), p.z()-3*s); glVertex3f(p.x()-s, p.y(), p.z()-3*s);
         glEnd();
         glBegin(GL_LINES);
-        glVertex3f(p.x(), p.y(), p.z()); glVertex3f(p.x(), p.y()-s, p.z());
+        glVertex3f(p.x(), p.y(), p.z()); glVertex3f(p.x(), p.y(), p.z()-s);
         glEnd();
         break;
       }
       case SupportKind::Pinned: {
         glBegin(GL_LINE_LOOP);
         glVertex3f(p.x(), p.y(), p.z());
-        glVertex3f(p.x()-s, p.y()-2*s, p.z());
-        glVertex3f(p.x()+s, p.y()-2*s, p.z());
+        glVertex3f(p.x()-s, p.y(), p.z()-2*s);
+        glVertex3f(p.x()+s, p.y(), p.z()-2*s);
         glEnd();
         break;
       }
@@ -261,17 +264,17 @@ void ModelViewerWidget::drawSupports(float s) {
         glBegin(GL_LINE_LOOP);
         for (int i = 0; i < kSegments; ++i) {
           const float a = 2.0f * 3.14159265f * i / kSegments;
-          glVertex3f(p.x() + s * std::cos(a), p.y() - 2*s + s * std::sin(a), p.z());
+          glVertex3f(p.x() + s * std::cos(a), p.y(), p.z() - 2*s + s * std::sin(a));
         }
         glEnd();
         break;
       }
       case SupportKind::Custom: {
         glBegin(GL_LINE_LOOP);
-        glVertex3f(p.x(), p.y()-2*s, p.z());
-        glVertex3f(p.x()-s, p.y()-s, p.z());
+        glVertex3f(p.x(), p.y(), p.z()-2*s);
+        glVertex3f(p.x()-s, p.y(), p.z()-s);
         glVertex3f(p.x(), p.y(), p.z());
-        glVertex3f(p.x()+s, p.y()-s, p.z());
+        glVertex3f(p.x()+s, p.y(), p.z()-s);
         glEnd();
         break;
       }
@@ -314,9 +317,9 @@ void ModelViewerWidget::drawAxisGizmo() {
   proj.ortho(-1.6f, 1.6f, -1.6f, 1.6f, -10.0f, 10.0f);
   const float yaw = qDegreesToRadians(yawDeg_);
   const float pitch = qDegreesToRadians(pitchDeg_);
-  const QVector3D dir(std::cos(pitch) * std::cos(yaw), std::sin(pitch), std::cos(pitch) * std::sin(yaw));
+  const QVector3D dir(std::cos(pitch) * std::cos(yaw), std::cos(pitch) * std::sin(yaw), std::sin(pitch));
   QMatrix4x4 view;
-  view.lookAt(dir * 4.0f, QVector3D(0, 0, 0), QVector3D(0, 1, 0));
+  view.lookAt(dir * 4.0f, QVector3D(0, 0, 0), QVector3D(0, 0, 1));
   QMatrix4x4 mvp = proj * view;
   glMatrixMode(GL_PROJECTION);
   glLoadIdentity();
@@ -455,8 +458,8 @@ void ModelViewerWidget::mouseMoveEvent(QMouseEvent* event) {
     update();
   } else if (panning_) {
     const float yaw = qDegreesToRadians(yawDeg_);
-    const QVector3D right(-std::sin(yaw), 0.0f, std::cos(yaw));
-    const QVector3D up(0.0f, 1.0f, 0.0f);
+    const QVector3D right(-std::sin(yaw), std::cos(yaw), 0.0f);
+    const QVector3D up(0.0f, 0.0f, 1.0f); // Z vertical
     const float panScale = distance_ * 0.002f;
     target_ -= right * (delta.x() * panScale);
     target_ += up * (delta.y() * panScale);

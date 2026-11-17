@@ -16,12 +16,15 @@
 #include <QDir>
 #include <QFile>
 #include <QFileDialog>
+#include <QCheckBox>
 #include <QFileInfo>
+#include <QGroupBox>
 #include <QHBoxLayout>
 #include <QPlainTextEdit>
 #include <QRegularExpression>
 #include <QSplitter>
 #include <QStandardPaths>
+#include <QStyle>
 #include <QTableWidget>
 #include <QTableWidgetItem>
 #include <QTabWidget>
@@ -136,63 +139,78 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
   // V2.2 Stage A: "Model Görünümü" sits beside the existing results-tables group as a sibling
   // tab, switchable, rather than replacing/nesting inside ResultsComparisonPanel's own internal
   // tab widget (which stays exactly as it was).
+  // V2.2 layout revision (2026-11-17, user feedback): icon-based toolbar (Qt's built-in
+  // QStyle::standardIcon pixmaps, tooltips carry the Turkish label -- no new SVG assets drawn
+  // for this pass), a right-hand "Görünüm Seçenekleri" checkbox panel for the display toggles
+  // (previously toolbar toggle buttons), and a full-width bottom selection-info bar, matching
+  // the approved reference layout's structure. No new rendering features (no color-by-section,
+  // thickness slider, load arrows, or deformed shape) were added -- those were explicitly out of
+  // scope for this pass per the user's own choice.
   modelViewer_ = new ModelViewerWidget(this);
+  auto* style = this->style();
   auto* viewerToolBar = new QToolBar(tr("Görünüm Araçları"), this);
-  viewerToolBar->addAction(tr("Modele Sığdır"), modelViewer_, &ModelViewerWidget::fitToModel);
-  viewerToolBar->addAction(tr("Görünümü Sıfırla"), modelViewer_, &ModelViewerWidget::resetView);
+  auto addIconAction = [&](const QString& tip, QStyle::StandardPixmap icon, auto&& slot) {
+    QAction* a = viewerToolBar->addAction(style->standardIcon(icon), tip);
+    a->setToolTip(tip);
+    connect(a, &QAction::triggered, modelViewer_, slot);
+    return a;
+  };
+  addIconAction(tr("Modele Sığdır"), QStyle::SP_TitleBarMaxButton, &ModelViewerWidget::fitToModel);
+  addIconAction(tr("Görünümü Sıfırla"), QStyle::SP_BrowserReload, &ModelViewerWidget::resetView);
   viewerToolBar->addSeparator();
-  viewerToolBar->addAction(tr("İzometrik"), modelViewer_, &ModelViewerWidget::viewIsometric);
-  viewerToolBar->addAction(tr("Üstten"), modelViewer_, &ModelViewerWidget::viewTop);
-  viewerToolBar->addAction(tr("Önden"), modelViewer_, &ModelViewerWidget::viewFront);
-  viewerToolBar->addAction(tr("Yandan"), modelViewer_, &ModelViewerWidget::viewSide);
+  addIconAction(tr("İzometrik"), QStyle::SP_ComputerIcon, &ModelViewerWidget::viewIsometric);
+  addIconAction(tr("Üstten"), QStyle::SP_ArrowUp, &ModelViewerWidget::viewTop);
+  addIconAction(tr("Önden"), QStyle::SP_ArrowRight, &ModelViewerWidget::viewFront);
+  addIconAction(tr("Yandan"), QStyle::SP_ArrowForward, &ModelViewerWidget::viewSide);
   viewerToolBar->addSeparator();
-  viewerToolBar->addAction(tr("Yakınlaştır"), modelViewer_, &ModelViewerWidget::zoomIn);
-  viewerToolBar->addAction(tr("Uzaklaştır"), modelViewer_, &ModelViewerWidget::zoomOut);
-  viewerToolBar->addSeparator();
-  // V2.2 Stage B: ID labels default OFF (performance requirement for dense models).
-  auto* nodeIdAction = viewerToolBar->addAction(tr("Düğüm ID"));
-  nodeIdAction->setCheckable(true);
-  connect(nodeIdAction, &QAction::toggled, modelViewer_, &ModelViewerWidget::setShowNodeIds);
-  auto* elementIdAction = viewerToolBar->addAction(tr("Eleman ID"));
-  elementIdAction->setCheckable(true);
-  connect(elementIdAction, &QAction::toggled, modelViewer_, &ModelViewerWidget::setShowElementIds);
-  viewerToolBar->addSeparator();
-  // V2.2 Stage C: Supports/Elastic Links default ON (cheap, structurally important); Local Axes
-  // default OFF (visual clutter), matching ModelViewerWidget's own defaults.
-  auto* supportsAction = viewerToolBar->addAction(tr("Mesnetler"));
-  supportsAction->setCheckable(true);
-  supportsAction->setChecked(true);
-  connect(supportsAction, &QAction::toggled, modelViewer_, &ModelViewerWidget::setShowSupports);
-  auto* elasticLinksAction = viewerToolBar->addAction(tr("Elastik Bağlantılar"));
-  elasticLinksAction->setCheckable(true);
-  elasticLinksAction->setChecked(true);
-  connect(elasticLinksAction, &QAction::toggled, modelViewer_, &ModelViewerWidget::setShowElasticLinks);
-  auto* localAxesAction = viewerToolBar->addAction(tr("Yerel Eksenler"));
-  localAxesAction->setCheckable(true);
-  connect(localAxesAction, &QAction::toggled, modelViewer_, &ModelViewerWidget::setShowLocalAxes);
+  addIconAction(tr("Yakınlaştır"), QStyle::SP_ArrowUp, &ModelViewerWidget::zoomIn);
+  addIconAction(tr("Uzaklaştır"), QStyle::SP_ArrowDown, &ModelViewerWidget::zoomOut);
 
-  // V2.2 Stage B: Element/Node Information panel, filled only from ModelViewerWidget's own
+  // Display toggles, moved out of the toolbar into a dedicated right-hand panel.
+  auto* optionsPanel = new QGroupBox(tr("Görünüm Seçenekleri"), this);
+  auto* optionsLayout = new QVBoxLayout(optionsPanel);
+  auto addToggle = [&](const QString& label, bool defaultOn, auto&& slot) {
+    auto* box = new QCheckBox(label, optionsPanel);
+    box->setChecked(defaultOn);
+    connect(box, &QCheckBox::toggled, modelViewer_, slot);
+    optionsLayout->addWidget(box);
+    return box;
+  };
+  // V2.2 Stage B: ID labels default OFF (performance requirement for dense models).
+  addToggle(tr("Düğüm Numaraları"), false, &ModelViewerWidget::setShowNodeIds);
+  addToggle(tr("Eleman Numaraları"), false, &ModelViewerWidget::setShowElementIds);
+  // V2.2 Stage C: Supports/Elastic Links default ON (cheap, structurally important); Local Axes
+  // default OFF (visual clutter) -- matching ModelViewerWidget's own defaults.
+  addToggle(tr("Mesnetler"), true, &ModelViewerWidget::setShowSupports);
+  addToggle(tr("Elastik Bağlantılar"), true, &ModelViewerWidget::setShowElasticLinks);
+  addToggle(tr("Lokal Eksenler"), false, &ModelViewerWidget::setShowLocalAxes);
+  optionsLayout->addStretch(1);
+  optionsPanel->setMaximumWidth(220);
+
+  // V2.2 Stage B: full-width selection-info bar, filled only from ModelViewerWidget's own
   // selection signals -- its text is built from real model fields, never fabricated here.
-  auto* viewerInfoPanel = new QPlainTextEdit(this);
-  viewerInfoPanel->setReadOnly(true);
-  viewerInfoPanel->setPlainText(tr("Seçim yok."));
-  viewerInfoPanel->setMaximumWidth(260);
-  connect(modelViewer_, &ModelViewerWidget::nodeInfoChanged, viewerInfoPanel, &QPlainTextEdit::setPlainText);
-  connect(modelViewer_, &ModelViewerWidget::elementInfoChanged, viewerInfoPanel, &QPlainTextEdit::setPlainText);
-  connect(modelViewer_, &ModelViewerWidget::selectionCleared, viewerInfoPanel, [viewerInfoPanel, this] { viewerInfoPanel->setPlainText(tr("Seçim yok.")); });
+  auto* viewerInfoBar = new QPlainTextEdit(this);
+  viewerInfoBar->setReadOnly(true);
+  viewerInfoBar->setPlainText(tr("Seçim yok."));
+  viewerInfoBar->setMaximumHeight(90);
+  connect(modelViewer_, &ModelViewerWidget::nodeInfoChanged, viewerInfoBar, &QPlainTextEdit::setPlainText);
+  connect(modelViewer_, &ModelViewerWidget::elementInfoChanged, viewerInfoBar, &QPlainTextEdit::setPlainText);
+  connect(modelViewer_, &ModelViewerWidget::selectionCleared, viewerInfoBar, [viewerInfoBar, this] { viewerInfoBar->setPlainText(tr("Seçim yok.")); });
+
+  auto* viewerMiddle = new QWidget(this);
+  auto* viewerMiddleLayout = new QHBoxLayout(viewerMiddle);
+  viewerMiddleLayout->setContentsMargins(0, 0, 0, 0);
+  viewerMiddleLayout->setSpacing(0);
+  viewerMiddleLayout->addWidget(modelViewer_, 1);
+  viewerMiddleLayout->addWidget(optionsPanel);
 
   auto* viewerPage = new QWidget(this);
-  auto* viewerOuterLayout = new QHBoxLayout(viewerPage);
-  viewerOuterLayout->setContentsMargins(0, 0, 0, 0);
-  viewerOuterLayout->setSpacing(0);
-  auto* viewerLeft = new QWidget(viewerPage);
-  auto* viewerLayout = new QVBoxLayout(viewerLeft);
+  auto* viewerLayout = new QVBoxLayout(viewerPage);
   viewerLayout->setContentsMargins(0, 0, 0, 0);
   viewerLayout->setSpacing(0);
   viewerLayout->addWidget(viewerToolBar);
-  viewerLayout->addWidget(modelViewer_, 1);
-  viewerOuterLayout->addWidget(viewerLeft, 1);
-  viewerOuterLayout->addWidget(viewerInfoPanel);
+  viewerLayout->addWidget(viewerMiddle, 1);
+  viewerLayout->addWidget(viewerInfoBar);
 
   auto* resultsTabs = new QTabWidget(this);
   resultsTabs->addTab(resultsPanel_, tr("Sonuç Karşılaştırma Tabloları"));

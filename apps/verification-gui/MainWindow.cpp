@@ -3,11 +3,14 @@
 #include "ExecutionLogPanel.h"
 #include "FileInputPanel.h"
 #include "ResultsComparisonPanel.h"
+#include "ModelViewerWidget.h"
 #include "SolverRunner.h"
 #include "EigenvalueReferenceReader.h"
 #include "ExcelReferenceReader.h"
 #include "ResultMatcher.h"
 #include "VerificationReportExporter.h"
+#include "../../include/kopruq/io/Cli.hpp"
+#include "../../include/kopruq/assembly/MatrixAssembler.hpp"
 #include <QCloseEvent>
 #include <QDateTime>
 #include <QDir>
@@ -19,10 +22,13 @@
 #include <QStandardPaths>
 #include <QTableWidget>
 #include <QTableWidgetItem>
+#include <QTabWidget>
+#include <QToolBar>
 #include <QVBoxLayout>
 #include <QWidget>
 #include <algorithm>
 #include <fstream>
+#include <sstream>
 
 using kopruq::verification::CategoryComparison;
 using kopruq::verification::ComparisonRow;
@@ -124,9 +130,36 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 
   modelInfoPanel_ = new ModelInfoPanel(this);
   resultsPanel_ = new ResultsComparisonPanel(this);
+
+  // V2.2 Stage A: "Model Görünümü" sits beside the existing results-tables group as a sibling
+  // tab, switchable, rather than replacing/nesting inside ResultsComparisonPanel's own internal
+  // tab widget (which stays exactly as it was).
+  modelViewer_ = new ModelViewerWidget(this);
+  auto* viewerToolBar = new QToolBar(tr("Görünüm Araçları"), this);
+  viewerToolBar->addAction(tr("Modele Sığdır"), modelViewer_, &ModelViewerWidget::fitToModel);
+  viewerToolBar->addAction(tr("Görünümü Sıfırla"), modelViewer_, &ModelViewerWidget::resetView);
+  viewerToolBar->addSeparator();
+  viewerToolBar->addAction(tr("İzometrik"), modelViewer_, &ModelViewerWidget::viewIsometric);
+  viewerToolBar->addAction(tr("Üstten"), modelViewer_, &ModelViewerWidget::viewTop);
+  viewerToolBar->addAction(tr("Önden"), modelViewer_, &ModelViewerWidget::viewFront);
+  viewerToolBar->addAction(tr("Yandan"), modelViewer_, &ModelViewerWidget::viewSide);
+  viewerToolBar->addSeparator();
+  viewerToolBar->addAction(tr("Yakınlaştır"), modelViewer_, &ModelViewerWidget::zoomIn);
+  viewerToolBar->addAction(tr("Uzaklaştır"), modelViewer_, &ModelViewerWidget::zoomOut);
+  auto* viewerPage = new QWidget(this);
+  auto* viewerLayout = new QVBoxLayout(viewerPage);
+  viewerLayout->setContentsMargins(0, 0, 0, 0);
+  viewerLayout->setSpacing(0);
+  viewerLayout->addWidget(viewerToolBar);
+  viewerLayout->addWidget(modelViewer_, 1);
+
+  auto* resultsTabs = new QTabWidget(this);
+  resultsTabs->addTab(resultsPanel_, tr("Sonuç Karşılaştırma Tabloları"));
+  resultsTabs->addTab(viewerPage, tr("Model Görünümü"));
+
   auto* bottomSplitter = new QSplitter(Qt::Horizontal, this);
   bottomSplitter->addWidget(modelInfoPanel_);
-  bottomSplitter->addWidget(resultsPanel_);
+  bottomSplitter->addWidget(resultsTabs);
   bottomSplitter->setStretchFactor(0, 1);
   bottomSplitter->setStretchFactor(1, 3);
 
@@ -221,7 +254,29 @@ void MainWindow::fullReset() {
   state_ = WorkflowState::InputReady;
   modelInfo_ = ModelInfoPanel::Info{};
   modelInfoPanel_->reset();
+  modelViewer_->clearModel();
   applyWorkflowState();
+}
+
+void MainWindow::loadViewerModel() {
+  modelViewer_->clearModel(); // never leave a stale model displayed while (re)loading
+  if (!fileInputPanel_->isUsable(FileInputPanel::Row::MidasModel)) return;
+  const std::string path = fileInputPanel_->filePath(FileInputPanel::Row::MidasModel).toStdString();
+  std::string text;
+  kopruq::io::ModelInput model;
+  int exitCode = 0;
+  std::ostringstream err;
+  if (!kopruq::io::detail::readModelFile(path, "midas-nx-json", err, text, model, exitCode)) {
+    appendLog(tr("Model Görünümü: dosya okunamadı (%1).").arg(QString::fromStdString(err.str())), /*Warning*/ 2);
+    return;
+  }
+  try {
+    kopruq::MatrixAssembler::assemble(model.model); // same validation gate as a solve
+  } catch (const std::exception& e) {
+    appendLog(tr("Model Görünümü: model geçerli değil (%1).").arg(QString::fromStdString(e.what())), /*Warning*/ 2);
+    return;
+  }
+  modelViewer_->setModel(model);
 }
 
 void MainWindow::onModelRowChanged() {
@@ -229,6 +284,7 @@ void MainWindow::onModelRowChanged() {
   // compare result belonged to whatever file was selected before, so a full reset is the only
   // safe response to the MIDAS model row itself changing.
   fullReset();
+  loadViewerModel();
   appendLog(tr("Model dosyası değişti, durum sıfırlandı."), /*Info*/ 0);
 }
 

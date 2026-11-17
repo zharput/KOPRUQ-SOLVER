@@ -22,6 +22,7 @@ class AnalysisControlPanel;
 class ExecutionLogPanel;
 class ResultsComparisonPanel;
 class SolverRunner;
+class ModelViewerWidget;
 class QCloseEvent;
 class QTableWidget;
 
@@ -55,12 +56,19 @@ private:
   void invalidateComparison();   // Compared -> Solved (comparison tables/cache cleared)
   void invalidateSolveAndBeyond(); // Solved/Compared -> Validated (+ invalidateComparison)
   void fullReset();              // anything -> InputReady (+ invalidateSolveAndBeyond, model info panel reset)
+  // V2.2 Stage A: (re)loads the "Model Görünümü" 3D viewer from the current MIDAS model row via
+  // the same kopruq::io::readModelFile(..., "midas-nx-json", ...) path the CLI/solver use, and
+  // the same MatrixAssembler::assemble() used before any solve as its validation gate -- never a
+  // separate parser. Clears the viewer first so a failed import/validation never leaves a stale
+  // model displayed.
+  void loadViewerModel();
 
   FileInputPanel* fileInputPanel_{};
   AnalysisControlPanel* analysisControlPanel_{};
   ExecutionLogPanel* executionLogPanel_{};
   ModelInfoPanel* modelInfoPanel_{};
   ResultsComparisonPanel* resultsPanel_{};
+  ModelViewerWidget* modelViewer_{};
   SolverRunner* solverRunner_{};
 
   WorkflowState state_{WorkflowState::InputReady};

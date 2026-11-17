@@ -44,7 +44,10 @@ if(KOPRUQ_BUILD_GUI)
   # V2.1: Svg is needed for QSvgRenderer (apps/verification-gui/IconProvider.cpp rasterizes and
   # tints the embedded line-icon SVGs at runtime) -- requires vcpkg's "qtsvg" port, added to the
   # "gui" manifest feature below.
-  find_package(Qt6 CONFIG REQUIRED COMPONENTS Widgets Svg)
+  # V2.2: OpenGLWidgets is needed for QOpenGLWidget (apps/verification-gui/ModelViewerWidget.cpp,
+  # the 3D MIDAS model viewer) -- requires vcpkg's qtbase "opengl" feature, added to the "gui"
+  # manifest feature below alongside the pre-existing "gui,widgets,thread".
+  find_package(Qt6 CONFIG REQUIRED COMPONENTS Widgets Svg OpenGL OpenGLWidgets)
 
   # verification/: Qt-independent (GUI-4 Excel reading today; ResultMatcher/ComparisonEngine/
   # VerificationReportExporter land here in later milestones) -- gated the same way as the GUI
@@ -80,14 +83,18 @@ if(KOPRUQ_BUILD_GUI)
     apps/verification-gui/SolverRunner.cpp
     apps/verification-gui/IconProvider.cpp
     apps/verification-gui/PanelHeader.cpp
+    apps/verification-gui/ModelViewerWidget.cpp
     apps/verification-gui/resources/icons.qrc)
-  target_link_libraries(kopruq_verification_gui PRIVATE kopruq_solver_io Qt6::Widgets Qt6::Svg kopruq_verification)
+  target_link_libraries(kopruq_verification_gui PRIVATE kopruq_solver_io Qt6::Widgets Qt6::Svg Qt6::OpenGL Qt6::OpenGLWidgets kopruq_verification)
   # vcpkg's x64-linux triplet is static by default (x64-windows is dynamic), so there is no
   # libqxcb.so to load at runtime -- the xcb platform plugin must be linked in statically and
   # registered via Q_IMPORT_PLUGIN (apps/verification-gui/main.cpp). Harmless/inert on Windows,
   # where windeployqt's dynamic qwindows.dll is unaffected by this.
   if(UNIX AND NOT APPLE)
     target_link_libraries(kopruq_verification_gui PRIVATE Qt6::QXcbIntegrationPlugin)
+  endif()
+  if(WIN32)
+    target_link_libraries(kopruq_verification_gui PRIVATE opengl32)
   endif()
   set(CMAKE_AUTOMOC OFF)
   set(CMAKE_AUTORCC OFF)

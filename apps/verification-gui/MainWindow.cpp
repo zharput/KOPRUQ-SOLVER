@@ -17,6 +17,8 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QHBoxLayout>
+#include <QPlainTextEdit>
 #include <QRegularExpression>
 #include <QSplitter>
 #include <QStandardPaths>
@@ -146,12 +148,37 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
   viewerToolBar->addSeparator();
   viewerToolBar->addAction(tr("Yakınlaştır"), modelViewer_, &ModelViewerWidget::zoomIn);
   viewerToolBar->addAction(tr("Uzaklaştır"), modelViewer_, &ModelViewerWidget::zoomOut);
+  viewerToolBar->addSeparator();
+  // V2.2 Stage B: ID labels default OFF (performance requirement for dense models).
+  auto* nodeIdAction = viewerToolBar->addAction(tr("Düğüm ID"));
+  nodeIdAction->setCheckable(true);
+  connect(nodeIdAction, &QAction::toggled, modelViewer_, &ModelViewerWidget::setShowNodeIds);
+  auto* elementIdAction = viewerToolBar->addAction(tr("Eleman ID"));
+  elementIdAction->setCheckable(true);
+  connect(elementIdAction, &QAction::toggled, modelViewer_, &ModelViewerWidget::setShowElementIds);
+
+  // V2.2 Stage B: Element/Node Information panel, filled only from ModelViewerWidget's own
+  // selection signals -- its text is built from real model fields, never fabricated here.
+  auto* viewerInfoPanel = new QPlainTextEdit(this);
+  viewerInfoPanel->setReadOnly(true);
+  viewerInfoPanel->setPlainText(tr("Seçim yok."));
+  viewerInfoPanel->setMaximumWidth(260);
+  connect(modelViewer_, &ModelViewerWidget::nodeInfoChanged, viewerInfoPanel, &QPlainTextEdit::setPlainText);
+  connect(modelViewer_, &ModelViewerWidget::elementInfoChanged, viewerInfoPanel, &QPlainTextEdit::setPlainText);
+  connect(modelViewer_, &ModelViewerWidget::selectionCleared, viewerInfoPanel, [viewerInfoPanel, this] { viewerInfoPanel->setPlainText(tr("Seçim yok.")); });
+
   auto* viewerPage = new QWidget(this);
-  auto* viewerLayout = new QVBoxLayout(viewerPage);
+  auto* viewerOuterLayout = new QHBoxLayout(viewerPage);
+  viewerOuterLayout->setContentsMargins(0, 0, 0, 0);
+  viewerOuterLayout->setSpacing(0);
+  auto* viewerLeft = new QWidget(viewerPage);
+  auto* viewerLayout = new QVBoxLayout(viewerLeft);
   viewerLayout->setContentsMargins(0, 0, 0, 0);
   viewerLayout->setSpacing(0);
   viewerLayout->addWidget(viewerToolBar);
   viewerLayout->addWidget(modelViewer_, 1);
+  viewerOuterLayout->addWidget(viewerLeft, 1);
+  viewerOuterLayout->addWidget(viewerInfoPanel);
 
   auto* resultsTabs = new QTabWidget(this);
   resultsTabs->addTab(resultsPanel_, tr("Sonuç Karşılaştırma Tabloları"));

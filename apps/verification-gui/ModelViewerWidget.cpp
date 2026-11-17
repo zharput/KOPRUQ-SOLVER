@@ -1,9 +1,14 @@
 #include "ModelViewerWidget.h"
-#include <QMatrix4x4>
+#include <QColor>
+#include <QLineF>
 #include <QMouseEvent>
+#include <QPainter>
+#include <QStringList>
+#include <QVector4D>
 #include <QWheelEvent>
 #include <QtMath>
 #include <algorithm>
+#include <array>
 #include <cmath>
 #ifdef _WIN32
 #define NOMINMAX
@@ -14,51 +19,68 @@
 
 namespace {
 constexpr float kMinDistance = 0.05f;
+constexpr int kPickPixelRadius = 8;    // node pick tolerance
+constexpr int kPickLinePixelRadius = 6; // beam pick tolerance (distance to segment)
+constexpr int kClickMoveTolerance = 4; // press->release movement under this is a "click", not a drag
+
+QString formatRestraints(const std::array<bool, 6>& r) {
+  static const char* names[6] = {"UX", "UY", "UZ", "RX", "RY", "RZ"};
+  QStringList held;
+  for (int i = 0; i < 6; ++i) if (r[i]) held << names[i];
+  return held.isEmpty() ? QStringLiteral("(serbest)") : held.join(", ");
+}
 }
 
 ModelViewerWidget::ModelViewerWidget(QWidget* parent) : QOpenGLWidget(parent) {
   setFocusPolicy(Qt::StrongFocus);
+  setMouseTracking(false);
 }
 
 void ModelViewerWidget::setModel(const kopruq::io::ModelInput& model) {
-  nodePositions_.clear();
+  model_ = model;
+  nodes_.clear();
   beams_.clear();
-  std::vector<QVector3D> byIndex; // positions keyed by node id lookup below
-  std::vector<std::pair<kopruq::Id, QVector3D>> byId;
-  byId.reserve(model.model.nodes.size());
-  for (const auto& n : model.model.nodes) {
-    QVector3D p(static_cast<float>(n.x), static_cast<float>(n.y), static_cast<float>(n.z));
-    nodePositions_.push_back(p);
-    byId.emplace_back(n.id, p);
-  }
+  selectedNodeId_.reset();
+  selectedElementId_.reset();
+
+  nodes_.reserve(model_.model.nodes.size());
+  for (const auto& n : model_.model.nodes)
+    nodes_.push_back({n.id, QVector3D(static_cast<float>(n.x), static_cast<float>(n.y), static_cast<float>(n.z))});
+
   auto findPos = [&](kopruq::Id id) -> const QVector3D* {
-    for (const auto& [nid, p] : byId) if (nid == id) return &p;
+    for (const auto& n : nodes_) if (n.id == id) return &n.pos;
     return nullptr;
   };
-  beams_.reserve(model.model.beams.size());
-  for (const auto& b : model.model.beams) {
+  beams_.reserve(model_.model.beams.size());
+  for (const auto& b : model_.model.beams) {
     const QVector3D* p1 = findPos(b.node1);
     const QVector3D* p2 = findPos(b.node2);
-    if (p1 && p2) beams_.push_back({*p1, *p2});
+    if (p1 && p2) beams_.push_back({b.id, b.node1, b.node2, b.material, b.section, *p1, *p2});
   }
-  hasModel_ = !nodePositions_.empty();
+  hasModel_ = !nodes_.empty();
   rebuildGeometry();
   fitToModel();
+  emit selectionCleared();
   update();
 }
 
 void ModelViewerWidget::clearModel() {
-  nodePositions_.clear();
+  model_ = kopruq::io::ModelInput{};
+  nodes_.clear();
   beams_.clear();
   hasModel_ = false;
+  selectedNodeId_.reset();
+  selectedElementId_.reset();
   boundsMin_ = boundsMax_ = QVector3D(0, 0, 0);
+  emit selectionCleared();
   update();
 }
 
 void ModelViewerWidget::rebuildGeometry() {
-  if (nodePositions_.empty()) { boundsMin_ = boundsMax_ = QVector3D(0, 0, 0); return; }
-  boundsMin_ = boundsMax_ = nodePositions_.front();
-  for (const auto& p : nodePositions_) {
+  if (nodes_.empty()) { boundsMin_ = boundsMax_ = QVector3D(0, 0, 0); return; }
+  boundsMin_ = boundsMax_ = nodes_.front().pos;
+  for (const auto& n : nodes_) {
+    const QVector3D& p = n.pos;
     boundsMin_.setX(std::min(boundsMin_.x(), p.x())); boundsMax_.setX(std::max(boundsMax_.x(), p.x()));
     boundsMin_.setY(std::min(boundsMin_.y(), p.y())); boundsMax_.setY(std::max(boundsMax_.y(), p.y()));
     boundsMin_.setZ(std::min(boundsMin_.z(), p.z())); boundsMax_.setZ(std::max(boundsMax_.z(), p.z()));
@@ -89,13 +111,18 @@ void ModelViewerWidget::viewSide() { yawDeg_ = 90.0f; pitchDeg_ = 0.0f; update()
 void ModelViewerWidget::zoomIn() { distance_ = std::max(distance_ * 0.8f, kMinDistance); update(); }
 void ModelViewerWidget::zoomOut() { distance_ = distance_ * 1.25f; update(); }
 
+void ModelViewerWidget::setShowNodeIds(bool on) { showNodeIds_ = on; update(); }
+void ModelViewerWidget::setShowElementIds(bool on) { showElementIds_ = on; update(); }
+
 void ModelViewerWidget::initializeGL() {
   glClearColor(0x0B / 255.0f, 0x15 / 255.0f, 0x25 / 255.0f, 1.0f); // Viewer Background #0B1525
   glEnable(GL_DEPTH_TEST);
 }
 
 void ModelViewerWidget::resizeGL(int w, int h) {
-  glViewport(0, 0, w, h <= 0 ? 1 : h);
+  viewportW_ = w;
+  viewportH_ = h <= 0 ? 1 : h;
+  glViewport(0, 0, w, viewportH_);
 }
 
 void ModelViewerWidget::applyCameraMatrix() {
@@ -112,11 +139,16 @@ void ModelViewerWidget::applyCameraMatrix() {
   QMatrix4x4 view;
   view.lookAt(eye, target_, QVector3D(0, 1, 0)); // Y is the consistent vertical axis for every view
 
-  QMatrix4x4 mvp = proj * view;
+  lastMvp_ = proj * view;
   glMatrixMode(GL_PROJECTION);
   glLoadIdentity();
   glMatrixMode(GL_MODELVIEW);
-  glLoadMatrixf(mvp.constData());
+  glLoadMatrixf(lastMvp_.constData());
+}
+
+namespace {
+// Highlight color for the current selection, #F59E0B.
+void setSelectedColor() { glColor3f(0xF5 / 255.0f, 0x9E / 255.0f, 0x0B / 255.0f); }
 }
 
 void ModelViewerWidget::paintGL() {
@@ -124,25 +156,148 @@ void ModelViewerWidget::paintGL() {
   applyCameraMatrix();
   if (!hasModel_) return;
 
-  // Frame elements: wireframe, #38BDF8.
-  glColor3f(0x38 / 255.0f, 0xBD / 255.0f, 0xF8 / 255.0f);
+  // Frame elements: wireframe, #38BDF8 (selected element overridden to #F59E0B).
   glBegin(GL_LINES);
   for (const auto& b : beams_) {
+    if (selectedElementId_ && *selectedElementId_ == b.id) setSelectedColor();
+    else glColor3f(0x38 / 255.0f, 0xBD / 255.0f, 0xF8 / 255.0f);
     glVertex3f(b.a.x(), b.a.y(), b.a.z());
     glVertex3f(b.b.x(), b.b.y(), b.b.z());
   }
   glEnd();
 
-  // Nodes: #E2E8F0.
-  glColor3f(0xE2 / 255.0f, 0xE8 / 255.0f, 0xF0 / 255.0f);
+  // Nodes: #E2E8F0 (selected node overridden to #F59E0B), drawn slightly larger when selected.
   glPointSize(5.0f);
   glBegin(GL_POINTS);
-  for (const auto& p : nodePositions_) glVertex3f(p.x(), p.y(), p.z());
+  for (const auto& n : nodes_) {
+    if (selectedNodeId_ && *selectedNodeId_ == n.id) continue; // drawn separately, larger, below
+    glColor3f(0xE2 / 255.0f, 0xE8 / 255.0f, 0xF0 / 255.0f);
+    glVertex3f(n.pos.x(), n.pos.y(), n.pos.z());
+  }
   glEnd();
+  if (selectedNodeId_) {
+    for (const auto& n : nodes_) {
+      if (n.id != *selectedNodeId_) continue;
+      glPointSize(9.0f);
+      setSelectedColor();
+      glBegin(GL_POINTS);
+      glVertex3f(n.pos.x(), n.pos.y(), n.pos.z());
+      glEnd();
+      break;
+    }
+  }
+}
+
+QPointF ModelViewerWidget::projectToScreen(const QVector3D& worldPos, bool* visible) const {
+  const QVector4D clip = lastMvp_ * QVector4D(worldPos, 1.0f);
+  if (visible) *visible = clip.w() > 1e-6f;
+  if (clip.w() <= 1e-6f) return QPointF(-1e6, -1e6);
+  const float ndcX = clip.x() / clip.w();
+  const float ndcY = clip.y() / clip.w();
+  // devicePixelRatio: QOpenGLWidget's GL viewport is in device pixels, but QPainter overlay
+  // drawing (and mouse events) use logical (widget) pixels, so project into logical pixels here.
+  const float wpx = static_cast<float>(width());
+  const float hpx = static_cast<float>(height());
+  return QPointF((ndcX * 0.5f + 0.5f) * wpx, (1.0f - (ndcY * 0.5f + 0.5f)) * hpx);
+}
+
+QString ModelViewerWidget::describeNode(const NodeEntry& n) const {
+  QString text = QStringLiteral("Düğüm Bilgisi\n\nID: %1\nX: %2 m\nY: %3 m\nZ: %4 m\n")
+    .arg(n.id).arg(n.pos.x(), 0, 'f', 4).arg(n.pos.y(), 0, 'f', 4).arg(n.pos.z(), 0, 'f', 4);
+  auto it = model_.restraints.find(n.id);
+  text += QStringLiteral("Mesnet Koşulları: %1")
+    .arg(it != model_.restraints.end() ? formatRestraints(it->second) : QStringLiteral("(serbest)"));
+  return text;
+}
+
+QString ModelViewerWidget::describeBeam(const BeamEntry& b) const {
+  const double length = (b.b - b.a).length();
+  return QStringLiteral("Eleman Bilgisi\n\nID: %1\nTip: Beam3D\nBaşlangıç Düğüm: %2\nBitiş Düğüm: %3\n"
+                         "Uzunluk: %4 m\nKesit (Section) ID: %5\nMalzeme (Material) ID: %6")
+    .arg(b.id).arg(b.node1).arg(b.node2).arg(length, 0, 'f', 4).arg(b.section).arg(b.material);
+}
+
+void ModelViewerWidget::drawOverlayLabels(QPainter& painter) {
+  if (!hasModel_ || (!showNodeIds_ && !showElementIds_)) return;
+  painter.setPen(QColor(0xE5, 0xEA, 0xF2)); // Text #E5EAF2
+  if (showNodeIds_) {
+    for (const auto& n : nodes_) {
+      bool visible = false;
+      const QPointF s = projectToScreen(n.pos, &visible);
+      if (visible) painter.drawText(s + QPointF(6, -6), QString::number(n.id));
+    }
+  }
+  if (showElementIds_) {
+    for (const auto& b : beams_) {
+      bool v1 = false, v2 = false;
+      const QPointF s1 = projectToScreen(b.a, &v1);
+      const QPointF s2 = projectToScreen(b.b, &v2);
+      if (v1 && v2) painter.drawText((s1 + s2) * 0.5, QString::number(b.id));
+    }
+  }
+}
+
+void ModelViewerWidget::paintEvent(QPaintEvent* event) {
+  QOpenGLWidget::paintEvent(event); // makeCurrent + paintGL + doneCurrent, composited into this widget
+  QPainter painter(this);
+  drawOverlayLabels(painter);
+}
+
+void ModelViewerWidget::pickAt(const QPoint& pos) {
+  if (!hasModel_) { emit selectionCleared(); return; }
+
+  kopruq::Id bestNode = 0;
+  double bestNodeDist = kPickPixelRadius;
+  for (const auto& n : nodes_) {
+    bool visible = false;
+    const QPointF s = projectToScreen(n.pos, &visible);
+    if (!visible) continue;
+    const double d = QLineF(s, pos).length();
+    if (d < bestNodeDist) { bestNodeDist = d; bestNode = n.id; }
+  }
+  if (bestNode != 0) {
+    selectedNodeId_ = bestNode;
+    selectedElementId_.reset();
+    for (const auto& n : nodes_) if (n.id == bestNode) { emit nodeInfoChanged(describeNode(n)); break; }
+    update();
+    return;
+  }
+
+  kopruq::Id bestBeam = 0;
+  double bestBeamDist = kPickLinePixelRadius;
+  for (const auto& b : beams_) {
+    bool v1 = false, v2 = false;
+    const QPointF s1 = projectToScreen(b.a, &v1);
+    const QPointF s2 = projectToScreen(b.b, &v2);
+    if (!v1 || !v2) continue;
+    const QLineF seg(s1, s2);
+    const double len = seg.length();
+    double d;
+    if (len < 1e-6) {
+      d = QLineF(s1, pos).length();
+    } else {
+      const double t = std::clamp(QPointF::dotProduct(pos - s1, s2 - s1) / (len * len), 0.0, 1.0);
+      const QPointF proj = s1 + t * (s2 - s1);
+      d = QLineF(proj, pos).length();
+    }
+    if (d < bestBeamDist) { bestBeamDist = d; bestBeam = b.id; }
+  }
+  if (bestBeam != 0) {
+    selectedElementId_ = bestBeam;
+    selectedNodeId_.reset();
+    for (const auto& b : beams_) if (b.id == bestBeam) { emit elementInfoChanged(describeBeam(b)); break; }
+    update();
+    return;
+  }
+
+  selectedNodeId_.reset();
+  selectedElementId_.reset();
+  emit selectionCleared();
+  update();
 }
 
 void ModelViewerWidget::mousePressEvent(QMouseEvent* event) {
-  lastMousePos_ = event->pos();
+  lastMousePos_ = pressPos_ = event->pos();
   rotating_ = (event->button() == Qt::LeftButton);
   panning_ = (event->button() == Qt::MiddleButton);
 }
@@ -162,6 +317,16 @@ void ModelViewerWidget::mouseMoveEvent(QMouseEvent* event) {
     target_ -= right * (delta.x() * panScale);
     target_ += up * (delta.y() * panScale);
     update();
+  }
+}
+
+void ModelViewerWidget::mouseReleaseEvent(QMouseEvent* event) {
+  const bool wasRotating = rotating_;
+  rotating_ = false;
+  panning_ = false;
+  if (event->button() == Qt::LeftButton && wasRotating &&
+      (event->pos() - pressPos_).manhattanLength() <= kClickMoveTolerance) {
+    pickAt(event->pos());
   }
 }
 

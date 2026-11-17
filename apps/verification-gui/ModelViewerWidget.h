@@ -1,29 +1,43 @@
 #pragma once
-// V2.2 Stage A (Viewer Foundation): a read-only 3D wireframe viewer for the exact MIDAS model
-// the solver analyzes. Geometry comes solely from kopruq::io::ModelInput (populated by
-// kopruq::io::readModelFile(..., "midas-nx-json", ...), the same importer path the CLI/solver
-// uses) -- never from a separate parser. Stage B (ID labels, selection, info panel) and Stage C
-// (supports, elastic links, local axes, display toggles) are later, separately-approved stages;
-// this widget intentionally only draws nodes and beam wireframes plus basic camera controls.
+// V2.2 Stage A (Viewer Foundation) + Stage B (Model Interaction): a read-only 3D wireframe
+// viewer for the exact MIDAS model the solver analyzes. Geometry comes solely from
+// kopruq::io::ModelInput (populated by kopruq::io::detail::readModelFile(..., "midas-nx-json",
+// ...), the same importer path the CLI/solver uses) -- never from a separate parser. Stage C
+// (supports, elastic links, local axes drawing, display toggles) is a later, separately-approved
+// stage.
+//
+// Stage B adds: optional node/element ID labels (off by default, per the performance
+// requirement), click-to-select a node or beam, and an Element/Node Information text report
+// (nodeInfoChanged/elementInfoChanged/selectionCleared signals) built only from real model
+// fields -- never fabricated.
 #include "../../include/kopruq/io/ModelJson.hpp"
+#include <QMatrix4x4>
 #include <QOpenGLWidget>
 #include <QPoint>
+#include <QString>
 #include <QVector3D>
+#include <optional>
 #include <vector>
 
-// Stage A deliberately uses the desktop fixed-function pipeline (glBegin/glColor3f/...) rather
+// Stage A/B deliberately use the desktop fixed-function pipeline (glBegin/glColor3f/...) rather
 // than a shader-based core-profile renderer: a few thousand lines/points need no vertex buffers
-// or shaders to stay responsive, and it keeps this stage's scope to "basic node/beam drawing"
-// as specified, without introducing GLSL build/version complexity this project doesn't need yet.
+// or shaders to stay responsive, and it keeps scope to "basic node/beam drawing" plus simple
+// screen-space picking, without introducing GLSL build/version complexity this project doesn't
+// need yet.
 class ModelViewerWidget : public QOpenGLWidget {
   Q_OBJECT
 public:
   explicit ModelViewerWidget(QWidget* parent = nullptr);
 
-  // Replaces the displayed model. Pass an empty optional (or call clearModel()) to show nothing
-  // -- used when the MIDAS file selection changes but has not (yet) passed import/validation.
+  // Replaces the displayed model. Call clearModel() to show nothing -- used when the MIDAS file
+  // selection changes but has not (yet) passed import/validation.
   void setModel(const kopruq::io::ModelInput& model);
   void clearModel();
+
+signals:
+  void nodeInfoChanged(const QString& text);
+  void elementInfoChanged(const QString& text);
+  void selectionCleared();
 
 public slots:
   void fitToModel();
@@ -34,25 +48,44 @@ public slots:
   void viewSide();
   void zoomIn();
   void zoomOut();
+  void setShowNodeIds(bool on);
+  void setShowElementIds(bool on);
 
 protected:
   void initializeGL() override;
   void resizeGL(int w, int h) override;
   void paintGL() override;
+  void paintEvent(QPaintEvent* event) override;
   void mousePressEvent(QMouseEvent* event) override;
   void mouseMoveEvent(QMouseEvent* event) override;
+  void mouseReleaseEvent(QMouseEvent* event) override;
   void wheelEvent(QWheelEvent* event) override;
 
 private:
-  struct Beam { QVector3D a, b; };
+  struct NodeEntry { kopruq::Id id; QVector3D pos; };
+  struct BeamEntry { kopruq::Id id, node1, node2, material, section; QVector3D a, b; };
 
   void rebuildGeometry();
   void applyCameraMatrix();
+  void drawOverlayLabels(class QPainter& painter);
+  QPointF projectToScreen(const QVector3D& worldPos, bool* visible) const;
+  void pickAt(const QPoint& pos);
+  QString describeNode(const NodeEntry& n) const;
+  QString describeBeam(const BeamEntry& b) const;
 
-  std::vector<QVector3D> nodePositions_;
-  std::vector<Beam> beams_;
+  kopruq::io::ModelInput model_;
+  std::vector<NodeEntry> nodes_;
+  std::vector<BeamEntry> beams_;
   QVector3D boundsMin_{0, 0, 0}, boundsMax_{0, 0, 0};
   bool hasModel_{false};
+
+  bool showNodeIds_{false};
+  bool showElementIds_{false};
+  std::optional<kopruq::Id> selectedNodeId_;
+  std::optional<kopruq::Id> selectedElementId_;
+
+  QMatrix4x4 lastMvp_;
+  int viewportW_{1}, viewportH_{1};
 
   // Camera: orbits a target point at a given distance; yaw/pitch in degrees.
   QVector3D target_{0, 0, 0};
@@ -60,6 +93,7 @@ private:
   float yawDeg_{-45.0f};
   float pitchDeg_{25.0f};
   QPoint lastMousePos_;
+  QPoint pressPos_;
   bool rotating_{false};
   bool panning_{false};
 };

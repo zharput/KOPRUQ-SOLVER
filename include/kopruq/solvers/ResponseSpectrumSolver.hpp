@@ -32,19 +32,39 @@
 //   U_i = Gamma_i*Sa(T_i)/omega_i^2*phi_i and nodal loads F_i (both consistent
 //   with each other because Kff phi_i = omega_i^2 Mff phi_i), giving an
 //   exactly equilibrated per-mode result.
-// - Modal combination: SRSS (square root of the sum of squares) over every
-//   displacement/reaction/end-force component independently. SRSS-combined
-//   values are peak *estimates*: they are not a single equilibrium state and
-//   generally do not satisfy sum(F)=0 themselves -- that is expected, not a
-//   defect. CQC (for closely-spaced modes) is not implemented; see
-//   docs/DEVELOPMENT_STATUS.md.
+// - Modal combination: SRSS (square root of the sum of squares, the default) or CQC (Complete
+//   Quadratic Combination, 2026-11-17) over every displacement/reaction/end-force component
+//   independently. Both are peak *estimates*: they are not a single equilibrium state and
+//   generally do not satisfy sum(F)=0 themselves -- that is expected, not a defect.
+//
+//   CQC (Der Kiureghian 1981, the standard formulation used by essentially every mainstream FEA
+//   package -- SAP2000/ETABS/MIDAS all cite the same reference): combined = sqrt(sum_i sum_j
+//   rho_ij * R_i * R_j), with the cross-modal correlation coefficient
+//     rho_ij = 8*zeta_i*zeta_j*(zeta_i+r*zeta_j)*r^1.5 / ((1-r^2)^2 + 4*zeta_i*zeta_j*r*(1+r^2)
+//              + 4*(zeta_i^2+zeta_j^2)*r^2),   r = omega_j/omega_i.
+//   SRSS is the special case rho_ij = (i==j) (every off-diagonal cross term is zero) -- both are
+//   implemented through the exact same "combined = sqrt(sum_i sum_j rho_ij*R_i*R_j)" code path
+//   here, never two separate, potentially-diverging implementations.
+//   This implementation uses a single, caller-supplied damping ratio for every mode (constant
+//   damping) -- the common case, and the only one this project has real MIDAS reference data
+//   for (verification/models/16's SPFC record uses one DRATIO for the whole spectrum function);
+//   per-mode-varying damping is not supported (the formula above degenerates correctly to
+//   zeta_i=zeta_j=zeta, so nothing here assumes equal damping as a simplification, it is simply
+//   the only input provided).
 #include "ModalSolver.hpp"
 #include <algorithm>
 
 namespace kopruq {
 
 struct ResponseSpectrumPoint { Real period_s{}, spectral_acceleration{}; }; // period [s], Sa [m/s^2]
-struct ResponseSpectrumInput { std::vector<ResponseSpectrumPoint> spectrum; int direction{}; int num_modes{6}; };
+enum class ModalCombination { SRSS, CQC };
+struct ResponseSpectrumInput {
+  std::vector<ResponseSpectrumPoint> spectrum;
+  int direction{};
+  int num_modes{6};
+  ModalCombination combination{ModalCombination::SRSS};
+  Real damping_ratio{0.05}; // only used when combination == CQC
+};
 
 // Piecewise-linear interpolation; throws std::invalid_argument if period_s is outside [spectrum.front(), spectrum.back()]
 // or the spectrum itself is malformed (fewer than 2 points, non-finite/non-positive period, non-finite/negative Sa,
@@ -68,9 +88,19 @@ inline Real interpolateSpectrum(const std::vector<ResponseSpectrumPoint>& spectr
   return spectrum.back().spectral_acceleration;
 }
 
+// Der Kiureghian (1981) cross-modal correlation coefficient for CQC; rho(omega,omega,zeta) == 1
+// always (r=1 limit). `zeta` must be finite and > 0 -- callers validate this once, not per call.
+inline Real cqcCorrelation(Real omega_i, Real omega_j, Real zeta) {
+  if (omega_i == omega_j) return 1.0; // exact r=1 limit, avoids 0/0 from floating-point r very close to but not exactly 1
+  const Real r = omega_j / omega_i;
+  const Real num = 8 * zeta * zeta * (1 + r) * std::pow(r, 1.5);
+  const Real den = (1 - r * r) * (1 - r * r) + 4 * zeta * zeta * r * (1 + r) * (1 + r);
+  return num / den;
+}
+
 struct ModalContribution { Real period_s{}, frequency_hz{}, participation_factor{}, effective_mass{}, mass_participation_ratio{}; AnalysisResults results; };
 struct NodalPeakResponse { Id node_id{}; DofVector displacement{}, reaction{}; };
-struct ElementPeakResponse { Id element_id{}; std::array<Real,12> global_end_force{}; };
+struct ElementPeakResponse { Id element_id{}; std::array<Real,12> local_end_force{}, global_end_force{}; };
 struct ResponseSpectrumResults {
   SolverStatus status;
   std::vector<ModalContribution> modes;
@@ -116,10 +146,13 @@ class ResponseSpectrumSolver { public:
       Eigen::VectorXd Miota = Mfull * iota;
       out.total_mass = iota.dot(Miota);
 
-      std::map<Id,std::array<Real,6>> dispSq, reacSq;
-      std::map<Id,std::array<Real,12>> forceSq;
-      for (const auto& n : m.nodes) { dispSq[n.id] = {}; reacSq[n.id] = {}; }
-      for (const auto& e : m.beams) forceSq[e.id] = {};
+      // Per-mode values are collected first (one vector<Real> per DOF/component, length ==
+      // number of modes) and combined only after the loop -- CQC needs every mode's value
+      // simultaneously (cross terms), unlike SRSS's simple running sum of squares.
+      std::map<Id,std::array<std::vector<Real>,6>> dispByMode, reacByMode;
+      std::map<Id,std::array<std::vector<Real>,12>> localForceByMode, forceByMode;
+      for (const auto& n : m.nodes) { dispByMode[n.id] = {}; reacByMode[n.id] = {}; }
+      for (const auto& e : m.beams) { localForceByMode[e.id] = {}; forceByMode[e.id] = {}; }
 
       for (const auto& mode : modal.modes) {
         const Real omega2 = mode.angular_frequency_rad_s * mode.angular_frequency_rad_s;
@@ -146,11 +179,31 @@ class ResponseSpectrumSolver { public:
         out.total_mass_participation_ratio += mc.mass_participation_ratio;
         out.modes.push_back(mc);
 
-        for (const auto& nr : rec.nodes) { auto& ds = dispSq[nr.node_id]; auto& rq = reacSq[nr.node_id]; for (int k = 0; k < 6; ++k) { ds[k] += nr.displacement[k] * nr.displacement[k]; rq[k] += nr.reaction[k] * nr.reaction[k]; } }
-        for (const auto& er : rec.elements) { auto& fs = forceSq[er.element_id]; for (int k = 0; k < 12; ++k) fs[k] += er.global_end_force[k] * er.global_end_force[k]; }
+        for (const auto& nr : rec.nodes) { auto& ds = dispByMode[nr.node_id]; auto& rq = reacByMode[nr.node_id]; for (int k = 0; k < 6; ++k) { ds[k].push_back(nr.displacement[k]); rq[k].push_back(nr.reaction[k]); } }
+        for (const auto& er : rec.elements) { auto& lfs = localForceByMode[er.element_id]; auto& fs = forceByMode[er.element_id]; for (int k = 0; k < 12; ++k) { lfs[k].push_back(er.local_end_force[k]); fs[k].push_back(er.global_end_force[k]); } }
       }
-      for (const auto& n : m.nodes) { NodalPeakResponse p; p.node_id = n.id; for (int k = 0; k < 6; ++k) { p.displacement[k] = std::sqrt(dispSq[n.id][k]); p.reaction[k] = std::sqrt(reacSq[n.id][k]); } out.combined_nodes.push_back(p); }
-      for (const auto& e : m.beams) { ElementPeakResponse p; p.element_id = e.id; for (int k = 0; k < 12; ++k) p.global_end_force[k] = std::sqrt(forceSq[e.id][k]); out.combined_elements.push_back(p); }
+
+      // Cross-modal correlation matrix: identity for SRSS (every off-diagonal term is zero, so
+      // the general formula below reduces exactly to a plain sum of squares), Der Kiureghian's
+      // CQC coefficients otherwise -- see this file's header comment for the formula/reference.
+      const std::size_t nModes = modal.modes.size();
+      Eigen::MatrixXd rho = Eigen::MatrixXd::Identity(static_cast<Eigen::Index>(nModes), static_cast<Eigen::Index>(nModes));
+      if (input.combination == ModalCombination::CQC) {
+        const Real zeta = input.damping_ratio;
+        if (!(std::isfinite(zeta) && zeta > 0)) throw std::invalid_argument("CQC requires a finite, positive damping_ratio");
+        for (std::size_t i = 0; i < nModes; ++i)
+          for (std::size_t j = 0; j < nModes; ++j)
+            rho(static_cast<Eigen::Index>(i), static_cast<Eigen::Index>(j)) = cqcCorrelation(modal.modes[i].angular_frequency_rad_s, modal.modes[j].angular_frequency_rad_s, zeta);
+      }
+      auto combine = [&](const std::vector<Real>& R) -> Real {
+        Real sum = 0;
+        for (std::size_t i = 0; i < nModes; ++i)
+          for (std::size_t j = 0; j < nModes; ++j) sum += rho(static_cast<Eigen::Index>(i), static_cast<Eigen::Index>(j)) * R[i] * R[j];
+        return std::sqrt(std::max(Real(0), sum)); // round-off on a near-zero sum must never produce NaN
+      };
+
+      for (const auto& n : m.nodes) { NodalPeakResponse p; p.node_id = n.id; for (int k = 0; k < 6; ++k) { p.displacement[k] = combine(dispByMode[n.id][k]); p.reaction[k] = combine(reacByMode[n.id][k]); } out.combined_nodes.push_back(p); }
+      for (const auto& e : m.beams) { ElementPeakResponse p; p.element_id = e.id; for (int k = 0; k < 12; ++k) { p.local_end_force[k] = combine(localForceByMode[e.id][k]); p.global_end_force[k] = combine(forceByMode[e.id][k]); } out.combined_elements.push_back(p); }
       out.status = {true, "response spectrum analysis completed", SolverStatusCode::Success};
     } catch (const std::exception& e) { out.status = {false, e.what(), SolverStatusCode::InvalidModel}; }
     return out;

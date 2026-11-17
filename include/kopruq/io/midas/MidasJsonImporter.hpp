@@ -47,12 +47,17 @@
 // tests/unit/rigid_link_modal_tests.cpp), and the CLI's `modal`/`spectrum` commands dispatch to
 // those solvers regardless of `--format`, so a RIGD-containing MIDAS model can already run modal
 // analysis today via `modal <file> --format midas-nx-json`.
-// SPLC/SPFC (response-spectrum requests) are NOT translated into `response_spectra` entries:
-// their real MIDAS JSON field shapes are still not independently confirmed (the one real sample
-// that had them, xmidas/deneme1.json, no longer exists in this working tree -- deleted by the
-// user, 2026-11; model "13 Eigen-1" has EIGV but no SPLC/SPFC), and this project does not guess
-// MIDAS field names from memory. Needs either that sample restored/re-supplied, or a confirmed
-// field reference, before implementing.
+// SPLC/SPFC (response-spectrum requests) ARE now translated into `response_spectra` entries,
+// confirmed from a real MIDAS NX JSON export (`verification/models/16 Spektrum-1`, 2026-11-17)
+// -- see the SPLC/SPFC handling below for the exact field shapes. Explicitly NOT translated, and
+// explicitly rejected (not silently approximated) when present: SPLC `ANGLE` != 0 (an arbitrary-
+// angle spectrum direction, not an axis-aligned one -- `ResponseSpectrumInput::direction` only
+// accepts global X/Y/Z); any `aUSEMODE` entry with `bUSE=false` or `MSFACTOR != 1.0` (per-mode
+// exclusion/scaling, which `ResponseSpectrumInput` has no way to express); any `SPLC.COMTYPE`
+// other than "CQC" or "SRSS". `SPLC.CQCRATIO`'s exact meaning was not confirmed from accessible
+// documentation (possibly a closely-spaced-mode cutoff ratio in some codes' CQC variants, not a
+// damping ratio) and is NOT used -- the CQC damping ratio instead comes from the referenced
+// SPFC's own `DRATIO`, which is unambiguous.
 #include "../ModelJson.hpp"
 #include "MidasMaterialLibrary.hpp"
 #include "MidasOrientation.hpp"
@@ -344,9 +349,110 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
     }
   }
 
-  // --- SPLC/SPFC: response-spectrum requests, recognized but not executed this phase ---
-  if (dbg.contains("SPLC") || dbg.contains("SPFC"))
-    out.report.rejected.push_back("response-spectrum requests (SPLC/SPFC) present in source are not translated into response_spectra entries by this importer: their real MIDAS JSON field shapes are not independently confirmed in this codebase (Phase 7E.1/7H, 2026-11-17) -- EIGV (modal analysis request) is now read, see above, but SPLC/SPFC are not");
+  // --- SPLC/SPFC: response-spectrum requests ---
+  // Real field shapes confirmed from an actual MIDAS NX JSON export
+  // (verification/models/16 Spektrum-1/16 Spektrum-1.json, 2026-11-17). SPLC references its
+  // spectrum function by NAME (not by key/id), so SPFC entries are indexed by name first.
+  if (dbg.contains("SPLC") && !dbg.at("SPLC").empty()) {
+    std::map<std::string, const nlohmann::json*> spfcByName;
+    if (dbg.contains("SPFC"))
+      for (auto it = dbg.at("SPFC").begin(); it != dbg.at("SPFC").end(); ++it)
+        if (it.value().contains("NAME")) spfcByName[it.value().at("NAME").get<std::string>()] = &it.value();
+
+    for (auto it = dbg.at("SPLC").begin(); it != dbg.at("SPLC").end(); ++it) {
+      const auto& splc = it.value();
+      const std::string caseName = splc.value("NAME", std::string("SPLC") + it.key());
+      bool ok = true;
+      std::string reason;
+
+      // Direction: only a single axis-aligned, zero-angle direction is supported -- SPLC's own
+      // ANGLE lets a spectrum be applied at an arbitrary horizontal angle, which
+      // ResponseSpectrumInput::direction (global X/Y/Z only) cannot express.
+      int direction = -1;
+      const double angle = splc.value("ANGLE", 0.0);
+      const std::string dir = splc.value("DIR", std::string());
+      if (angle != 0.0) { ok = false; reason = "ANGLE != 0 (an arbitrary-angle spectrum direction) is not supported"; }
+      else if (!dir.empty() && (dir[0] == 'X' || dir[0] == 'x')) direction = 0;
+      else if (!dir.empty() && (dir[0] == 'Y' || dir[0] == 'y')) direction = 1;
+      else if (!dir.empty() && (dir[0] == 'Z' || dir[0] == 'z')) direction = 2;
+      else { ok = false; reason = "DIR '" + dir + "' not recognized (expected to start with X/Y/Z)"; }
+      if (ok && dir.size() > 1)
+        out.report.assumptions.push_back("SPLC " + caseName + ": DIR='" + dir + "' with ANGLE=0 -- direction taken as its first letter ('" +
+            std::string(1, dir[0]) + "'); nothing past the first letter of a compound DIR is otherwise interpreted");
+
+      // Modal combination: only CQC and SRSS are implemented (Phase 7I.1, 2026-11-17).
+      ModalCombination combo = ModalCombination::SRSS;
+      const std::string comtype = splc.value("COMTYPE", std::string("SRSS"));
+      if (comtype == "CQC") combo = ModalCombination::CQC;
+      else if (comtype == "SRSS") combo = ModalCombination::SRSS;
+      else if (ok) { ok = false; reason = "COMTYPE '" + comtype + "' is neither CQC nor SRSS"; }
+
+      // Per-mode use/scale: only the trivial case (every mode used, every factor 1.0) is
+      // supported -- ResponseSpectrumInput has no way to exclude or rescale one mode's
+      // contribution.
+      if (ok && splc.contains("aUSEMODE"))
+        for (const auto& um : splc.at("aUSEMODE"))
+          if (!um.value("bUSE", true) || um.value("MSFACTOR", 1.0) != 1.0) {
+            ok = false; reason = "aUSEMODE has a per-mode exclusion or scale factor, which ResponseSpectrumInput cannot express"; break;
+          }
+
+      ResponseSpectrumInput input;
+      Real dampingRatio = 0, gravUsed = 0;
+      std::string funcNameUsed;
+      if (ok) {
+        if (!splc.contains("aFUNCNAME") || splc.at("aFUNCNAME").empty()) { ok = false; reason = "aFUNCNAME is missing or empty"; }
+        else {
+          funcNameUsed = splc.at("aFUNCNAME").front().get<std::string>();
+          auto spfcIt = spfcByName.find(funcNameUsed);
+          if (spfcIt == spfcByName.end()) { ok = false; reason = "referenced SPFC '" + funcNameUsed + "' not found"; }
+          else {
+            const auto& spfc = *spfcIt->second;
+            gravUsed = spfc.value("GRAV", 9.806);
+            dampingRatio = spfc.value("DRATIO", 0.05);
+            if (!spfc.contains("aFUNC") || spfc.at("aFUNC").size() < 2) { ok = false; reason = "SPFC '" + funcNameUsed + "' has fewer than 2 aFUNC points"; }
+            else {
+              // MIDAS's own spectrum table is in units of g (confirmed by cross-checking its
+              // T=0/plateau values against the SPFC's own Eurocode 8 parameters: ag=0.2,
+              // S=1.15, I=1.2 -> ag*S*I=0.276, exactly the T=0 aFUNC value) -- converted to
+              // m/s^2 (ResponseSpectrumInput's own documented unit) using THIS SPFC's own GRAV,
+              // never a hardcoded constant, so the conversion matches whatever MIDAS itself used.
+              for (const auto& pt : spfc.at("aFUNC")) {
+                // interpolateSpectrum (ResponseSpectrumSolver.hpp) requires a strictly positive,
+                // strictly increasing period -- MIDAS's own T=0 anchor point is nudged to a tiny
+                // positive value (1e-6 s) rather than dropped, since many real high-frequency
+                // modes (confirmed on model 16 itself: 16/20 modes have a period shorter than the
+                // smallest other tabulated period, 0.04 s) would otherwise fall outside the
+                // table's range entirely. This keeps the real T=0 VALUE, it does not invent or
+                // extrapolate a new one.
+                const double period = std::max(pt.value("PERIOD", 0.0), 1e-6);
+                const double value = pt.value("VALUE", 0.0);
+                input.spectrum.push_back({period, value * gravUsed});
+              }
+              if (input.spectrum.size() < 2) { ok = false; reason = "SPFC '" + funcNameUsed + "' has fewer than 2 usable (period>0) points"; }
+            }
+          }
+        }
+      }
+
+      if (!ok) {
+        out.report.rejected.push_back("SPLC " + caseName + ": not translated into a response_spectra entry -- " + reason);
+        continue;
+      }
+
+      input.direction = direction;
+      input.num_modes = out.input.modal_request.present ? out.input.modal_request.num_modes : 6;
+      input.combination = combo;
+      input.damping_ratio = dampingRatio;
+      out.input.response_spectra.push_back({caseName, input});
+      std::string note = "SPLC " + caseName + ": response spectrum imported from SPFC '" + funcNameUsed + "' (direction=" +
+          std::string(1, "XYZ"[direction]) + ", " + comtype + " combination";
+      if (combo == ModalCombination::CQC) note += ", damping ratio " + std::to_string(dampingRatio) + " from SPFC DRATIO -- SPLC's own CQCRATIO is not used, its exact meaning is unconfirmed";
+      note += "); values converted from g to m/s^2 using this SPFC's own GRAV (" + std::to_string(gravUsed) + ")";
+      out.report.assumptions.push_back(note);
+    }
+  } else if (dbg.contains("SPFC") && !dbg.at("SPFC").empty()) {
+    out.report.rejected.push_back("SPFC (response-spectrum function) present without any SPLC (response-spectrum case) referencing it -- nothing to import");
+  }
 
   return out;
 }

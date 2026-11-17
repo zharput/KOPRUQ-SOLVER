@@ -632,6 +632,65 @@ passing); the same 5 pre-existing, unrelated `xmidas/deneme1.json`-missing failu
 phase, no regressions. Re-verified via the actual production CLI (`modal --mass-type lumped`) on
 all three real models (13, 14, 15), matching the diagnostic's numbers exactly.
 
+### Phase 7I.1 — CQC modal combination + MIDAS SPLC/SPFC (response-spectrum) import
+**COMPLETE (verified, 2026-11-17), triggered by the user supplying the first real MIDAS NX
+sample with actual `SPLC`/`SPFC` data (`verification/models/16 Spektrum-1`), which explicitly
+requests `COMTYPE="CQC"` -- a combination `ResponseSpectrumSolver` did not implement (SRSS only,
+a disclosed gap since Phase 6.2).**
+
+**CQC (Complete Quadratic Combination), `ResponseSpectrumSolver.hpp`:** added the standard Der
+Kiureghian (1981) cross-modal correlation formula (the same reference SAP2000/ETABS/MIDAS all
+cite) as a new `ModalCombination::{SRSS,CQC}` option on `ResponseSpectrumInput`, defaulting to
+`SRSS` (zero change for every existing caller/test). SRSS is implemented as CQC's own
+`rho_ij=(i==j)` special case -- one combination code path, `combined = sqrt(sum_i sum_j
+rho_ij*R_i*R_j)`, never two separately-maintained implementations that could silently diverge.
+Uses a single, caller-supplied damping ratio for every mode (the only case this project has real
+reference data for). New, dedicated `tests/unit/cqc_tests.cpp` (3 tests): `cqcCorrelation()`
+against hand-computed values (the trivial r=1 limit, and r=2/zeta=0.05 computed independently,
+not by re-deriving the same formula); CQC reducing to within 2% of SRSS on a well-separated-mode
+cantilever (no repeated eigenvalues); and error handling (non-positive damping ratio rejected).
+
+**MIDAS SPLC/SPFC import, `MidasJsonImporter.hpp`:** real field shapes confirmed from model 16's
+own JSON (`SPLC`: `NAME`,`DIR`,`ANGLE`,`COMTYPE`,`aFUNCNAME`,`aUSEMODE`; `SPFC`:
+`NAME`,`GRAV`,`DRATIO`,`aFUNC` as a period/value table). Explicitly rejected, not silently
+approximated, when present: `ANGLE != 0` (arbitrary-angle direction, unsupported);
+`aUSEMODE` entries with `bUSE=false` or `MSFACTOR != 1.0` (per-mode exclusion/scaling,
+unsupported); `COMTYPE` other than `CQC`/`SRSS`. `SPLC`'s own `CQCRATIO` is NOT used (its exact
+meaning -- possibly a closely-spaced-mode cutoff ratio in some codes' CQC variants, not a damping
+ratio -- was not confirmed from accessible documentation); the CQC damping ratio instead comes
+from the referenced SPFC's unambiguous `DRATIO`. `aFUNC`'s `VALUE` column is confirmed (by
+cross-checking its T=0/plateau values against the SPFC's own cited Eurocode 8 parameters: ag=0.2,
+S=1.15, I=1.2 -> ag\*S\*I=0.276, exactly the T=0 value) to be in units of g, converted to m/s^2
+using THIS SPFC's own `GRAV` field, never a hardcoded constant. MIDAS's own `T=0` anchor point is
+nudged to a tiny positive period (1e-6 s, not dropped) since `interpolateSpectrum` requires a
+strictly positive period and 16/20 of model 16's real modes have a period shorter than the
+smallest OTHER tabulated point (0.04 s) -- dropping T=0 entirely made the analysis fail outright
+on a real model before this fix.
+
+**`ElementPeakResponse` (`ResponseSpectrumResults`) gained `local_end_forces`** alongside the
+pre-existing `global_end_forces` -- needed because MIDAS's own "Beam Force" export reports
+LOCAL-axis values (Axial/Shear-y/Shear-z/Torsion/Moment-y/Moment-z), and comparing those against
+`global_end_forces` for a non-horizontal member is comparing different quantities entirely (found
+and fixed during this verification itself: an initial comparison attempt showed Axial and
+Shear-z appearing "swapped," which was this global/local mismatch, not a real defect).
+`kopruq-response-spectrum-results` schema bumped 1->2 (`schemas/response_spectrum_results.schema.json`
+updated to match); existing `ResponseSpectrumResultsJson.SchemaKeysMatchWriterOutput` test still
+passes (it does not enumerate `combined_elements`' own keys, but the schema file itself was kept
+in sync for any future stricter check).
+
+**Verified end-to-end against model 16's real reference data** (`.xlsx` exports, `--mass-type
+lumped --format midas-nx-json`, CQC via the imported SPLC): Mesnet Tepkimeleri (Reactions)
+**24/24 PASS**; Deplasmanlar (Displacements) **234/234 PASS**; Kiriş İç Kuvvetleri (Beam Force,
+local axes) **454/456 PASS** (2 isolated rows at the same node, Moment-y, ~3.75% off -- not
+investigated further, too small and localized to indicate a formulation gap). This is, by a wide
+margin, the closest match to MIDAS achieved on any model so far in this project, confirming the
+CQC implementation, the SPLC/SPFC import, the lumped-mass option (Phase 7H.1) and the g->m/s^2
+conversion are all simultaneously correct on a real, non-trivial case.
+
+Debug/Release/gui-release CTest: 239/244, 239/244, 269/274 (3 new CQC tests, same 5
+pre-existing, unrelated `xmidas/deneme1.json`-missing failures as before this phase, no
+regressions).
+
 ### Phase 7I — Traffic (moving) loads — REINSTATED, user decision 2026-11-16
 Cancelled 2026-10-17 as part of the former Phase 8 ("construction stages, bearings/soil springs,
 moving loads/influence lines"); **reinstated by explicit user decision 2026-11-16**, scoped

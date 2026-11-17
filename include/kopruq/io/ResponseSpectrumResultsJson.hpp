@@ -23,7 +23,11 @@
 namespace kopruq::io {
 
 inline constexpr const char* response_spectrum_results_schema_name = "kopruq-response-spectrum-results";
-inline constexpr int response_spectrum_results_schema_version = 1;
+// v2 (2026-11-17, Phase 7I.1): combined_elements gained local_end_forces alongside the
+// pre-existing global_end_forces -- needed to compare a CQC/SRSS-combined element response
+// against MIDAS's own "Beam Force" export, which reports LOCAL-axis values (Axial/Shear-y/
+// Shear-z/Torsion/Moment-y/Moment-z), not global ones.
+inline constexpr int response_spectrum_results_schema_version = 2;
 
 inline json writeResponseSpectrumResults(const std::vector<std::pair<std::string, ResponseSpectrumResults>>& cases, const std::string& modelSha256) {
   json j;
@@ -55,7 +59,7 @@ inline json writeResponseSpectrumResults(const std::vector<std::pair<std::string
     cj["combined_nodes"] = json::array();
     for (const auto& n : r.combined_nodes) cj["combined_nodes"].push_back({{"id", n.node_id}, {"displacement", n.displacement}, {"reaction", n.reaction}});
     cj["combined_elements"] = json::array();
-    for (const auto& e : r.combined_elements) cj["combined_elements"].push_back({{"id", e.element_id}, {"global_end_forces", e.global_end_force}});
+    for (const auto& e : r.combined_elements) cj["combined_elements"].push_back({{"id", e.element_id}, {"local_end_forces", e.local_end_force}, {"global_end_forces", e.global_end_force}});
     j["cases"].push_back(cj);
   }
   j["status"] = statusJson(aggregate);

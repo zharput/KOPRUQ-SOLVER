@@ -16,8 +16,8 @@ namespace kopruq::io {
 inline constexpr const char* cli_usage =
   "Usage: kopruq_solver_cli [--version|--help]\n"
   "       kopruq_solver_cli solve <model.json> [-o <results.json>] [--format <native|midas-nx-json>]\n"
-  "       kopruq_solver_cli modal <model.json> [-o <results.json>] [-n <num-modes>] [--format <native|midas-nx-json>]\n"
-  "       kopruq_solver_cli spectrum <model.json> [-o <results.json>] [--format <native|midas-nx-json>]\n"
+  "       kopruq_solver_cli modal <model.json> [-o <results.json>] [-n <num-modes>] [--format <native|midas-nx-json>] [--mass-type <consistent|lumped>]\n"
+  "       kopruq_solver_cli spectrum <model.json> [-o <results.json>] [--format <native|midas-nx-json>] [--mass-type <consistent|lumped>]\n"
   "                         (runs every \"response_spectra\" entry defined in the model)\n"
   "\n"
   "--format midas-nx-json reads a MIDAS Civil NX JSON export instead of the native model\n"
@@ -25,16 +25,22 @@ inline constexpr const char* cli_usage =
   "docs/MIDAS_JSON_DATA_AUDIT.md is supported -- unsupported records are rejected, not\n"
   "guessed at, and every disclosed assumption/rejection is printed as a diagnostic).\n"
   "\n"
+  "--mass-type (modal/spectrum only, default consistent): consistent is ModalSolver's own\n"
+  "long-standing, independently-verified mass formulation; lumped is a classic translational-\n"
+  "only lumped mass (zero rotational mass), added specifically because it reproduces MIDAS NX's\n"
+  "own default eigenvalue analysis far more closely on the models it was validated against --\n"
+  "see docs/SOLVER_ROADMAP.md's Phase 7H entry. Not yet supported together with rigid links.\n"
+  "\n"
   "Exit codes: 0 success, 1 analysis failed (results still written),\n"
   "            2 usage error, 3 invalid model, 4 file I/O error.\n";
 
 namespace detail {
 
-struct CommonArgs { std::string modelPath, outputPath, format = "native"; int numModes = 6; bool haveNumModes = false; };
+struct CommonArgs { std::string modelPath, outputPath, format = "native"; int numModes = 6; bool haveNumModes = false; MassMatrixType massType = MassMatrixType::Consistent; };
 
-// Parses the shared "<model.json> [-o <out>] [-n <modes>] [--format <fmt>]" tail; -n is only
-// meaningful for "modal" but accepted here so both commands share one parser. Returns false
-// (and writes to err) on a usage error.
+// Parses the shared "<model.json> [-o <out>] [-n <modes>] [--format <fmt>] [--mass-type <type>]"
+// tail; -n/--mass-type are only meaningful for "modal"/"spectrum" but accepted here so every
+// command shares one parser. Returns false (and writes to err) on a usage error.
 inline bool parseArgs(const char* command, const std::vector<std::string>& args, std::ostream& err, CommonArgs& out) {
   for (std::size_t i = 1; i < args.size(); ++i) {
     if (args[i] == "-o" || args[i] == "--output") {
@@ -44,6 +50,12 @@ inline bool parseArgs(const char* command, const std::vector<std::string>& args,
       if (i + 1 >= args.size()) { err << command << ": " << args[i] << " needs a number\n"; return false; }
       try { out.numModes = std::stoi(args[++i]); out.haveNumModes = true; }
       catch (const std::exception&) { err << command << ": invalid number of modes '" << args[i] << "'\n"; return false; }
+    } else if (args[i] == "--mass-type") {
+      if (i + 1 >= args.size()) { err << command << ": " << args[i] << " needs 'consistent' or 'lumped'\n"; return false; }
+      const std::string& v = args[++i];
+      if (v == "consistent") out.massType = MassMatrixType::Consistent;
+      else if (v == "lumped") out.massType = MassMatrixType::Lumped;
+      else { err << command << ": unsupported --mass-type '" << v << "' (expected consistent or lumped)\n"; return false; }
     } else if (args[i] == "--format") {
       if (i + 1 >= args.size()) { err << command << ": " << args[i] << " needs a format name\n"; return false; }
       out.format = args[++i];
@@ -132,7 +144,7 @@ inline int runModal(const std::vector<std::string>& args, std::ostream& out, std
   // (e.g. MIDAS EIGV's iFREQ), if the source format populated one, before this command's own
   // default (6) -- never changes behavior for a model/format with no such request.
   const int numModes = a.haveNumModes ? a.numModes : (model.modal_request.present ? model.modal_request.num_modes : a.numModes);
-  const auto result = ModalSolver::solve(model.model, model.restraints, numModes);
+  const auto result = ModalSolver::solve(model.model, model.restraints, numModes, a.massType);
   const std::string document = writeModalResults(model.model, result, sha256Hex(text)).dump(2) + "\n";
   if (int rc = writeDocument(a.outputPath, document, out, err)) return rc;
   if (!result.status.success) { err << "analysis failed: " << result.status.message << '\n'; return 1; }
@@ -146,7 +158,7 @@ inline int runSpectrum(const std::vector<std::string>& args, std::ostream& out, 
   std::vector<std::pair<std::string, ResponseSpectrumResults>> results;
   results.reserve(model.response_spectra.size());
   for (const auto& rc : model.response_spectra)
-    results.emplace_back(rc.name, ResponseSpectrumSolver::solve(model.model, model.restraints, rc.input));
+    results.emplace_back(rc.name, ResponseSpectrumSolver::solve(model.model, model.restraints, rc.input, a.massType));
   const json document_json = writeResponseSpectrumResults(results, sha256Hex(text));
   const std::string document = document_json.dump(2) + "\n";
   if (int rc = writeDocument(a.outputPath, document, out, err)) return rc;

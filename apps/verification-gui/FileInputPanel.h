@@ -47,6 +47,12 @@ public:
   // comparison category).
   bool isIncludedInComparison(Row row) const;
 
+  // Only meaningful for Row::EigenvalueMode: whether the user wants the chained modal CLI run to
+  // use `--mass-type lumped` instead of the solver's long-standing default (consistent). See
+  // ModalSolver.hpp's MassMatrixType -- lumped reproduces MIDAS NX's own default eigenvalue
+  // analysis far more closely on the models it was validated against (Phase 7H.1, 2026-11-17).
+  bool useLumpedMass() const { return lumpedMassCheckBox_ && lumpedMassCheckBox_->isChecked(); }
+
 signals:
   // Emitted whenever any row's path or validity changes, so the main window can react (e.g.
   // enable "Modeli Doğrula" once a usable MIDAS model is selected -- GUI-3's concern, not
@@ -71,5 +77,6 @@ private:
   std::array<QPushButton*, kRowCount> browseButtons_{};
   std::array<QLabel*, kRowCount> statusLabels_{};
   std::array<QCheckBox*, kRowCount> includeCheckBoxes_{}; // null for Row::MidasModel
+  QCheckBox* lumpedMassCheckBox_{}; // only for Row::EigenvalueMode -- see useLumpedMass()
   std::array<Status, kRowCount> statuses_{};
 };

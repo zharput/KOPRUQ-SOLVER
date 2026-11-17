@@ -80,15 +80,21 @@ struct ResponseSpectrumResults {
 };
 
 class ResponseSpectrumSolver { public:
-  static ResponseSpectrumResults solve(const Model& m, const Restraints& rs, const ResponseSpectrumInput& input) {
+  // `massType`: see ModalSolver.hpp's MassMatrixType. Threaded through to BOTH the underlying
+  // modal solve AND this solver's own use of the mass matrix (iota/Miota, per-mode equivalent
+  // static force) -- using Consistent for one and Lumped for the other would be internally
+  // inconsistent (Gamma_i/total_mass would no longer correspond to the same physical mass
+  // distribution `phi_i` was computed against).
+  static ResponseSpectrumResults solve(const Model& m, const Restraints& rs, const ResponseSpectrumInput& input,
+                                        MassMatrixType massType = MassMatrixType::Consistent) {
     ResponseSpectrumResults out;
     try {
       if (input.direction < 0 || input.direction > 2) throw std::invalid_argument("direction must be 0 (x), 1 (y) or 2 (z)");
-      auto modal = ModalSolver::solve(m, rs, input.num_modes);
+      auto modal = ModalSolver::solve(m, rs, input.num_modes, massType);
       if (!modal.status.success) { out.status = modal.status; return out; }
 
       DofManager dm(m);
-      Eigen::SparseMatrix<Real> Mfull = MatrixAssembler::assembleMass(m);
+      Eigen::SparseMatrix<Real> Mfull = massType == MassMatrixType::Lumped ? MatrixAssembler::assembleLumpedMass(m) : MatrixAssembler::assembleMass(m);
 
       auto all = rs; for (const auto& n : m.nodes) if (!all.count(n.id)) all[n.id] = {};
       // A rigid-link slave node's 6 DOFs are not independent (see RigidLink.hpp) -- they must be

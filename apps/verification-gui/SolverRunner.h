@@ -22,13 +22,15 @@ public:
   // is a best-effort developer convenience, not a guarantee.
   static QString locateCli();
 
-  // Runs `cli <command> <modelPath> -o <outputPath> [--format <format>]` (format == "native"
-  // omits the flag; `command` defaults to "solve"). `label` is cosmetic, only used in log lines,
-  // so the same runner can serve "Modeli Doğrula"/"Solver'ı Çalıştır" (both "solve") and the
-  // Eigenvalue Mode row's chained modal run ("modal") without duplicating process plumbing -- the
-  // callers differ only in how they interpret the exit code/output, not in what actually runs.
+  // Runs `cli <command> <modelPath> -o <outputPath> [--format <format>] [extraArgs...]` (format
+  // == "native" omits the flag; `command` defaults to "solve"). `label` is cosmetic, only used in
+  // log lines, so the same runner can serve "Modeli Doğrula"/"Solver'ı Çalıştır" (both "solve")
+  // and the Eigenvalue Mode row's chained modal run ("modal", optionally with
+  // `--mass-type lumped` in `extraArgs`) without duplicating process plumbing -- the callers
+  // differ only in how they interpret the exit code/output, not in what actually runs.
   void run(const QString& cliPath, const QString& modelPath, const QString& format,
-           const QString& outputPath, const QString& label, const QString& command = "solve");
+           const QString& outputPath, const QString& label, const QString& command = "solve",
+           const QStringList& extraArgs = {});
 
   // Terminates an in-flight run, if any -- used when the window closes or a new run is
   // requested, never silently left as an orphaned background process.

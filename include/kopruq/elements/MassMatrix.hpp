@@ -20,6 +20,9 @@
 // oversight: modal/response-spectrum results for a Timoshenko beam
 // (Asy/Asz > 0) use this slightly approximate mass alongside the (exact)
 // Timoshenko stiffness.
+//
+// `lumpedMassMatrix` (below) is a second, independently selectable mass
+// formulation -- see its own comment for why it exists and when to use it.
 #include "Beam3D.hpp"
 #include "Releases.hpp"
 #include <array>
@@ -67,6 +70,26 @@ inline Beam3DMatrix consistentMassMatrix(Real L, Real rhoA, Real rhoJ) {
     M += wq * rhoJ * (to * to.transpose());
   }
   return 0.5 * (M + M.transpose());
+}
+
+// Classic "translational-only" lumped mass: half of the element's total mass (rho*A*L) placed
+// directly on each end node's UX/UY/UZ; every rotational DOF (RX/RY/RZ, including torsion) gets
+// exactly zero mass -- the most common "lumped mass" option in commercial FE software, and
+// confirmed (2026-11-17, independent diagnostic, not guessed) to be what MIDAS NX's own default
+// eigenvalue analysis uses for verification/models/13 and 14: using this matrix in place of
+// `consistentMassMatrix` reproduces MIDAS's modal frequencies to within a constant ~0.11%
+// (plausibly a minor density/rounding difference, not a formulation gap) across every mode of
+// both models, including high modes where `consistentMassMatrix` diverges by up to 23%.
+// Rotationally singular by construction (every RX/RY/RZ row/column is exactly zero) -- callers
+// (ModalSolver's Lumped path) must statically condense the massless rotational DOFs before using
+// this in a generalized eigenproblem; it is never directly Cholesky-factorizable on its own.
+inline Beam3DMatrix lumpedMassMatrix(Real L, Real rhoA) {
+  if (!(std::isfinite(L) && L > 0) || !std::isfinite(rhoA))
+    throw Beam3DError(Beam3DErrorCode::InvalidProperty, "mass matrix requires a finite, positive length and finite mass properties");
+  Beam3DMatrix M = Beam3DMatrix::Zero();
+  const Real half = rhoA * L * 0.5;
+  for (int i : {0, 1, 2, 6, 7, 8}) M(i, i) = half; // UX,UY,UZ at node1 (0-2) and node2 (6-8)
+  return M;
 }
 
 } // namespace kopruq

@@ -95,6 +95,14 @@ FileInputPanel::FileInputPanel(QWidget* parent) : QGroupBox(parent) {
       includeCheckBoxes_[i] = include;
       connect(include, &QCheckBox::toggled, this, [this, row](bool) { emit rowChanged(row); });
     }
+    if (row == Row::EigenvalueMode) {
+      lumpedMassCheckBox_ = new QCheckBox(tr("Lumped Mass (MIDAS)"), this);
+      lumpedMassCheckBox_->setToolTip(tr("İşaretlenirse modal analiz --mass-type lumped ile çalıştırılır "
+                                          "(MIDAS NX'in varsayılan özdeğer analizi kütle formülasyonu); "
+                                          "işaretli değilse solver'ın kendi consistent kütle matrisi kullanılır."));
+      grid->addWidget(lumpedMassCheckBox_, gridRow, 5);
+      connect(lumpedMassCheckBox_, &QCheckBox::toggled, this, [this](bool) { emit rowChanged(Row::EigenvalueMode); });
+    }
 
     connect(browse, &QPushButton::clicked, this, [this, row] { browseFor(row); });
   }

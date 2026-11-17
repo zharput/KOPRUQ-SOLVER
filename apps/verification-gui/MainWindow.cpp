@@ -282,7 +282,11 @@ void MainWindow::startModalRun() {
   const QString outputPath = workDir + "/" + QFileInfo(modelPath).completeBaseName() + ".modal-results.json";
 
   activeRunMode_ = RunMode::Modal;
-  solverRunner_->run(cli, modelPath, "midas-nx-json", outputPath, tr("Eigenvalue (Modal) Analizi"), "modal");
+  QStringList extra;
+  const bool lumped = fileInputPanel_->useLumpedMass();
+  if (lumped) extra << "--mass-type" << "lumped";
+  appendLog(lumped ? tr("Kütle tipi: Lumped (MIDAS NX varsayılanı)") : tr("Kütle tipi: Consistent (solver varsayılanı)"), /*Info*/ 0);
+  solverRunner_->run(cli, modelPath, "midas-nx-json", outputPath, tr("Eigenvalue (Modal) Analizi"), "modal", extra);
 }
 
 void MainWindow::onRunFinished(int exitCode, QProcess::ExitStatus status, const QString& outputPath) {

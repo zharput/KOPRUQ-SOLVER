@@ -50,7 +50,8 @@ QString SolverRunner::locateCli() {
 }
 
 void SolverRunner::run(const QString& cliPath, const QString& modelPath, const QString& format,
-                        const QString& outputPath, const QString& label, const QString& command) {
+                        const QString& outputPath, const QString& label, const QString& command,
+                        const QStringList& extraArgs) {
   if (isRunning()) { emit logLine(tr("Zaten bir işlem çalışıyor, önce onun bitmesi bekleniyor.")); return; }
   if (cliPath.isEmpty() || !QFileInfo::exists(cliPath)) {
     emit logLine(tr("kopruq_solver_cli bulunamadı -- GUI-7'de paketleme tamamlanana kadar CLI'nin "
@@ -62,6 +63,7 @@ void SolverRunner::run(const QString& cliPath, const QString& modelPath, const Q
   pendingOutputPath_ = outputPath;
   QStringList args{command, modelPath, "-o", outputPath};
   if (format != "native") { args << "--format" << format; }
+  args << extraArgs;
 
   emit logLine(QStringLiteral("[%1] %2 çalıştırılıyor: %3 %4")
                    .arg(QDateTime::currentDateTime().toString("HH:mm:ss"))

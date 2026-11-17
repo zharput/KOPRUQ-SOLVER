@@ -575,6 +575,63 @@ Also fixed in passing (Debug-only MSVC regression, unrelated to the rigid-link l
 in `RigidLink.hpp`'s extra `Eigen::Sparse` template instantiations — `kopruq_solver_tests` already
 had this flag for an unrelated reason, so the fix follows the exact same existing pattern.
 
+### Phase 7H.1 — Lumped mass option for `ModalSolver`/`ResponseSpectrumSolver` (root cause of the mode 13/14 divergence)
+**COMPLETE (verified, 2026-11-17).** Investigated, at the user's request, WHY models 13/14's
+higher modes diverge from MIDAS while model 15's 100 modes all matched closely. Ruled out by
+direct evidence, not assumption: (1) no single dominant-DOF-type pattern (classified every mode
+by which of UX/UY/UZ/RX/RY/RZ carries most of its kinetic energy; both passing and failing modes
+span every type); (2) not an under-resolved/locally-oscillating mesh shape (inspected failing
+modes' actual deformation along a column -- smooth, monotonic, same global character as passing
+low modes, not a sawtooth higher-harmonic shape); (3) not the already-disclosed Timoshenko-
+stiffness/Euler-Bernoulli-mass mismatch (`MassMatrix.hpp`'s own documented simplification) --
+disabling shear deformation entirely on model 13 made the divergence *worse*, not better (mode
+11: 0.06% with shear -> 10.61% without), ruling this out as the dominant cause.
+
+**Confirmed root cause, via an independent diagnostic** (a throwaway standalone program, reusing
+only already-verified `MatrixAssembler::assemble`/`MidasJsonImporter`, never committed): building
+a classic translational-only lumped mass matrix (half of each element's rho\*A\*L on each end
+node's UX/UY/UZ, zero rotational mass) in place of the consistent mass, with the resulting
+massless rotational DOFs statically condensed (Guyan reduction) before the eigensolve, reproduces
+MIDAS NX's own default eigenvalue analysis almost exactly on **all three** models: 13 (20/20
+modes within a constant -0.110%, was 11/20 passing a 1% check with consistent mass, worst case
+-15.18%), 14 (30/30 within -0.110%, was 13/30, worst case -23.2%), and **15 (100/100 within
+0.110%, confirming MIDAS uses lumped mass there too -- its earlier apparent match with consistent
+mass was coincidental: the two formulations' difference stays under 1% within the first 100 modes
+of that much larger, finer-meshed structure, not because MIDAS used consistent mass there).** The
+remaining constant ~0.11% offset, identical across all three models regardless of size, is a
+separate, minor, unidentified mass-scale difference (a candidate: the assumed 25 kN/m^3 unit
+weight, Phase 7B's own disclosed EN1991-1-1 standard-value substitution for a grade-named
+material, vs MIDAS's own actual internal value) -- not investigated further, since it is two
+orders of magnitude smaller than the effect this phase set out to explain.
+
+**Implemented as a new, explicitly-selectable `MassMatrixType` (`Consistent`/`Lumped`) on
+`ModalSolver::solve`/`ResponseSpectrumSolver::solve`, defaulting to `Consistent`** (every existing
+caller/test is completely unaffected). `MatrixAssembler::assembleLumpedMass` (new) and
+`MassMatrix.hpp`'s `lumpedMassMatrix` (new) build the lumped matrix; `ModalSolver`'s new
+`eigensolveLumped` performs the Guyan condensation of massless (rotational) free DOFs and backs
+their mode-shape values out of the condensation afterward (never left at zero) -- the same
+technique `RigidLink.hpp` and `Releases.hpp` already use elsewhere in this codebase, applied here
+to a different partition (massless vs massy, not slave vs master or released vs active). Not yet
+supported together with rigid links (explicitly rejected, not silently ignored or silently
+downgraded to Consistent).
+
+New CLI flag `--mass-type <consistent|lumped>` on `modal`/`spectrum`. New GUI checkbox ("Lumped
+Mass (MIDAS)") next to the Eigenvalue Mode row, wired through `SolverRunner`'s new `extraArgs`
+parameter to the chained modal CLI invocation.
+
+New, dedicated `tests/unit/lumped_mass_tests.cpp` (4 tests, independent of every existing
+Consistent-path test): `lumpedMassMatrix` against a hand formula; a single-element cantilever's
+Lumped-path frequencies against an independent from-scratch Guyan reduction built in the test
+itself (not calling `eigensolveLumped`); the full-free-DOF eigenproblem residual (K\*phi -
+omega^2\*M\*phi) vanishing at every free DOF including the massless ones, confirming the back-
+substituted rotational mode-shape values are exactly the ones that satisfy equilibrium, not an
+arbitrary placeholder; and error handling (Lumped+rigid-links rejected; omitting the new argument
+still gives bit-identical results to the explicit `Consistent` default). Debug/Release/gui-release
+CTest: 236/241, 236/241, 266/271 respectively (241/271 up from 237/267 -- the 4 new tests, all
+passing); the same 5 pre-existing, unrelated `xmidas/deneme1.json`-missing failures as before this
+phase, no regressions. Re-verified via the actual production CLI (`modal --mass-type lumped`) on
+all three real models (13, 14, 15), matching the diagnostic's numbers exactly.
+
 ### Phase 7I — Traffic (moving) loads — REINSTATED, user decision 2026-11-16
 Cancelled 2026-10-17 as part of the former Phase 8 ("construction stages, bearings/soil springs,
 moving loads/influence lines"); **reinstated by explicit user decision 2026-11-16**, scoped

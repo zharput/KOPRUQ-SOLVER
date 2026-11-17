@@ -91,7 +91,16 @@ class ResponseSpectrumSolver { public:
       Eigen::SparseMatrix<Real> Mfull = MatrixAssembler::assembleMass(m);
 
       auto all = rs; for (const auto& n : m.nodes) if (!all.count(n.id)) all[n.id] = {};
-      auto free = MatrixAssembler::classify(dm, all).free;
+      // A rigid-link slave node's 6 DOFs are not independent (see RigidLink.hpp) -- they must be
+      // excluded here exactly as LinearStaticSolver::solveCasesWithRigidLinks excludes them from
+      // `allRetained` before classify, or they would wrongly appear as extra "free" DOFs with
+      // their own iota=1 entries, double-counting mass already captured through the master's
+      // modal response (ModalSolver::solve has already expanded each mode's shape through the
+      // same rigid kinematics, so the slave DOFs' motion is already fully represented in `phi`).
+      std::set<Id> slaveNodes;
+      if (!m.rigid_links.empty()) slaveNodes = RigidLinkReduction::build(m, dm).slaveNodes;
+      auto allRetained = all; for (const auto& slave : slaveNodes) allRetained.erase(slave);
+      auto free = MatrixAssembler::classify(dm, allRetained).free;
 
       // iota: 1 at every FREE translational DOF matching `direction` (DOF index mod 6:
       // 0=UX, 1=UY, 2=UZ), 0 everywhere else, including restrained DOFs -- see the

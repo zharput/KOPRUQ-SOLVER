@@ -19,6 +19,25 @@ this roadmap, not deferred. The former Phase 9/10/11 are renumbered to
 Phase 7/8/9 below since nothing after them in the sequence depends on the
 cancelled phases. Full rationale/record: `docs/DEVELOPMENT_STATUS.md`.
 
+## Scope change — 2026-11-16 (user decision): traffic loads reinstated; load-type completion order
+Partial reversal of the 2026-10-17 cancellation: **traffic (moving) loads only** are reinstated
+(Phase 7I below) — construction stages and bearings/soil springs remain cancelled. User's explicit
+instruction for the next work sequence, load type by load type, each taken to completion before
+the next starts:
+1. Dead/self-weight loads — already COMPLETE (Phase 4.1's `Material::unit_weight` self-weight).
+2. Uniform temperature loads — already COMPLETE (Phase 7T, `MemberThermalLoad::uniform_delta_t`).
+3. Modal analysis and response-spectrum analysis — COMPLETE for the native, rigid-link-free case
+   (Phase 6.1/6.2) **and now also for MIDAS-imported rigid-link models** (Phase 7H, COMPLETE,
+   verified 2026-11-17: solver-level fix + CLI dispatch confirmed end-to-end). Still open, split
+   out as its own sub-item rather than guessed: EIGV/SPLC/SPFC -> `response_spectra` translation
+   in the MIDAS importer itself (blocked on missing real-sample field-shape ground truth — see
+   Phase 7H's own entry below for why).
+4. Traffic (moving) loads — reinstated, Phase 7I, not started, scope not yet defined.
+5. Load combinations — Phase 7G, not started (MIDAS `LCOM-GEN` import).
+Phase 7E.1 (MIDAS beam-force sign convention) runs alongside this sequence, not strictly before
+or after it, since it affects comparison/verification of every load type above, not one specific
+load type.
+
 ## Immediate priority: Phase 3.2 requalification — COMPLETE
 The historical 25-test suite was lost. It has **not** been restored. New
 independent tests were written instead, preserving all existing tests;
@@ -362,16 +381,132 @@ was imported from) is not part of the results document today, since nothing down
 7E) later needs provenance tagging, it can be added in that phase without reopening 7D.
 
 ### Phase 7E — MIDAS NX results comparison
-Not started; depends on 7B-7D. Reference data available so far: MIDAS's own modal frequencies
-for all 20 modes, readable directly from `xmidas/deneme1_Eigenvalue.out` (plain text). No
-readable numeric static or response-spectrum results were found in the sibling `.out`/`.log`
-files (they are run logs only); the corresponding `.rst`/`.mec`/`.nfxp` files are binary MIDAS
-formats not parsed in this audit. Full static/spectrum comparison may need an additional results
-export from MIDAS in a parseable format, or MIDAS API access — to be confirmed, not assumed,
-before claiming MIDAS numerical validation is complete.
+**In progress (started 2026-11-16, via the Qt6 Verification GUI's GUI-5 comparison engine, not a
+separate code path).** Reference data: the user supplied 11 small, individually MIDAS-NX-run
+verification models (`verification/models/01`-`11`), each with a real `.xlsx` (OOXML, byte-
+signature-verified, not a renamed `.xls`) export of `Reaction(Global)`, `Displacements(Global)`
+and `Beam Force`. Models 01-06 compared against the solver's own `results.json` so far:
+
+- **Displacements and reactions: fully verified, 0 FAIL** on every primitive MIDAS load case in
+  models 02-06 (model 01's and 05's earlier MIDAS-side data-integrity anomalies were resolved by
+  the user re-exporting from MIDAS; see `docs/DEVELOPMENT_STATUS.md`).
+- **Beam-force (Axial/Shear-z/Moment-y) comparisons systematically FAIL** on models 05 and 06 (143
+  and 162 FAILs respectively) — every failing row is magnitude-exact, sign-opposite, never a real
+  magnitude discrepancy. This confirms, on real solved data for the first time, the sign-
+  convention open question already recorded here: MIDAS's own beam-force I/J-end axial/shear/
+  moment sign convention has not been independently verified against `Beam3D::local_end_forces`.
+  **Not fixed yet** — a sign flip must not be guessed into `ResultMatcher`/`ComparisonEngine`
+  without independent verification (CLAUDE.md: no silent sign-convention changes).
+- Models 05's/06's `LCOM-GEN` load combinations (`COMBO-1`, `COMBO-2`) are read by the MIDAS
+  importer but not solved — see Phase 7G below — so their reference rows compare as `N/A`
+  (disclosed, not a defect).
+
+Still not started: independent verification of the sign convention itself (next sub-task below),
+and models 07-11 (not yet re-run by the user against the current solver).
+
+### Phase 7E.1 — MIDAS beam-force sign convention (independent verification)
+**Not started.** Must independently derive (from a hand-built statics reference, or confirmed
+MIDAS documentation — never from "make the comparison pass") which local axis/end convention
+MIDAS's `Beam Force` export uses for Axial/Shear-z/Moment-y at the I and J ends, confirm it
+differs from `Beam3D::local_end_forces`'s own (already-verified, R1-R4) convention in a
+consistent, explainable way, then apply the correction once in `ResultMatcher`
+(`verification/ResultMatcher.cpp`), never in the solver itself (the solver's own convention is
+independently verified and must not change). New dedicated test(s) required; `ComparisonEngine`'s
+tolerance must not be touched to work around this.
+
+### Phase 7G — MIDAS load-combination import (`LCOM-GEN`)
+**Not started.** Phase 4.1 already supports combinations by superposition in the native model
+format; `MidasJsonImporter.hpp` currently reads `LCOM-GEN` entries nowhere — `STLD`/load cases
+import, but `vCOMB` (the combination's constituent load cases + factors) is silently unused.
+Needs: map each `LCOM-GEN` entry onto the existing native combination mechanism (by load-case
+name + factor, matching `STLD.NAME`/Phase 7B's preserved load-case names), solve and report them
+through the existing `results.json` `combinations` array (already present in the schema, just
+always empty on MIDAS import today), and verify against MIDAS's own combination reference rows
+(`Reaction(Global)`/`Beam Force`/`Displacements(Global)` already export `COMBO-*` rows in models
+05/06 — currently compared as `N/A` for exactly this reason).
+
+### Phase 7H — Rigid-link support in `ModalSolver`/`ResponseSpectrumSolver` (unblock MIDAS modal/spectrum import)
+**COMPLETE for the solver-level fix and its CLI dispatch (verified, this session, 2026-11-17);
+EIGV/SPLC->`response_spectra` *translation* in the MIDAS importer remains explicitly blocked, see
+below — not part of this phase's original scope once split out, see rationale below.**
+
+`ModalSolver::solve` and `ResponseSpectrumSolver::solve` (`include/kopruq/solvers/ModalSolver.hpp`,
+`ResponseSpectrumSolver.hpp`) now dispatch to a rigid-link-aware code path
+(`ModalSolver::solveWithRigidLinks`) whenever `Model::rigid_links` is non-empty, exactly mirroring
+`LinearStaticSolver::solveCasesWithRigidLinks`'s already-verified pattern: K/M are assembled in
+full DOF space unchanged, `RigidLinkReduction::build` produces `T` (`include/kopruq/assembly/RigidLink.hpp`,
+unmodified), `Kmid=T^T K T`/`Mmid=T^T M T`, the eigensolve runs on the reduced free-DOF `Kff`/`Mff`
+exactly as the rigid-link-free path already does (refactored into a shared `eigensolve()` helper
+to avoid duplicating that math), and each mode's reduced-space shape is expanded back
+(`red.expand`) to full DOF space, giving every rigid-link slave node's 6 DOFs through the same
+rigid kinematics `LinearStaticSolver` uses — never zero, as the old rejected-outright behavior
+effectively implied. Mass-normalization survives the expansion exactly, by construction
+(`phi_full^T M_full phi_full = phiReduced^T Mmid phiReduced = phiFree^T Mff phiFree = 1`).
+`ResponseSpectrumSolver::solve` additionally had to stop treating a rigid-link slave node's DOFs
+as independent "free" DOFs when building its base-excitation vector `iota` (they are not
+independent — their motion is already fully represented in `phi` through the same rigid
+kinematics), by excluding `RigidLinkReduction::build(m,dm).slaveNodes` from the restraint map
+before classifying free/fixed DOFs, the same way `LinearStaticSolver` already does.
+
+New, dedicated `tests/unit/rigid_link_modal_tests.cpp` (7 tests, independent of the existing
+rigid-link-free `modal_tests.cpp`/`response_spectrum_tests.cpp` and of the existing
+rigid-link-but-static-only `rigid_link_tests.cpp`): a cantilever beam with a massless rigid-arm
+slave node confirms (1) frequencies/eigenvalues are bit-for-bit identical to the no-rigid-link
+baseline (a model-independent prediction, not merely asserted, since the slave carries no mass or
+stiffness of its own), (2) every mode shape's slave DOFs satisfy `u_slave = u_master + theta x e`
+exactly, (3) mass-orthonormality holds over the *full* DOF space including the slave, checked
+against an independently assembled mass matrix, (4) the equivalent response-spectrum-side checks
+(`total_mass` unchanged vs. baseline; each mode's *pre-SRSS* recovered displacement at the slave
+satisfies the same rigid kinematics — deliberately checked before the final SRSS combination,
+since SRSS is nonlinear and does not preserve a linear kinematic relationship between two
+already-combined quantities), and (5) a slave node still cannot carry its own restraints (same
+rejection as `LinearStaticSolver`). Debug/Release/CTest: **232/237 both configurations**, no
+regressions (the 5 pre-existing failures are the already-documented `xmidas/deneme1.json`-missing
+ones, unrelated — that sample folder was deleted by the user this session, see below).
+
+**CLI dispatch confirmed end-to-end, no importer change needed for modal:** `kopruq_solver_cli
+modal <model.json> --format midas-nx-json -n <N>` already calls `ModalSolver::solve` directly
+(`include/kopruq/io/Cli.hpp::runModal`) regardless of format, so a MIDAS model with a `RIGD` record
+now runs modal analysis today, with zero changes to `MidasJsonImporter.hpp`'s already-correct RIGD
+import. Verified against a hand-built, schema-accurate (`RIGD.<masterNodeKey>.ITEMS[].S_NODE[]`,
+read directly from `MidasJsonImporter.hpp`'s own parsing code, never guessed) MIDAS JSON fixture:
+a cantilever with a rigid-arm slave node solved modal analysis successfully, and the slave's mode
+shape independently verified (by hand, outside the solver) against `u_slave = u_master + theta x
+e` for every mode.
+
+**EIGV/SPLC/SPFC -> `response_spectra` translation: explicitly still blocked, split out of this
+phase's scope rather than guessed.** The `spectrum` CLI command additionally needs a *populated*
+`ModelInput.response_spectra` (spectrum curve points, direction, mode count) to have anything to
+run — unlike `modal`, which only needs `-n` from the command line. `MidasJsonImporter.hpp`
+recognizes `EIGV`/`SPLC`/`SPFC` are present (recorded in `MidasImportReport::rejected`, not
+silently dropped) but does not translate them, because their real MIDAS JSON field shapes were
+never independently confirmed from actual MIDAS output — the one real sample that had them
+(`xmidas/deneme1.json`, Phase 7A's audit source) no longer exists in this working tree (the user
+deleted the whole `xmidas/` folder earlier this session; confirmed by directory listing). This
+project's standing discipline (every other MIDAS field, including `RIGD`'s own `S_NODE` key used
+above, was confirmed from the real export before being coded, never guessed from memory or
+general MIDAS documentation) means this translation is not implemented here. Needs either that
+sample restored/re-supplied by the user, or another MIDAS NX JSON export that actually contains
+`EIGV`/`SPLC`/`SPFC`, before this can be done without guessing field names.
+
+Also fixed in passing (Debug-only MSVC regression, unrelated to the rigid-link logic itself):
+`kopruq_response_spectrum_tests`/`kopruq_modal_tests`/`kopruq_rigid_link_modal_tests` needed
+`/bigobj` (MSVC C1128, COFF section-count limit) once `ResponseSpectrumSolver.hpp` started pulling
+in `RigidLink.hpp`'s extra `Eigen::Sparse` template instantiations — `kopruq_solver_tests` already
+had this flag for an unrelated reason, so the fix follows the exact same existing pattern.
+
+### Phase 7I — Traffic (moving) loads — REINSTATED, user decision 2026-11-16
+Cancelled 2026-10-17 as part of the former Phase 8 ("construction stages, bearings/soil springs,
+moving loads/influence lines"); **reinstated by explicit user decision 2026-11-16**, scoped
+narrowly to moving/traffic loads only (construction stages and bearings/soil springs remain
+cancelled/out of scope unless separately reinstated). **Not started.** Needs its own scope
+definition before implementation begins (which traffic-load model — influence-line envelope vs.
+discrete vehicle positions; which code, if any, e.g. EN 1991-2 load models — has not yet been
+decided and must not be assumed) plus independent analytical reference cases, per this project's
+standing verification requirements.
 
 ### Phase 7F — Final standalone release
-Not started; depends on 7A-7E.
+Not started; depends on 7A-7I.
 
 ### Phase 8 — KOPRUQ integration (EXPLICIT APPROVAL REQUIRED)
 *(renumbered from the former Phase 10)*

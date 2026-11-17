@@ -39,12 +39,20 @@
 // USE_SHEAR_DEFORM false still import as Euler-Bernoulli (Asy=Asz=0).
 //
 // NOT executed in this phase (recorded in report, not silently dropped):
-// EIGV/SPLC/SPFC (modal/response-spectrum requests) are present in many
-// MIDAS exports but are not translated into kopruq `response_spectra`
-// entries here -- ModalSolver/ResponseSpectrumSolver (Phase 5.5) reject
-// any model with `rigid_links`, which RIGD maps onto directly, so a
-// model built by this importer that has any RIGD record cannot run
-// modal/response-spectrum analysis today regardless.
+// EIGV/SPLC/SPFC (modal/response-spectrum requests) are present in many MIDAS exports but are
+// not translated into kopruq `response_spectra` entries here. This is no longer because of a
+// rigid-link limitation -- ModalSolver/ResponseSpectrumSolver now support `rigid_links` (Phase
+// 7H, 2026-11-17: an exact Guyan/DOF-elimination extension of the same RigidLinkReduction
+// LinearStaticSolver already used, independently verified in
+// tests/unit/rigid_link_modal_tests.cpp, and confirmed end-to-end through this importer's own
+// RIGD import + the `modal` CLI command), and the CLI's `modal`/`spectrum` commands dispatch to
+// those solvers regardless of `--format`, so a RIGD-containing MIDAS model can already run modal
+// analysis today via `modal <file> --format midas-nx-json`, with no importer change needed for
+// that. What remains unexecuted is purely EIGV/SPLC/SPFC -> `response_spectra` *translation*:
+// their real MIDAS JSON field shapes are not independently confirmed (the one real sample that
+// had them, xmidas/deneme1.json, no longer exists in this working tree -- deleted by the user,
+// 2026-11), and this project does not guess MIDAS field names from memory. Needs either that
+// sample restored/re-supplied, or a confirmed field reference, before implementing.
 #include "../ModelJson.hpp"
 #include "MidasMaterialLibrary.hpp"
 #include "MidasOrientation.hpp"
@@ -318,7 +326,7 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
 
   // --- EIGV/SPLC: recognized but not executed this phase ---
   if (dbg.contains("EIGV") || dbg.contains("SPLC"))
-    out.report.rejected.push_back("modal/response-spectrum requests (EIGV/SPLC) present in source are not executed by this importer: ModalSolver/ResponseSpectrumSolver reject any model with rigid_links (Phase 5.5), and RIGD maps onto rigid_links directly");
+    out.report.rejected.push_back("modal/response-spectrum requests (EIGV/SPLC) present in source are not translated into response_spectra entries by this importer: their real MIDAS JSON field shapes are not independently confirmed in this codebase (Phase 7E.1/7H, 2026-11-17); a RIGD-containing model can still run modal analysis directly via the CLI's 'modal' command, since ModalSolver/ResponseSpectrumSolver now support rigid_links");
 
   return out;
 }

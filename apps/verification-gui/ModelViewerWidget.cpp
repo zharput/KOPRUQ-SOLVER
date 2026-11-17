@@ -55,7 +55,14 @@ void ModelViewerWidget::setModel(const kopruq::io::ModelInput& model) {
   for (const auto& b : model_.model.beams) {
     const QVector3D* p1 = findPos(b.node1);
     const QVector3D* p2 = findPos(b.node2);
-    if (p1 && p2) beams_.push_back({b.id, b.node1, b.node2, b.material, b.section, *p1, *p2});
+    if (p1 && p2) beams_.push_back({b.id, b.node1, b.node2, b.material, b.section, *p1, *p2, b.reference_y});
+  }
+  links_.clear();
+  links_.reserve(model_.model.springs.size());
+  for (const auto& s : model_.model.springs) {
+    const QVector3D* p1 = findPos(s.node1);
+    const QVector3D* p2 = findPos(s.node2);
+    if (p1 && p2) links_.push_back({s.id, *p1, *p2});
   }
   hasModel_ = !nodes_.empty();
   rebuildGeometry();
@@ -68,6 +75,7 @@ void ModelViewerWidget::clearModel() {
   model_ = kopruq::io::ModelInput{};
   nodes_.clear();
   beams_.clear();
+  links_.clear();
   hasModel_ = false;
   selectedNodeId_.reset();
   selectedElementId_.reset();
@@ -113,6 +121,19 @@ void ModelViewerWidget::zoomOut() { distance_ = distance_ * 1.25f; update(); }
 
 void ModelViewerWidget::setShowNodeIds(bool on) { showNodeIds_ = on; update(); }
 void ModelViewerWidget::setShowElementIds(bool on) { showElementIds_ = on; update(); }
+void ModelViewerWidget::setShowSupports(bool on) { showSupports_ = on; update(); }
+void ModelViewerWidget::setShowElasticLinks(bool on) { showElasticLinks_ = on; update(); }
+void ModelViewerWidget::setShowLocalAxes(bool on) { showLocalAxes_ = on; update(); }
+
+ModelViewerWidget::SupportKind ModelViewerWidget::classifyRestraint(const std::array<bool, 6>& r) {
+  const bool allSix = r[0] && r[1] && r[2] && r[3] && r[4] && r[5];
+  if (allSix) return SupportKind::Fixed;
+  const bool translationsOnly = r[0] && r[1] && r[2] && !r[3] && !r[4] && !r[5];
+  if (translationsOnly) return SupportKind::Pinned;
+  const bool verticalOnly = !r[0] && !r[1] && r[2] && !r[3] && !r[4] && !r[5];
+  if (verticalOnly) return SupportKind::Roller;
+  return SupportKind::Custom;
+}
 
 void ModelViewerWidget::initializeGL() {
   glClearColor(0x0B / 255.0f, 0x15 / 255.0f, 0x25 / 255.0f, 1.0f); // Viewer Background #0B1525
@@ -186,6 +207,129 @@ void ModelViewerWidget::paintGL() {
       break;
     }
   }
+
+  const QVector3D extent = boundsMax_ - boundsMin_;
+  const float symbolSize = std::max(std::max({extent.x(), extent.y(), extent.z()}) * 0.035f, 0.05f);
+  if (showElasticLinks_) drawElasticLinks();
+  if (showSupports_) drawSupports(symbolSize);
+  if (showLocalAxes_) drawLocalAxes(symbolSize);
+  drawAxisGizmo();
+}
+
+void ModelViewerWidget::drawElasticLinks() {
+  // Elastic links: distinctly colored separate lines, #A78BFA.
+  glColor3f(0xA7 / 255.0f, 0x78 / 255.0f, 0xFA / 255.0f);
+  glBegin(GL_LINES);
+  for (const auto& l : links_) {
+    glVertex3f(l.a.x(), l.a.y(), l.a.z());
+    glVertex3f(l.b.x(), l.b.y(), l.b.z());
+  }
+  glEnd();
+}
+
+void ModelViewerWidget::drawSupports(float s) {
+  // Supports: #22C55E. Symbol depends only on the actual restraint pattern -- never a guess for
+  // an ambiguous pattern (drawn as a generic diamond instead).
+  glColor3f(0x22 / 255.0f, 0xC5 / 255.0f, 0x55 / 255.0f);
+  for (const auto& [nodeId, restraint] : model_.restraints) {
+    const NodeEntry* node = nullptr;
+    for (const auto& n : nodes_) if (n.id == nodeId) { node = &n; break; }
+    if (!node) continue;
+    const QVector3D& p = node->pos;
+    const SupportKind kind = classifyRestraint(restraint);
+    switch (kind) {
+      case SupportKind::Fixed: {
+        glBegin(GL_LINE_LOOP);
+        glVertex3f(p.x()-s, p.y()-s, p.z()); glVertex3f(p.x()+s, p.y()-s, p.z());
+        glVertex3f(p.x()+s, p.y()-s, p.z()+2*s); glVertex3f(p.x()-s, p.y()-s, p.z()+2*s);
+        glEnd();
+        glBegin(GL_LINES);
+        glVertex3f(p.x(), p.y(), p.z()); glVertex3f(p.x(), p.y()-s, p.z());
+        glEnd();
+        break;
+      }
+      case SupportKind::Pinned: {
+        glBegin(GL_LINE_LOOP);
+        glVertex3f(p.x(), p.y(), p.z());
+        glVertex3f(p.x()-s, p.y()-2*s, p.z());
+        glVertex3f(p.x()+s, p.y()-2*s, p.z());
+        glEnd();
+        break;
+      }
+      case SupportKind::Roller: {
+        constexpr int kSegments = 16;
+        glBegin(GL_LINE_LOOP);
+        for (int i = 0; i < kSegments; ++i) {
+          const float a = 2.0f * 3.14159265f * i / kSegments;
+          glVertex3f(p.x() + s * std::cos(a), p.y() - 2*s + s * std::sin(a), p.z());
+        }
+        glEnd();
+        break;
+      }
+      case SupportKind::Custom: {
+        glBegin(GL_LINE_LOOP);
+        glVertex3f(p.x(), p.y()-2*s, p.z());
+        glVertex3f(p.x()-s, p.y()-s, p.z());
+        glVertex3f(p.x(), p.y(), p.z());
+        glVertex3f(p.x()+s, p.y()-s, p.z());
+        glEnd();
+        break;
+      }
+    }
+  }
+}
+
+void ModelViewerWidget::drawLocalAxes(float s) {
+  // Local axis arrows: computed by calling the solver's own kopruq::Beam3D::axes() for the
+  // exact same geometry it uses (node positions + reference_y), never a parallel visual-only
+  // calculation. Red/green/blue = local x/y/z, drawn from each beam's midpoint.
+  for (const auto& b : beams_) {
+    kopruq::Beam3DGeometry g{Eigen::Vector3d(b.a.x(), b.a.y(), b.a.z()), Eigen::Vector3d(b.b.x(), b.b.y(), b.b.z()), b.referenceY};
+    kopruq::Beam3DAxes axes;
+    try { axes = kopruq::Beam3D::axes(g); } catch (const std::exception&) { continue; } // never fabricate on a degenerate beam
+    const QVector3D mid = (b.a + b.b) * 0.5f;
+    auto drawArrow = [&](const Eigen::Vector3d& dir, float r, float gr, float bl) {
+      const QVector3D d(static_cast<float>(dir.x()), static_cast<float>(dir.y()), static_cast<float>(dir.z()));
+      glColor3f(r, gr, bl);
+      glBegin(GL_LINES);
+      glVertex3f(mid.x(), mid.y(), mid.z());
+      glVertex3f(mid.x() + d.x()*s, mid.y() + d.y()*s, mid.z() + d.z()*s);
+      glEnd();
+    };
+    drawArrow(axes.x, 1.0f, 0.2f, 0.2f);
+    drawArrow(axes.y, 0.2f, 1.0f, 0.2f);
+    drawArrow(axes.z, 0.3f, 0.5f, 1.0f);
+  }
+}
+
+void ModelViewerWidget::drawAxisGizmo() {
+  // Corner XYZ gizmo: rotation-only camera, origin-centered, small fixed-size viewport region
+  // in the bottom-left, color-coded red/green/blue, updates as the camera orbits.
+  const int size = std::min({80, width(), height()});
+  if (size <= 0) return;
+  glViewport(0, 0, size, size);
+  glClear(GL_DEPTH_BUFFER_BIT);
+
+  QMatrix4x4 proj;
+  proj.ortho(-1.6f, 1.6f, -1.6f, 1.6f, -10.0f, 10.0f);
+  const float yaw = qDegreesToRadians(yawDeg_);
+  const float pitch = qDegreesToRadians(pitchDeg_);
+  const QVector3D dir(std::cos(pitch) * std::cos(yaw), std::sin(pitch), std::cos(pitch) * std::sin(yaw));
+  QMatrix4x4 view;
+  view.lookAt(dir * 4.0f, QVector3D(0, 0, 0), QVector3D(0, 1, 0));
+  QMatrix4x4 mvp = proj * view;
+  glMatrixMode(GL_PROJECTION);
+  glLoadIdentity();
+  glMatrixMode(GL_MODELVIEW);
+  glLoadMatrixf(mvp.constData());
+
+  glBegin(GL_LINES);
+  glColor3f(1, 0, 0); glVertex3f(0, 0, 0); glVertex3f(1, 0, 0); // X: red
+  glColor3f(0, 1, 0); glVertex3f(0, 0, 0); glVertex3f(0, 1, 0); // Y: green
+  glColor3f(0.3f, 0.5f, 1.0f); glVertex3f(0, 0, 0); glVertex3f(0, 0, 1); // Z: blue
+  glEnd();
+
+  glViewport(0, 0, viewportW_, viewportH_);
 }
 
 QPointF ModelViewerWidget::projectToScreen(const QVector3D& worldPos, bool* visible) const {

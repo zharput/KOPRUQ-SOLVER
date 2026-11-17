@@ -1,21 +1,32 @@
 #pragma once
-// V2.2 Stage A (Viewer Foundation) + Stage B (Model Interaction): a read-only 3D wireframe
-// viewer for the exact MIDAS model the solver analyzes. Geometry comes solely from
-// kopruq::io::ModelInput (populated by kopruq::io::detail::readModelFile(..., "midas-nx-json",
-// ...), the same importer path the CLI/solver uses) -- never from a separate parser. Stage C
-// (supports, elastic links, local axes drawing, display toggles) is a later, separately-approved
-// stage.
+// V2.2 Stage A (Viewer Foundation) + Stage B (Model Interaction) + Stage C (Structural Display):
+// a read-only 3D wireframe viewer for the exact MIDAS model the solver analyzes. Geometry comes
+// solely from kopruq::io::ModelInput (populated by kopruq::io::detail::readModelFile(...,
+// "midas-nx-json", ...), the same importer path the CLI/solver uses) -- never from a separate
+// parser.
 //
-// Stage B adds: optional node/element ID labels (off by default, per the performance
+// Stage B added: optional node/element ID labels (off by default, per the performance
 // requirement), click-to-select a node or beam, and an Element/Node Information text report
 // (nodeInfoChanged/elementInfoChanged/selectionCleared signals) built only from real model
 // fields -- never fabricated.
+//
+// Stage C adds: support symbols derived only from the actual restraint pattern in
+// kopruq::io::ModelInput::restraints (Fixed = all 6 DOFs held, Pinned = all 3 translations held
+// and no rotation, Roller = only UZ held; any other pattern draws a distinct, deliberately
+// generic "custom restraint" marker rather than guessing a canonical type); elastic links
+// (kopruq::Model::springs) drawn as separate #A78BFA lines; local axis arrows computed by
+// calling kopruq::Beam3D::axes() directly -- the solver's own orientation/transformation logic,
+// never a separate visual-only calculation; and a corner XYZ axis gizmo that rotates with the
+// camera. Supports/elastic links default ON (cheap to draw, structurally important); local axes
+// and ID labels default OFF (visual clutter / performance).
 #include "../../include/kopruq/io/ModelJson.hpp"
+#include "../../include/kopruq/elements/Beam3D.hpp"
 #include <QMatrix4x4>
 #include <QOpenGLWidget>
 #include <QPoint>
 #include <QString>
 #include <QVector3D>
+#include <array>
 #include <optional>
 #include <vector>
 
@@ -50,6 +61,9 @@ public slots:
   void zoomOut();
   void setShowNodeIds(bool on);
   void setShowElementIds(bool on);
+  void setShowSupports(bool on);
+  void setShowElasticLinks(bool on);
+  void setShowLocalAxes(bool on);
 
 protected:
   void initializeGL() override;
@@ -63,24 +77,35 @@ protected:
 
 private:
   struct NodeEntry { kopruq::Id id; QVector3D pos; };
-  struct BeamEntry { kopruq::Id id, node1, node2, material, section; QVector3D a, b; };
+  struct BeamEntry { kopruq::Id id, node1, node2, material, section; QVector3D a, b; Eigen::Vector3d referenceY; };
+  struct LinkEntry { kopruq::Id id; QVector3D a, b; };
+  enum class SupportKind { Fixed, Pinned, Roller, Custom };
 
   void rebuildGeometry();
   void applyCameraMatrix();
   void drawOverlayLabels(class QPainter& painter);
+  void drawSupports(float symbolSize);
+  void drawElasticLinks();
+  void drawLocalAxes(float symbolSize);
+  void drawAxisGizmo();
   QPointF projectToScreen(const QVector3D& worldPos, bool* visible) const;
   void pickAt(const QPoint& pos);
   QString describeNode(const NodeEntry& n) const;
   QString describeBeam(const BeamEntry& b) const;
+  static SupportKind classifyRestraint(const std::array<bool, 6>& r);
 
   kopruq::io::ModelInput model_;
   std::vector<NodeEntry> nodes_;
   std::vector<BeamEntry> beams_;
+  std::vector<LinkEntry> links_;
   QVector3D boundsMin_{0, 0, 0}, boundsMax_{0, 0, 0};
   bool hasModel_{false};
 
   bool showNodeIds_{false};
   bool showElementIds_{false};
+  bool showSupports_{true};
+  bool showElasticLinks_{true};
+  bool showLocalAxes_{false};
   std::optional<kopruq::Id> selectedNodeId_;
   std::optional<kopruq::Id> selectedElementId_;
 

@@ -156,6 +156,20 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
   auto* elementIdAction = viewerToolBar->addAction(tr("Eleman ID"));
   elementIdAction->setCheckable(true);
   connect(elementIdAction, &QAction::toggled, modelViewer_, &ModelViewerWidget::setShowElementIds);
+  viewerToolBar->addSeparator();
+  // V2.2 Stage C: Supports/Elastic Links default ON (cheap, structurally important); Local Axes
+  // default OFF (visual clutter), matching ModelViewerWidget's own defaults.
+  auto* supportsAction = viewerToolBar->addAction(tr("Mesnetler"));
+  supportsAction->setCheckable(true);
+  supportsAction->setChecked(true);
+  connect(supportsAction, &QAction::toggled, modelViewer_, &ModelViewerWidget::setShowSupports);
+  auto* elasticLinksAction = viewerToolBar->addAction(tr("Elastik Bağlantılar"));
+  elasticLinksAction->setCheckable(true);
+  elasticLinksAction->setChecked(true);
+  connect(elasticLinksAction, &QAction::toggled, modelViewer_, &ModelViewerWidget::setShowElasticLinks);
+  auto* localAxesAction = viewerToolBar->addAction(tr("Yerel Eksenler"));
+  localAxesAction->setCheckable(true);
+  connect(localAxesAction, &QAction::toggled, modelViewer_, &ModelViewerWidget::setShowLocalAxes);
 
   // V2.2 Stage B: Element/Node Information panel, filled only from ModelViewerWidget's own
   // selection signals -- its text is built from real model fields, never fabricated here.

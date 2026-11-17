@@ -1603,6 +1603,37 @@ these 5 tests' fixture path can be repointed at it without otherwise changing th
 were never testing anything specific to that one file's exact numbers beyond "a real, complex
 MIDAS export imports, validates and solves end to end."
 
+## GUI V2.2 — 3D Model Viewer, Stages A/B/C — COMPLETE (2026-11-17)
+Added a read-only OpenGL "Model Görünümü" tab beside the existing "4. Sonuç Karşılaştırma
+Tabloları" tab (`apps/verification-gui/ModelViewerWidget.{h,cpp}`, `QOpenGLWidget` + desktop
+fixed-function pipeline). Model geometry comes exclusively from the existing
+`kopruq::io::detail::readModelFile(..., "midas-nx-json", ...)` / `MidasJsonImporter` path (the
+same one the CLI/solver use) and is gated by the same `kopruq::MatrixAssembler::assemble()`
+validation used before a solve -- a failed import/validation always clears the viewer rather
+than leaving a stale model displayed. No new JSON parser was written.
+- **Stage A (Viewer Foundation)**: tab, camera (rotate/pan/zoom/fit/reset/isometric/top/front/
+  side), node/beam wireframe drawing. Commit `c2e6b92`.
+- **Stage B (Model Interaction)**: optional Node ID/Element ID labels (default OFF, performance),
+  click-to-select node/beam (screen-space picking via the render MVP matrix), an Element/Node
+  Information side panel built only from real model fields (coordinates, restraints, section/
+  material ids, length). Commit `16ff859`.
+- **Stage C (Structural Display)**: support symbols from the actual restraint pattern only
+  (Fixed/Pinned/Roller canonical patterns; any other pattern draws a distinct generic marker,
+  never a guess), elastic links (`kopruq::Model::springs`) as separate `#A78BFA` lines, local
+  axis arrows computed via `kopruq::Beam3D::axes()` directly (never a separate visual-only
+  calculation), a corner XYZ camera-following gizmo, and toolbar toggles (Supports/Elastic Links
+  default ON, Local Axes default OFF). Commit `70d4acf`.
+- `vcpkg.json` gained qtbase's `"opengl"` feature; `CMakeLists.txt` links `Qt6::OpenGL`/
+  `Qt6::OpenGLWidgets` (+ `opengl32` on Windows).
+- Verified after each stage: `ninja-gui-release` build succeeds; CTest **269/274 PASS** at every
+  stage, with the exact same 5 pre-existing/permanent `xmidas/deneme1.json`-removal failures
+  listed above -- no regressions introduced by the viewer work at any stage.
+- Not yet done: interactive mouse-driven GUI testing (standing constraint from this project's
+  mouse-automation privacy incident -- CLI/code-level verification only); Debug-configuration
+  CTest run (only Release/`gui-release` was exercised for this feature).
+- Deferred by the approved spec to a later version: deformed shape, force/stress diagrams, solid
+  section rendering, traffic/moving load visualization, BIM export, CAD editing.
+
 ## Next autonomous action
 Phase 3.2, Phase 4, Phase 5 (5.1-5.6), Phase 6 (6.1, 6.1b, 6.2, 6.2b; 6.3 cancelled), Phase 7A,
 7B (including ETMP thermal wiring), 7C, 7D, 7M, 7S(1) and 7T are all complete and verified -- CI

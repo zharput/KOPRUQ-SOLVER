@@ -8,6 +8,7 @@
 // failed to solve), or Unsupported (a known formulation gap, e.g. elastic links). Never silently
 // dropped.
 #include "ComparisonEngine.h"
+#include "EigenvalueReferenceReader.h"
 #include "ExcelReferenceReader.h"
 #include <nlohmann/json.hpp>
 #include <string>
@@ -48,5 +49,16 @@ CategoryStats summarizeCategory(const std::vector<ComparisonRow>& rows);
 // data gap -- see MidasJsonImporter.hpp), so no element in results.json can ever correspond to
 // one. Every reference row is reported Unsupported, never guessed at or silently skipped.
 CategoryComparison markElasticLinksUnsupported(const ReferenceTable& ref);
+
+// `modalResults` is `kopruq-modal-results` (io::writeModalResults's own JSON, read back with
+// nlohmann::json::parse). Matches by mode index (`eigenRef[i].mode` is 1-based, `modalResults`'s
+// own "index" field is 0-based -- see ModalResultsJson.hpp -- so `mode - 1` is the lookup key, not
+// position in the vector, in case a future reference export's modes are ever out of order).
+// Every reference mode produces two ComparisonRows (angular frequency, frequency in Hz); modes
+// beyond what ModalSolver computed (fewer modes requested than MIDAS's reference has) report
+// NotApplicable, never silently dropped.
+CategoryComparison matchEigenvalueFrequencies(const nlohmann::json& modalResults,
+                                               const std::vector<EigenvalueReferenceRow>& eigenRef,
+                                               const ToleranceSettings& tol);
 
 } // namespace kopruq::verification

@@ -128,7 +128,11 @@ inline int runModal(const std::vector<std::string>& args, std::ostream& out, std
   if (a.haveNumModes && a.numModes <= 0) { err << "modal: -n must be a positive integer\n"; return 2; }
   std::string text; ModelInput model; int code;
   if (!readModelFile(a.modelPath, a.format, err, text, model, code)) return code;
-  const auto result = ModalSolver::solve(model.model, model.restraints, a.numModes);
+  // -n on the command line always wins; otherwise fall back to the model's own modal request
+  // (e.g. MIDAS EIGV's iFREQ), if the source format populated one, before this command's own
+  // default (6) -- never changes behavior for a model/format with no such request.
+  const int numModes = a.haveNumModes ? a.numModes : (model.modal_request.present ? model.modal_request.num_modes : a.numModes);
+  const auto result = ModalSolver::solve(model.model, model.restraints, numModes);
   const std::string document = writeModalResults(model.model, result, sha256Hex(text)).dump(2) + "\n";
   if (int rc = writeDocument(a.outputPath, document, out, err)) return rc;
   if (!result.status.success) { err << "analysis failed: " << result.status.message << '\n'; return 1; }

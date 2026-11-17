@@ -19,6 +19,7 @@ public:
   QTableWidget* reactionsTable() const { return reactionsTable_; }
   QTableWidget* beamForcesTable() const { return beamForcesTable_; }
   QTableWidget* elasticLinksTable() const { return elasticLinksTable_; }
+  QTableWidget* eigenvalueTable() const { return eigenvalueTable_; }
   QTableWidget* diagnosticsTable() const { return diagnosticsTable_; }
 
   QLineEdit* absoluteToleranceField() const { return absTolField_; }
@@ -40,6 +41,7 @@ private:
   QTableWidget* reactionsTable_{};
   QTableWidget* beamForcesTable_{};
   QTableWidget* elasticLinksTable_{};
+  QTableWidget* eigenvalueTable_{};
   QTableWidget* diagnosticsTable_{};
 
   QLabel* totalCompared_{};

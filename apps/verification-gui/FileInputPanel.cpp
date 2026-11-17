@@ -29,6 +29,7 @@ const std::array<RowSpec, static_cast<std::size_t>(FileInputPanel::Row::Count)> 
   {"Displacements (Global) (Excel)", "displacements", kExcelFilter, kExcelSuffixes},
   {"Elastic Link (Excel)", "elasticLink", kExcelFilter, kExcelSuffixes},
   {"Reaction (Global) (Excel)", "reactions", kExcelFilter, kExcelSuffixes},
+  {"Eigenvalue Mode (Excel)", "eigenvalueMode", kExcelFilter, kExcelSuffixes},
 }};
 
 QString statusText(FileInputPanel::Status s) {

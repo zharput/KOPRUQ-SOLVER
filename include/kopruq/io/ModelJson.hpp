@@ -70,12 +70,18 @@ class ModelInputError : public std::runtime_error {
 
 struct ResponseSpectrumCase { std::string name; ResponseSpectrumInput input; };
 
+// A source format's own request for how many modes to compute (e.g. MIDAS EIGV's `iFREQ`);
+// `present=false` (the native schema's/every pre-existing caller's default) means no such
+// request exists, so callers fall back to their own default exactly as before this field existed.
+struct ModalRequest { bool present{false}; int num_modes{6}; };
+
 struct ModelInput {
   Model model;
   LinearStaticSolver::Restraints restraints;
   std::vector<LoadCase> load_cases;
   std::vector<LoadCombination> combinations;
   std::vector<ResponseSpectrumCase> response_spectra;
+  ModalRequest modal_request;
 };
 
 namespace detail {

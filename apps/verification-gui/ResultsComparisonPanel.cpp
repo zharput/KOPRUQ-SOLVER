@@ -74,6 +74,10 @@ ResultsComparisonPanel::ResultsComparisonPanel(QWidget* parent) : QWidget(parent
                                     tr("SOLVER Değeri"), tr("Fark"), tr("Birim"), tr("Durum")}, group);
   tabs_->addTab(elasticLinksTable_, tr("Elastik Bağlantılar"));
 
+  eigenvalueTable_ = buildTable({tr("Mod No"), tr("Bileşen"), tr("MIDAS Değeri"), tr("SOLVER Değeri"),
+                                   tr("İşaretli Fark"), tr("Mutlak Fark"), tr("Bağıl Fark"), tr("Birim"), tr("Durum")}, group);
+  tabs_->addTab(eigenvalueTable_, tr("Özdeğer (Eigenvalue)"));
+
   diagnosticsTable_ = buildTable({tr("Kategori"), tr("Kaynak"), tr("Açıklama"), tr("Önem")}, group);
   tabs_->addTab(diagnosticsTable_, tr("Diagnostik"));
 

@@ -34,11 +34,16 @@ protected:
   void closeEvent(QCloseEvent* event) override;
 
 private:
-  enum class RunMode { ValidateOnly, Solve };
+  // Modal is never user-triggered directly: startRun(Solve) chains into it automatically, right
+  // after a successful solve, only when the Eigenvalue Mode (Excel) row has a usable file -- see
+  // its own comment in MainWindow.cpp for why a second CLI invocation is the simplest correct
+  // approach rather than teaching the CLI's own "solve" command to also run modal analysis.
+  enum class RunMode { ValidateOnly, Solve, Modal };
   enum class WorkflowState { InputReady = 0, Validated = 1, Solved = 2, Compared = 3 };
 
   void applyWorkflowState();
   void startRun(RunMode mode);
+  void startModalRun();
   void onRunFinished(int exitCode, QProcess::ExitStatus status, const QString& outputPath);
   void onCompare();
   void onExport();
@@ -61,13 +66,14 @@ private:
   WorkflowState state_{WorkflowState::InputReady};
   RunMode activeRunMode_{RunMode::Solve};
   QString lastResultsPath_; // discovered results.json from the most recent successful solve
+  QString lastModalResultsPath_; // discovered kopruq-modal-results.json, empty if no Eigenvalue Mode row or that run failed
   ModelInfoPanel::Info modelInfo_; // accumulated across the two "midas-nx-json ..." log lines
 
   // GUI-5's last comparison, cached so GUI-6's export reuses it verbatim instead of recomputing.
-  std::vector<kopruq::verification::ComparisonRow> lastDisplacementRows_, lastReactionRows_, lastBeamForceRows_, lastElasticLinkRows_;
+  std::vector<kopruq::verification::ComparisonRow> lastDisplacementRows_, lastReactionRows_, lastBeamForceRows_, lastElasticLinkRows_, lastEigenvalueRows_;
   QStringList lastDiagnostics_;
   kopruq::verification::ToleranceSettings lastTolerance_;
   QString lastSolverVersion_;
   QString lastComparisonTimestamp_;
-  QString lastDisplacementsFile_, lastReactionsFile_, lastBeamForceFile_, lastElasticLinkFile_;
+  QString lastDisplacementsFile_, lastReactionsFile_, lastBeamForceFile_, lastElasticLinkFile_, lastEigenvalueFile_;
 };

@@ -4,6 +4,7 @@
 #include "FileInputPanel.h"
 #include "ResultsComparisonPanel.h"
 #include "SolverRunner.h"
+#include "EigenvalueReferenceReader.h"
 #include "ExcelReferenceReader.h"
 #include "ResultMatcher.h"
 #include "VerificationReportExporter.h"
@@ -74,6 +75,28 @@ void populateBeamOrLinkTable(QTableWidget* table, const std::vector<ComparisonRo
     table->setItem(i, c++, new QTableWidgetItem(hasNumbers ? fmt(r.result.referenceValue) : QString()));
     table->setItem(i, c++, new QTableWidgetItem(hasNumbers ? fmt(r.result.solverValue) : QString()));
     table->setItem(i, c++, new QTableWidgetItem(hasNumbers ? fmt(r.result.signedDiff) : QString()));
+    table->setItem(i, c++, new QTableWidgetItem(QString::fromStdString(r.unit)));
+    table->setItem(i, c++, new QTableWidgetItem(statusText(r.result.status)));
+    for (int col = 0; col < table->columnCount(); ++col)
+      if (auto* item = table->item(i, col)) item->setFlags(item->flags() & ~Qt::ItemIsEditable);
+  }
+}
+
+// Eigenvalue (modal) comparison: same per-row fields as populateNodeBasedTable, minus "Yük
+// Durumu" (modal analysis has no load case) -- `ComparisonRow::id` holds the 1-based mode number.
+void populateEigenvalueTable(QTableWidget* table, const std::vector<ComparisonRow>& rows) {
+  table->setRowCount(static_cast<int>(rows.size()));
+  for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
+    const auto& r = rows[static_cast<std::size_t>(i)];
+    int c = 0;
+    const bool hasNumbers = r.result.status == ComparisonStatus::Pass || r.result.status == ComparisonStatus::Fail;
+    table->setItem(i, c++, new QTableWidgetItem(QString::fromStdString(r.id)));
+    table->setItem(i, c++, new QTableWidgetItem(QString::fromStdString(r.component)));
+    table->setItem(i, c++, new QTableWidgetItem(fmt(r.result.referenceValue)));
+    table->setItem(i, c++, new QTableWidgetItem(hasNumbers ? fmt(r.result.solverValue) : QString()));
+    table->setItem(i, c++, new QTableWidgetItem(hasNumbers ? fmt(r.result.signedDiff) : QString()));
+    table->setItem(i, c++, new QTableWidgetItem(hasNumbers ? fmt(r.result.absDiff) : QString()));
+    table->setItem(i, c++, new QTableWidgetItem(hasNumbers ? QString::number(r.result.relDiff * 100.0, 'f', 3) + "%" : QString()));
     table->setItem(i, c++, new QTableWidgetItem(QString::fromStdString(r.unit)));
     table->setItem(i, c++, new QTableWidgetItem(statusText(r.result.status)));
     for (int col = 0; col < table->columnCount(); ++col)
@@ -171,11 +194,13 @@ void MainWindow::invalidateComparison() {
   lastReactionRows_.clear();
   lastBeamForceRows_.clear();
   lastElasticLinkRows_.clear();
+  lastEigenvalueRows_.clear();
   lastDiagnostics_.clear();
   resultsPanel_->displacementsTable()->setRowCount(0);
   resultsPanel_->reactionsTable()->setRowCount(0);
   resultsPanel_->beamForcesTable()->setRowCount(0);
   resultsPanel_->elasticLinksTable()->setRowCount(0);
+  resultsPanel_->eigenvalueTable()->setRowCount(0);
   resultsPanel_->diagnosticsTable()->setRowCount(0);
   resultsPanel_->categoryTable()->setRowCount(0);
   resultsPanel_->setSummaryCounts(0, 0, 0, 0);
@@ -186,6 +211,7 @@ void MainWindow::invalidateComparison() {
 void MainWindow::invalidateSolveAndBeyond() {
   invalidateComparison();
   lastResultsPath_.clear();
+  lastModalResultsPath_.clear();
   if (state_ == WorkflowState::Solved) state_ = WorkflowState::Validated;
   applyWorkflowState();
 }
@@ -244,6 +270,21 @@ void MainWindow::startRun(RunMode mode) {
   solverRunner_->run(cli, modelPath, "midas-nx-json", outputPath, label);
 }
 
+// Chained automatically by onRunFinished right after a successful "solve", only when the
+// Eigenvalue Mode (Excel) row has a usable file -- a second CLI invocation (`modal`, not
+// `solve`) rather than teaching "solve" to also run modal analysis, since the two are
+// independent analyses in the CLI's own design (Phase 6.1's ModalSolver vs Phase 4's
+// LinearStaticSolver) and every other model/workflow must stay unaffected by this row existing.
+void MainWindow::startModalRun() {
+  const QString cli = SolverRunner::locateCli();
+  const QString modelPath = fileInputPanel_->filePath(FileInputPanel::Row::MidasModel);
+  const QString workDir = QStandardPaths::writableLocation(QStandardPaths::TempLocation) + "/kopruq_verification";
+  const QString outputPath = workDir + "/" + QFileInfo(modelPath).completeBaseName() + ".modal-results.json";
+
+  activeRunMode_ = RunMode::Modal;
+  solverRunner_->run(cli, modelPath, "midas-nx-json", outputPath, tr("Eigenvalue (Modal) Analizi"), "modal");
+}
+
 void MainWindow::onRunFinished(int exitCode, QProcess::ExitStatus status, const QString& outputPath) {
   const QString ts = QDateTime::currentDateTime().toString("HH:mm:ss");
   executionLogPanel_->progressBar()->setRange(0, 100);
@@ -273,11 +314,21 @@ void MainWindow::onRunFinished(int exitCode, QProcess::ExitStatus status, const 
       appendLog(tr("[%1] MIDAS yük kombinasyonları desteklenmiyor (Yük Kombinasyonu Sayısı: N/A).").arg(ts), /*Warning*/ 2);
       state_ = WorkflowState::Validated;
     }
-  } else {
+  } else if (activeRunMode_ == RunMode::Solve) {
     if (exitCode == 0) {
       lastResultsPath_ = outputPath;
       executionLogPanel_->progressBar()->setValue(100);
       appendLog(tr("[%1] Analiz tamamlandı. Sonuçlar: %2").arg(ts, outputPath), /*Success*/ 1);
+      // Eigenvalue Mode (Excel) row provided -> chain a second CLI invocation (`modal`) before
+      // declaring the step Solved, so a comparison against it is possible right after. Static
+      // solve already succeeded regardless of what this second run does, so its own outcome is
+      // handled entirely in the RunMode::Modal branch below (never re-fails this step).
+      if (fileInputPanel_->isUsable(FileInputPanel::Row::EigenvalueMode)) {
+        appendLog(tr("[%1] Eigenvalue Mode (Excel) seçili -- modal analiz de çalıştırılıyor...").arg(ts), /*Info*/ 0);
+        startModalRun();
+        return; // stays "busy" (buttons disabled, progress indeterminate) until the modal run finishes
+      }
+      lastModalResultsPath_.clear();
       state_ = WorkflowState::Solved;
     } else if (exitCode == 1 && QFileInfo::exists(outputPath)) {
       // Per the CLI's documented contract, exit 1 still writes results (a load case that failed
@@ -291,6 +342,19 @@ void MainWindow::onRunFinished(int exitCode, QProcess::ExitStatus status, const 
       appendLog(tr("[%1] Analiz BAŞARISIZ (çıkış kodu %2).").arg(ts).arg(exitCode), /*Error*/ 3);
       state_ = WorkflowState::Validated;
     }
+  } else { // RunMode::Modal -- always finalizes to Solved, since the static solve it was chained
+           // after already succeeded; a failed/missing modal run only means the Eigenvalue
+           // comparison category will itself report N/A later, not that the whole step failed.
+    if (exitCode == 0) {
+      lastModalResultsPath_ = outputPath;
+      executionLogPanel_->progressBar()->setValue(100);
+      appendLog(tr("[%1] Modal analiz tamamlandı. Sonuçlar: %2").arg(ts, outputPath), /*Success*/ 1);
+    } else {
+      lastModalResultsPath_.clear();
+      executionLogPanel_->progressBar()->setValue(0);
+      appendLog(tr("[%1] Modal analiz BAŞARISIZ (çıkış kodu %2) -- Eigenvalue karşılaştırması N/A olacak.").arg(ts).arg(exitCode), /*Error*/ 3);
+    }
+    state_ = WorkflowState::Solved;
   }
   applyWorkflowState();
 }
@@ -343,7 +407,8 @@ void MainWindow::onCompare() {
   const bool anyChecked = fileInputPanel_->isIncludedInComparison(FileInputPanel::Row::Displacements) ||
                            fileInputPanel_->isIncludedInComparison(FileInputPanel::Row::Reactions) ||
                            fileInputPanel_->isIncludedInComparison(FileInputPanel::Row::BeamForce) ||
-                           fileInputPanel_->isIncludedInComparison(FileInputPanel::Row::ElasticLink);
+                           fileInputPanel_->isIncludedInComparison(FileInputPanel::Row::ElasticLink) ||
+                           fileInputPanel_->isIncludedInComparison(FileInputPanel::Row::EigenvalueMode);
   if (!anyChecked) {
     appendLog(tr("En az bir Excel referans dosyası seçilip \"Karşılaştır\" işaretlenmeli."), /*Warning*/ 2);
     return;
@@ -412,10 +477,48 @@ void MainWindow::onCompare() {
     }
   }
 
+  // Eigenvalue Mode (Excel): a separate code path, not folded into the FileSpec loop above --
+  // it compares against the chained `modal` CLI run's own results.json (lastModalResultsPath_),
+  // never the static-solve `results` already parsed above, and reads via a dedicated parser
+  // (EigenvalueReferenceReader, not ExcelReferenceReader/ReferenceTable) since the real export's
+  // layout (stacked, independently-titled sub-tables) does not fit that generic reader.
+  std::vector<ComparisonRow> eigenvalueRows;
+  lastEigenvalueFile_.clear();
+  if (!fileInputPanel_->isUsable(FileInputPanel::Row::EigenvalueMode)) {
+    allDiagnostics << tr("Eigenvalue Mode: dosya seçilmedi, bu kategori karşılaştırılmadı.");
+  } else if (!fileInputPanel_->isIncludedInComparison(FileInputPanel::Row::EigenvalueMode)) {
+    allDiagnostics << tr("Eigenvalue Mode: dosya seçili ama \"Karşılaştır\" işaretli değil, bu kategori atlandı.");
+  } else {
+    lastEigenvalueFile_ = QFileInfo(fileInputPanel_->filePath(FileInputPanel::Row::EigenvalueMode)).fileName();
+    auto eigenRead = kopruq::verification::readEigenvalueReferenceExcel(fileInputPanel_->filePath(FileInputPanel::Row::EigenvalueMode).toStdString());
+    for (const auto& d : eigenRead.diagnostics) allDiagnostics << QString::fromStdString(d);
+    if (eigenRead.rows) {
+      if (lastModalResultsPath_.isEmpty()) {
+        allDiagnostics << tr("Eigenvalue Mode: modal analiz çalıştırılmadı veya başarısız oldu, karşılaştırma yapılamadı.");
+      } else {
+        nlohmann::json modalResults;
+        std::ifstream modalIn(lastModalResultsPath_.toStdString(), std::ios::binary);
+        if (!modalIn) {
+          allDiagnostics << tr("Modal sonuç dosyası açılamadı: %1").arg(lastModalResultsPath_);
+        } else {
+          try {
+            modalIn >> modalResults;
+            CategoryComparison cmp = kopruq::verification::matchEigenvalueFrequencies(modalResults, *eigenRead.rows, tol);
+            for (const auto& d : cmp.diagnostics) allDiagnostics << QString::fromStdString(d);
+            eigenvalueRows = std::move(cmp.rows);
+          } catch (const std::exception& e) {
+            allDiagnostics << tr("Modal sonuç dosyası (modal-results.json) ayrıştırılamadı: %1").arg(QString::fromStdString(e.what()));
+          }
+        }
+      }
+    }
+  }
+
   populateNodeBasedTable(resultsPanel_->displacementsTable(), displacementRows);
   populateNodeBasedTable(resultsPanel_->reactionsTable(), reactionRows);
   populateBeamOrLinkTable(resultsPanel_->beamForcesTable(), beamForceRows);
   populateBeamOrLinkTable(resultsPanel_->elasticLinksTable(), elasticLinkRows);
+  populateEigenvalueTable(resultsPanel_->eigenvalueTable(), eigenvalueRows);
 
   auto* diag = resultsPanel_->diagnosticsTable();
   diag->setRowCount(static_cast<int>(allDiagnostics.size()));
@@ -433,11 +536,13 @@ void MainWindow::onCompare() {
       {"Mesnet Tepkimeleri (Global)", &reactionRows},
       {"Kiriş İç Kuvvetleri", &beamForceRows},
       {"Elastik Bağlantılar", &elasticLinkRows},
+      {"Özdeğer (Eigenvalue)", &eigenvalueRows},
   };
   auto* catTable = resultsPanel_->categoryTable();
-  catTable->setRowCount(4);
+  constexpr int kCategoryCount = 5;
+  catTable->setRowCount(kCategoryCount);
   int totalAll = 0, passAll = 0, failAll = 0, naAll = 0;
-  for (int i = 0; i < 4; ++i) {
+  for (int i = 0; i < kCategoryCount; ++i) {
     const auto stats = kopruq::verification::summarizeCategory(*categories[i].rows);
     totalAll += stats.total; passAll += stats.pass; failAll += stats.fail; naAll += stats.na;
     const QString status = stats.total == 0 ? tr("—") : (stats.fail == 0 ? tr("PASS") : tr("FAIL"));
@@ -461,6 +566,7 @@ void MainWindow::onCompare() {
   lastReactionRows_ = std::move(reactionRows);
   lastBeamForceRows_ = std::move(beamForceRows);
   lastElasticLinkRows_ = std::move(elasticLinkRows);
+  lastEigenvalueRows_ = std::move(eigenvalueRows);
   lastDiagnostics_ = allDiagnostics;
   lastTolerance_ = tol;
   lastSolverVersion_ = results.value("metadata", nlohmann::json::object()).value("solver_version", std::string{}).c_str();

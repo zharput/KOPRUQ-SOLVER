@@ -39,20 +39,20 @@
 // USE_SHEAR_DEFORM false still import as Euler-Bernoulli (Asy=Asz=0).
 //
 // NOT executed in this phase (recorded in report, not silently dropped):
-// EIGV/SPLC/SPFC (modal/response-spectrum requests) are present in many MIDAS exports but are
-// not translated into kopruq `response_spectra` entries here. This is no longer because of a
-// rigid-link limitation -- ModalSolver/ResponseSpectrumSolver now support `rigid_links` (Phase
-// 7H, 2026-11-17: an exact Guyan/DOF-elimination extension of the same RigidLinkReduction
-// LinearStaticSolver already used, independently verified in
-// tests/unit/rigid_link_modal_tests.cpp, and confirmed end-to-end through this importer's own
-// RIGD import + the `modal` CLI command), and the CLI's `modal`/`spectrum` commands dispatch to
+// EIGV (modal analysis request -- number of modes only, `iFREQ`) IS now read, confirmed from a
+// real MIDAS NX JSON export (`verification/models/13 Eigen-1`, 2026-11-17) -- see the EIGV
+// handling below for the exact field shape. ModalSolver/ResponseSpectrumSolver support
+// `rigid_links` (Phase 7H, 2026-11-17: an exact Guyan/DOF-elimination extension of the same
+// RigidLinkReduction LinearStaticSolver already used, independently verified in
+// tests/unit/rigid_link_modal_tests.cpp), and the CLI's `modal`/`spectrum` commands dispatch to
 // those solvers regardless of `--format`, so a RIGD-containing MIDAS model can already run modal
-// analysis today via `modal <file> --format midas-nx-json`, with no importer change needed for
-// that. What remains unexecuted is purely EIGV/SPLC/SPFC -> `response_spectra` *translation*:
-// their real MIDAS JSON field shapes are not independently confirmed (the one real sample that
-// had them, xmidas/deneme1.json, no longer exists in this working tree -- deleted by the user,
-// 2026-11), and this project does not guess MIDAS field names from memory. Needs either that
-// sample restored/re-supplied, or a confirmed field reference, before implementing.
+// analysis today via `modal <file> --format midas-nx-json`.
+// SPLC/SPFC (response-spectrum requests) are NOT translated into `response_spectra` entries:
+// their real MIDAS JSON field shapes are still not independently confirmed (the one real sample
+// that had them, xmidas/deneme1.json, no longer exists in this working tree -- deleted by the
+// user, 2026-11; model "13 Eigen-1" has EIGV but no SPLC/SPFC), and this project does not guess
+// MIDAS field names from memory. Needs either that sample restored/re-supplied, or a confirmed
+// field reference, before implementing.
 #include "../ModelJson.hpp"
 #include "MidasMaterialLibrary.hpp"
 #include "MidasOrientation.hpp"
@@ -324,9 +324,29 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
 
   out.report.load_cases = out.input.load_cases.size();
 
-  // --- EIGV/SPLC: recognized but not executed this phase ---
-  if (dbg.contains("EIGV") || dbg.contains("SPLC"))
-    out.report.rejected.push_back("modal/response-spectrum requests (EIGV/SPLC) present in source are not translated into response_spectra entries by this importer: their real MIDAS JSON field shapes are not independently confirmed in this codebase (Phase 7E.1/7H, 2026-11-17); a RIGD-containing model can still run modal analysis directly via the CLI's 'modal' command, since ModalSolver/ResponseSpectrumSolver now support rigid_links");
+  // --- EIGV: modal analysis request (number of modes only) ---
+  // Real field shape confirmed from an actual MIDAS NX JSON export (verification/models/13
+  // Eigen-1/13 Eigen-1.json, 2026-11-17): {"EIGV":{"<id>":{"TYPE":"LANCZOS","iFREQ":20,
+  // "bMINMAX":false,"bSTRUM":false}}}. Only `iFREQ` (number of modes) is read -- `TYPE` (solver
+  // algorithm choice), `bMINMAX`/`bSTRUM` (Lanczos-specific options) have no counterpart in
+  // ModalSolver (a single, already-independently-verified dense eigensolve, see Phase 6.1) and
+  // are not translated; if more than one EIGV entry is present, the first (by key) is used, since
+  // MIDAS NX only ever exports one modal control record in every sample seen so far.
+  if (dbg.contains("EIGV") && !dbg.at("EIGV").empty()) {
+    const auto& first = dbg.at("EIGV").begin().value();
+    if (first.contains("iFREQ") && first.at("iFREQ").is_number_integer()) {
+      out.input.modal_request.present = true;
+      out.input.modal_request.num_modes = first.at("iFREQ").get<int>();
+      out.report.assumptions.push_back("EIGV: modal analysis requested, " + std::to_string(out.input.modal_request.num_modes) +
+          " modes (iFREQ) -- solver algorithm/options (TYPE/bMINMAX/bSTRUM) are not translated, ModalSolver always uses its own single, independently-verified dense eigensolve");
+    } else {
+      out.report.rejected.push_back("EIGV: present but 'iFREQ' field missing or not an integer -- modal analysis request not read");
+    }
+  }
+
+  // --- SPLC/SPFC: response-spectrum requests, recognized but not executed this phase ---
+  if (dbg.contains("SPLC") || dbg.contains("SPFC"))
+    out.report.rejected.push_back("response-spectrum requests (SPLC/SPFC) present in source are not translated into response_spectra entries by this importer: their real MIDAS JSON field shapes are not independently confirmed in this codebase (Phase 7E.1/7H, 2026-11-17) -- EIGV (modal analysis request) is now read, see above, but SPLC/SPFC are not");
 
   return out;
 }

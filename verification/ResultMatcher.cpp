@@ -248,6 +248,42 @@ CategoryComparison markElasticLinksUnsupported(const ReferenceTable& ref) {
   return out;
 }
 
+CategoryComparison matchEigenvalueFrequencies(const Json& modalResults, const std::vector<EigenvalueReferenceRow>& eigenRef,
+                                               const ToleranceSettings& tol) {
+  CategoryComparison out;
+  const bool solved = modalResults.contains("status") && modalResults.at("status").value("success", false);
+  if (!solved) out.diagnostics.push_back("Modal analiz sonucu başarısız veya mevcut değil: tüm mod karşılaştırmaları N/A.");
+
+  std::map<int, const Json*> byIndex; // 0-based ModalSolver mode index -> its JSON entry
+  if (solved && modalResults.contains("modes"))
+    for (const auto& m : modalResults.at("modes")) byIndex[m.at("index").get<int>()] = &m;
+
+  for (const auto& ref : eigenRef) {
+    const int zeroBased = ref.mode - 1; // reference Mode No is 1-based, ModalSolver's own index is 0-based
+    const auto it = byIndex.find(zeroBased);
+    const struct { const char* label; double EigenvalueReferenceRow::*field; QuantityCategory category; const char* jsonField; } comps[] = {
+        {"Frekans (Hz)", &EigenvalueReferenceRow::frequency_hz, QuantityCategory::Frequency, "frequency_hz"},
+        {"Açısal Frekans (rad/s)", &EigenvalueReferenceRow::angular_frequency_rad_s, QuantityCategory::Frequency, "angular_frequency_rad_s"},
+    };
+    for (const auto& c : comps) {
+      ComparisonRow row;
+      row.id = std::to_string(ref.mode);
+      row.component = c.label;
+      row.unit = (c.jsonField == std::string("frequency_hz")) ? "Hz" : "rad/s";
+      const double referenceValue = ref.*(c.field);
+      if (it == byIndex.end()) {
+        row.result.status = ComparisonStatus::NotApplicable;
+        row.result.referenceValue = referenceValue;
+      } else {
+        const double solverValue = it->second->at(c.jsonField).get<double>();
+        row.result = compareValues(solverValue, referenceValue, c.category, tol);
+      }
+      out.rows.push_back(std::move(row));
+    }
+  }
+  return out;
+}
+
 CategoryStats summarizeCategory(const std::vector<ComparisonRow>& rows) {
   CategoryStats s;
   s.total = static_cast<int>(rows.size());

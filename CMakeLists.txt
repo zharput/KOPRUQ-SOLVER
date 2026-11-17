@@ -56,6 +56,7 @@ if(KOPRUQ_BUILD_GUI)
   find_package(Xlnt CONFIG REQUIRED)
   add_library(kopruq_verification STATIC
     verification/ExcelReferenceReader.cpp
+    verification/EigenvalueReferenceReader.cpp
     verification/ComparisonEngine.cpp
     verification/ResultMatcher.cpp
     verification/VerificationReportExporter.cpp)
@@ -208,6 +209,10 @@ if(BUILD_TESTING)
     target_link_libraries(kopruq_result_matcher_tests PRIVATE kopruq_verification GTest::gtest_main)
     add_executable(kopruq_verification_report_exporter_tests tests/unit/verification_report_exporter_tests.cpp)
     target_link_libraries(kopruq_verification_report_exporter_tests PRIVATE kopruq_verification GTest::gtest_main)
+    add_executable(kopruq_eigenvalue_reference_reader_tests tests/unit/eigenvalue_reference_reader_tests.cpp)
+    target_link_libraries(kopruq_eigenvalue_reference_reader_tests PRIVATE kopruq_verification GTest::gtest_main)
+    add_executable(kopruq_eigenvalue_result_matcher_tests tests/unit/eigenvalue_result_matcher_tests.cpp)
+    target_link_libraries(kopruq_eigenvalue_result_matcher_tests PRIVATE kopruq_verification GTest::gtest_main)
   endif()
   if(MSVC)
     target_compile_options(kopruq_solver_tests PRIVATE /bigobj)
@@ -255,6 +260,8 @@ if(BUILD_TESTING)
     gtest_discover_tests(kopruq_comparison_engine_tests DISCOVERY_TIMEOUT 60)
     gtest_discover_tests(kopruq_result_matcher_tests DISCOVERY_TIMEOUT 60)
     gtest_discover_tests(kopruq_verification_report_exporter_tests DISCOVERY_TIMEOUT 60)
+    gtest_discover_tests(kopruq_eigenvalue_reference_reader_tests DISCOVERY_TIMEOUT 60)
+    gtest_discover_tests(kopruq_eigenvalue_result_matcher_tests DISCOVERY_TIMEOUT 60)
   endif()
   # The real CLI executable, end to end.
   add_test(NAME cli.solve_portal_frame_example

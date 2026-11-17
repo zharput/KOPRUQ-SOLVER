@@ -10,6 +10,7 @@ double categoryAbsoluteTolerance(QuantityCategory category, const ToleranceSetti
     case QuantityCategory::Rotation: base = tol.rotationAbsTol; break;
     case QuantityCategory::Force: base = tol.forceAbsTol; break;
     case QuantityCategory::Moment: base = tol.momentAbsTol; break;
+    case QuantityCategory::Frequency: base = tol.frequencyAbsTol; break;
   }
   return base * tol.absoluteToleranceScale;
 }

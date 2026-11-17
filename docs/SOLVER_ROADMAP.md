@@ -499,20 +499,52 @@ a cantilever with a rigid-arm slave node solved modal analysis successfully, and
 shape independently verified (by hand, outside the solver) against `u_slave = u_master + theta x
 e` for every mode.
 
-**EIGV/SPLC/SPFC -> `response_spectra` translation: explicitly still blocked, split out of this
-phase's scope rather than guessed.** The `spectrum` CLI command additionally needs a *populated*
-`ModelInput.response_spectra` (spectrum curve points, direction, mode count) to have anything to
-run — unlike `modal`, which only needs `-n` from the command line. `MidasJsonImporter.hpp`
-recognizes `EIGV`/`SPLC`/`SPFC` are present (recorded in `MidasImportReport::rejected`, not
-silently dropped) but does not translate them, because their real MIDAS JSON field shapes were
-never independently confirmed from actual MIDAS output — the one real sample that had them
-(`xmidas/deneme1.json`, Phase 7A's audit source) no longer exists in this working tree (the user
-deleted the whole `xmidas/` folder earlier this session; confirmed by directory listing). This
-project's standing discipline (every other MIDAS field, including `RIGD`'s own `S_NODE` key used
-above, was confirmed from the real export before being coded, never guessed from memory or
-general MIDAS documentation) means this translation is not implemented here. Needs either that
-sample restored/re-supplied by the user, or another MIDAS NX JSON export that actually contains
-`EIGV`/`SPLC`/`SPFC`, before this can be done without guessing field names.
+**Update, 2026-11-17: EIGV is now read.** The user supplied a real MIDAS NX JSON export that
+actually contains `EIGV` (`verification/models/13 Eigen-1/13 Eigen-1.json`), giving the exact
+field shape previously missing: `{"EIGV":{"<id>":{"TYPE":"LANCZOS","iFREQ":20,"bMINMAX":false,
+"bSTRUM":false}}}`. `MidasJsonImporter.hpp` now reads `iFREQ` into a new `ModelInput::modal_request`
+field (`{present, num_modes}`, defaults to `present=false` for the native schema and every
+pre-existing caller, so nothing else changes); `TYPE`/`bMINMAX`/`bSTRUM` (Lanczos-specific solver
+options) have no counterpart in `ModalSolver` (a single, independently-verified dense eigensolve)
+and are not translated. The CLI's `modal` command now uses this as its default mode count when
+`-n` is not given on the command line (`-n` still always wins). SPLC/SPFC (response-spectrum
+requests) remain unread: `xmidas/deneme1.json` (which had them) is still gone, and model
+"13 Eigen-1" has EIGV but no SPLC/SPFC, so their field shapes are still not independently
+confirmed -- needs that sample or another export that actually contains SPLC/SPFC.
+
+**GUI: new "Eigenvalue Mode (Excel)" input row, 2026-11-17 (user decision).** `FileInputPanel`
+gained a sixth row (`Row::EigenvalueMode`) for MIDAS's "Eigenvalue Mode.xlsx" export, same
+`.xlsx`-only policy as the other four. Its structure is unlike every other reference export
+(several independently-titled, stacked sub-tables in one sheet: a letter-spaced "E I G E N V A L
+U E   A N A L Y S I S" frequency table, then "MODAL PARTICIPATION MASSES PRINTOUT" x2, then
+"MODAL PARTICIPATION FACTOR PRINTOUT" -- confirmed from the real export), so a dedicated reader
+(`verification/EigenvalueReferenceReader.{h,cpp}`) was written rather than forcing it through
+`ExcelReferenceReader`'s generic single-header-row parser. Only the frequency table (Mode No /
+Frequency rad-per-sec / Frequency cycle-per-sec / Period) is read -- the participation mass/
+factor tables are explicitly disclosed as not parsed, since `ModalSolver`'s plain modal analysis
+has no base-excitation direction and computes no participation factor/mass at all (that concept
+only exists inside `ResponseSpectrumSolver`, for a specific direction); comparing them would need
+a new, separate solver capability, not more columns in this reader. New `QuantityCategory::Frequency`
+(`ComparisonEngine.h`) and `matchEigenvalueFrequencies` (`ResultMatcher.{h,cpp}`) compare by
+1-based reference mode number against `ModalSolver`'s own 0-based mode index, producing two rows
+per mode (Hz, rad/s); a reference mode beyond what was computed reports NotApplicable, never
+dropped. `MainWindow` chains a second CLI invocation (`modal`, not `solve`) automatically right
+after a successful `solve`, only when the Eigenvalue Mode row has a usable file -- the two are
+independent analyses in the CLI's own design, so every other model/workflow is unaffected by this
+row simply existing. New dedicated tests: `tests/unit/eigenvalue_reference_reader_tests.cpp` (4),
+`tests/unit/eigenvalue_result_matcher_tests.cpp` (4) -- all passing; gui-release CTest 262/267 (8
+new tests, same 5 pre-existing unrelated failures as Debug/Release's 232/237).
+
+**Model "13 Eigen-1" tested end to end (CLI + the GUI's own backend logic, both against the real
+`Eigenvalue Mode.xlsx`), 2026-11-17: 20/20 modes read, 20 PASS / 20 FAIL (40 rows: Hz + rad/s per
+mode) under default tolerance.** Modes 1-3, 5-6, 8-11, 17 match within ~1.3%; modes 4, 7, 12-16,
+18-20 differ by 1.3%-15.2%, growing with mode number -- confirmed via an independent optimal
+(minimum-total-error) one-to-one assignment between the 20 solver and 20 MIDAS frequencies
+(`scipy.optimize.linear_sum_assignment`) that this is NOT a mode-ordering/degenerate-pair
+artifact (the optimal assignment is the same as direct ascending-order pairing). Root cause not
+yet investigated -- plausible candidates (consistent vs. MIDAS's own mass formulation/lumping
+choice, rotary-inertia treatment, self-weight-to-mass conversion details) are not confirmed; this
+is reported as a genuine, disclosed open question, not forced to PASS by adjusting tolerance.
 
 Also fixed in passing (Debug-only MSVC regression, unrelated to the rigid-link logic itself):
 `kopruq_response_spectrum_tests`/`kopruq_modal_tests`/`kopruq_rigid_link_modal_tests` needed

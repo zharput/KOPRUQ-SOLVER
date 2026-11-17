@@ -11,7 +11,7 @@
 // applied identically to meters and kilonewtons.
 namespace kopruq::verification {
 
-enum class QuantityCategory { Displacement, Rotation, Force, Moment };
+enum class QuantityCategory { Displacement, Rotation, Force, Moment, Frequency };
 
 struct ToleranceSettings {
   // Defaults, each in the category's own unit (this project's canonical units: m, rad, kN, kNm).
@@ -22,6 +22,7 @@ struct ToleranceSettings {
   double rotationAbsTol{1.0e-5};     // rad
   double forceAbsTol{1.0e-2};        // kN
   double momentAbsTol{1.0e-2};       // kNm
+  double frequencyAbsTol{1.0e-2};    // Hz -- modal analysis (Phase 7E.1/GUI eigenvalue row, 2026-11-17)
   double relativeTol{1.0e-2};        // dimensionless; legitimately shared across categories
   double absoluteToleranceScale{1.0}; // the GUI's single "Mutlak Tolerans" field (see header note)
 };

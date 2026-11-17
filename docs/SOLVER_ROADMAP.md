@@ -546,6 +546,29 @@ yet investigated -- plausible candidates (consistent vs. MIDAS's own mass formul
 choice, rotary-inertia treatment, self-weight-to-mass conversion details) are not confirmed; this
 is reported as a genuine, disclosed open question, not forced to PASS by adjusting tolerance.
 
+**Models "14 Eigen-2" and "15 Eigen-3" also tested (CLI `modal`, Python-reproduced comparison
+against each model's own real `Eigenvalue Mode.xlsx`), 2026-11-17 -- same disclosed open question
+confirmed on a second small model, but NOT present on a third, much larger one:**
+- **14 Eigen-2** (49 nodes, 48 elements, 30 modes requested): modes 1-13 match MIDAS within
+  ~1%; modes 14-30 diverge, growing from -2.9% to as much as -23.2% (mode 15) and generally
+  worsening with mode number -- 17/30 modes fail the 1% check. Same qualitative pattern as model
+  13 (small portal-frame-like geometry, divergence beyond a certain mode).
+- **15 Eigen-3** (1630 nodes, 2024 elements, 100 modes requested -- by far the largest/most
+  realistic model tested so far): **all 100/100 modes match MIDAS within 0.2%, zero exceptions.**
+  This is strong evidence the divergence seen in models 13/14 is NOT a general mass-matrix-
+  formulation defect (which would be expected to show up here too, likely worse given the much
+  larger mode count) -- it is more likely specific to something about those two small models'
+  higher modes (plausibly local single-member torsion/bending modes that a small, simple frame
+  reaches at a low mode number, where a modeling detail like rotary inertia or shear-area
+  treatment matters more than it does for model 15's much more global, structure-scale mode
+  shapes). Root cause still not investigated -- this observation narrows where to look, it does
+  not resolve the question.
+- Practical/performance note: model 15's dense (`Eigen::SelfAdjointEigenSolver`) eigensolve on
+  its ~9780 free-DOF system took **18 minutes** wall-clock. `ModalSolver` has no sparse/iterative
+  path (Phase 7, "sparse direct/iterative solver strategy", is explicitly not started) --
+  acceptable for this one-off verification run, but worth knowing before using the GUI's
+  Eigenvalue Mode row interactively on a similarly large model.
+
 Also fixed in passing (Debug-only MSVC regression, unrelated to the rigid-link logic itself):
 `kopruq_response_spectrum_tests`/`kopruq_modal_tests`/`kopruq_rigid_link_modal_tests` needed
 `/bigobj` (MSVC C1128, COFF section-count limit) once `ResponseSpectrumSolver.hpp` started pulling

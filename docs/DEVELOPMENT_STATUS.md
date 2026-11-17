@@ -1572,8 +1572,36 @@ file required) and remains so, now with the same explicit per-run control as the
 Built and smoke-tested locally (`scripts/configure.ps1 Gui` / `build.ps1 Gui` / `run-gui.ps1`);
 local `ctest` showed 4 pre-existing, unrelated failures (`Cli.MidasNxJsonFormatOption`,
 `MidasJsonImporter.*`) because the user's local `xmidas/deneme1.json` had been deleted from the
-working tree since GUI-7 (still present in git HEAD, so CI is unaffected) -- not caused by this
-change and not touched here.
+working tree since GUI-7 (at the time, still present in git HEAD, so CI was unaffected) -- not
+caused by this change and not touched here.
+
+**UPDATE (2026-11-17): `xmidas/deneme1.*` (including `deneme1.json`) permanently removed from git
+itself, by explicit user instruction -- no longer just a locally-deleted, git-recoverable file.**
+The user confirmed they deleted this sample from their own machine and asked for it to be removed
+from git history going forward too (commit `e688f53`); the old `xmidas/deneme1.json`
+naming/fixture scheme is retired in favor of the current `verification/models/01`-`17` set. This
+is now a **permanent, irrecoverable** (from this point in history forward) loss of that one real
+sample, not a transient local-environment issue -- CI *is* now affected, not just a developer's
+local machine, since there is nothing left in the repository to restore. The following 5 tests
+depend on this file and will **always fail from now on**, by explicit user decision, left
+untouched rather than silently rewritten or deleted (CLAUDE.md: preserve existing tests, never
+hide a failure by weakening/removing a test) -- this is a known, accepted, permanent limitation,
+not a bug to chase or a transient CI blip to retry:
+- `Cli.MidasNxJsonFormatOption`
+- `MidasJsonImporter.ImportCountsMatchIndependentlyComputedTotals`
+- `MidasJsonImporter.ReportsElasticLinkRejectionCountAndNodeBoundingBox`
+- `MidasJsonImporter.ImportedModelPassesValidation`
+- `MidasJsonImporter.StaticSolveOfImportedModelDoesNotThrowAndReportsAStatus`
+
+Every CTest run reported elsewhere in this document and in `docs/SOLVER_ROADMAP.md` from
+2026-11-16 onward that cites "5 pre-existing, unrelated `xmidas/deneme1.json`-missing failures" is
+describing exactly these same 5 tests -- the count has been stable and unrelated to every other
+change made in that period, consistent with this being a single, isolated, now-permanent fixture
+loss rather than a drifting set of regressions. If `xmidas/deneme1.json`-equivalent real MIDAS
+data (ideally the same bridge model, or any similarly-sized real export) is ever supplied again,
+these 5 tests' fixture path can be repointed at it without otherwise changing their logic -- they
+were never testing anything specific to that one file's exact numbers beyond "a real, complex
+MIDAS export imports, validates and solves end to end."
 
 ## Next autonomous action
 Phase 3.2, Phase 4, Phase 5 (5.1-5.6), Phase 6 (6.1, 6.1b, 6.2, 6.2b; 6.3 cancelled), Phase 7A,

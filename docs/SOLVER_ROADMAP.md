@@ -488,6 +488,11 @@ already-combined quantities), and (5) a slave node still cannot carry its own re
 rejection as `LinearStaticSolver`). Debug/Release/CTest: **232/237 both configurations**, no
 regressions (the 5 pre-existing failures are the already-documented `xmidas/deneme1.json`-missing
 ones, unrelated — that sample folder was deleted by the user this session, see below).
+**Superseded, 2026-11-17: this sample is now permanently removed from git itself (commit
+`e688f53`), by explicit user instruction, not merely locally deleted/git-recoverable as described
+when first found — see `docs/DEVELOPMENT_STATUS.md`'s own dated update for the full, authoritative
+note and the exact 5 affected tests, which now fail permanently, by design, not as a transient
+issue.**
 
 **CLI dispatch confirmed end-to-end, no importer change needed for modal:** `kopruq_solver_cli
 modal <model.json> --format midas-nx-json -n <N>` already calls `ModalSolver::solve` directly

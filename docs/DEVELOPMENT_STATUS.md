@@ -82,6 +82,65 @@ test eklendi — `midas_section_shear_area_tests.cpp`,
 teşhis edilmiş, ilgisiz `xmidas/deneme1.json` eksikliği, bu oturumda
 değişmedi). Kullanıcı talimatıyla **model 06-11'e geçilmedi.**
 
+**Güncelleme (2026-11-16/17) — Model 01 ve 05 çözüldü, Model 06 doğrulandı,
+Phase 7H ve 7E.1 tamamlandı, Model 11/12 tam PASS:**
+
+- **Model 01 ve 05'in MIDAS referans verisi kullanıcı tarafından düzeltildi**
+  (MIDAS'ta yeniden çalıştırılıp taze export alındı, 2026-11-16 16:02-17:17).
+  Her iki model artık **tam doğrulandı**: Model 01 saf eksenel davranış
+  gösteriyor (önceki anomali gitti), reaksiyon/eksenel kuvvet tam eşleşiyor.
+  Model 05'in model verisi gerçekten asimetrikmiş (farklı yükseklik/
+  büyüklükte CNLD) — önceki "MIDAS asimetrik reaksiyon" bulgusu MIDAS hatası
+  değil, model verisinin kendisiymiş; düzeltilmiş veriyle reaksiyon/kuvvet
+  tam eşleşiyor.
+- **Model 06 (Cerceve-2, yük kombinasyonlu) test edildi:** Deplasman 342/342,
+  reaksiyon 36/36 (3 asıl yük durumu için) tam PASS; kalan N/A'lar tamamen
+  `COMBO-1`/`COMBO-2` kombinasyonlarından (çözücü MIDAS `LCOM-GEN`
+  kombinasyonlarını henüz içe aktarmıyor — bkz. `docs/SOLVER_ROADMAP.md`
+  Phase 7G, başlanmadı).
+- **Phase 7H — ModalSolver/ResponseSpectrumSolver'a rigid-link desteği
+  (COMPLETE, commit `dd6898b`, 2026-11-17).** `LinearStaticSolver`'ın zaten
+  doğrulanmış `RigidLinkReduction` (Guyan/DOF-eliminasyon) mekanizması
+  ModalSolver'a ve ResponseSpectrumSolver'a genişletildi. Yeni
+  `tests/unit/rigid_link_modal_tests.cpp` (7 test): frekanslar rigid-link'siz
+  referans modelle bit-bit eşleşiyor, her modda slave node kinematiği
+  (`u_slave=u_master+θ×e`) tam sağlanıyor, tam DOF uzayında kütle-
+  ortonormalite doğrulandı. CLI'nin `modal --format midas-nx-json` komutu,
+  importer'da hiçbir değişiklik gerekmeden, RIGD içeren gerçek bir MIDAS
+  modelinde uçtan uca çalıştığı doğrulandı (el yapımı, gerçek `S_NODE` alan
+  şemasıyla). EIGV/SPLC→`response_spectra` çevirisi ayrı, bloke bir alt-madde
+  olarak bırakıldı (gerçek örnek veri — `xmidas/deneme1.json` — kullanıcı
+  tarafından silinmiş, alan adları tahmin edilmedi).
+- **Phase 7E.1 — MIDAS kiriş-kuvvet işaret kuralı düzeltmesi (COMPLETE,
+  commit `ac1ecc9`, 2026-11-17).** Model 01'in saf eksenel statiğinden
+  bağımsız olarak türetildi: MIDAS, N(x)/V(x)/M(x) diyagram değerini
+  (konum-bağımsız, her iki uçta aynı işaret) raporluyor; çözücünün
+  `local_end_force`'u ("eklemin elemana uyguladığı kuvvet") ise Axial/
+  Shear/Torsion için I-ucunda ters işaretli (f_I=-N, f_J=+N), moment için
+  tam tersi (f_I=+M, f_J=-M, kesme-kolu terimi `dM/dx=V` nedeniyle).
+  `verification/ResultMatcher.cpp`'de tek noktada uygulandı, solver'a
+  dokunulmadı. 2 bağımsız modelde (05: 147 satır, 06: 162 satır) **sıfır
+  istisnayla** doğrulandı. Shear-y/Torsion/Moment-z aynı mantıkla
+  genişletildi ama mevcut tüm modeller düzlemsel olduğu için gerçek veride
+  hiç sınanmadı (açıkça disclosed).
+- **Model 11 (Temprature-1) ve 12 (Temprature-2) — yeni, sıcaklık yükü
+  (ETMP/TEMP-1,TEMP-2) içeren modeller, test edildi (2026-11-17):** Her ikisi
+  de **tam PASS**: Model 11 deplasman 300/300, reaksiyon 24/24, kiriş kuvveti
+  576/576; Model 12 (4 farklı kesit, 5 farklı mesnet tipi dahil) deplasman
+  588/588, reaksiyon 60/60, kiriş kuvveti 1152/1152 — **sıfır FAIL, sıfır
+  N/A** her ikisinde de. Bu, hem Phase 7T (uniform sıcaklık) hem Phase 7E.1
+  (işaret kuralı) için tamamen farklı bir yük tipinde bağımsız bir çapraz
+  doğrulama.
+- **GUI V2.1 ikon/görsel revizyonu (COMPLETE, commit `c538687`, 2026-11-16).**
+  Sol işlem butonları `QToolButton`'a geçirildi (ikon üstte/yazı altta), 5
+  panel başlığına ikon eklendi, checkbox işareti ve log seviyesi ikonları
+  Qt Resource System'e (`icons.qrc`) gömüldü (13 adet elle çizilmiş,
+  Lucide-tarzı SVG). Solver/JSON/Excel mantığına dokunulmadı; `kopruq_verification_gui.exe`
+  derlenip çalıştırılarak ekran görüntüleriyle doğrulandı.
+- Üç commit de **push edilmedi** (kullanıcı onayı her checkpoint'te ayrı
+  alındı, push talep edilmedi bu üç madde için — GUI V2.1 commit'i push
+  edildi, 7H ve 7E.1 push edilmedi, henüz onay bekliyor).
+
 **Qt6 Verification GUI V2.0 revizyonu — yerel olarak derlendi ve test edildi,
 commit/push ve CI henüz onay bekliyor (2026-11-16).** Kullanıcının detaylı
 "KOPRUQ-SOLVER — Qt6 Verification GUI V2.0 Revizyonu" talimatına göre:

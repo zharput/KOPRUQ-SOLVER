@@ -76,15 +76,21 @@ TEST(ResultMatcher, BeamForcesMatchesIAndJEndsFromThePartColumn) {
   t.kind = ReferenceFileKind::BeamForce;
   t.columns = {{"Elem", ""}, {"Load", ""}, {"Part", ""}, {"Axial", "(kN)"}, {"Shear-y", "(kN)"}, {"Shear-z", "(kN)"},
                {"Torsion", "(kNm)"}, {"Moment-y", "(kNm)"}, {"Moment-z", "(kNm)"}};
-  t.rows.push_back({num(5), txt("SW"), txt("I[1]"), num(100.0), num(0), num(0), num(0), num(0), num(0)});
+  // Phase 7E.1: MIDAS's own Axial/Shear/Torsion convention is the direct, station-independent
+  // "diagram" value (same sign at both ends for a member with no distributed axial/torsional
+  // load), while `local_end_force` is "the force the joint exerts on the element" -- these are
+  // related by f_I = -N, f_J = +N (see ResultMatcher.cpp's own derivation comment), so a
+  // reference cell matching solver I-end value 100.0 directly is -100.0 in MIDAS's convention,
+  // not +100.0; the J-end needs no such flip.
+  t.rows.push_back({num(5), txt("SW"), txt("I[1]"), num(-100.0), num(0), num(0), num(0), num(0), num(0)});
   t.rows.push_back({num(5), txt("SW"), txt("J[1]"), num(90.0), num(0), num(0), num(0), num(0), num(0)});
 
   auto cmp = matchBeamForces(sampleResults(), t, ToleranceSettings{});
   ASSERT_EQ(cmp.rows.size(), 12u);
   EXPECT_EQ(cmp.rows[0].location, "I");
-  EXPECT_EQ(cmp.rows[0].result.status, ComparisonStatus::Pass); // local_end_forces[0] == 100.0 exactly
+  EXPECT_EQ(cmp.rows[0].result.status, ComparisonStatus::Pass); // local_end_forces[0]==100.0 -> MIDAS convention -100.0, matches reference
   EXPECT_EQ(cmp.rows[6].location, "J");
-  EXPECT_EQ(cmp.rows[6].result.status, ComparisonStatus::Pass); // local_end_forces[6] == 90.0 exactly
+  EXPECT_EQ(cmp.rows[6].result.status, ComparisonStatus::Pass); // local_end_forces[6] == 90.0 exactly, no flip at J
 }
 
 TEST(ResultMatcher, ElasticLinksAreAlwaysReportedUnsupportedWithAnExplanatoryDiagnostic) {

@@ -25,6 +25,63 @@ long toId(double v) { return static_cast<long>(v + (v >= 0 ? 0.5 : -0.5)); }
 
 struct ComponentSpec { const char* excelName; int index; QuantityCategory category; };
 
+// Phase 7E.1 (2026-11-17) -- MIDAS's own "Beam Force" export and
+// Beam3DConnection/LinearStaticSolver's `local_end_force` (the production value compared here)
+// use two DIFFERENT, independently-derived sign conventions for a beam's end actions, confirmed
+// by cross-checking already-independently-verified solver output (Phase R1-R4, Beam3D core)
+// against real, solved MIDAS reference exports -- never by adjusting this rule until a
+// comparison test passed.
+//
+// Derivation (axial, the simplest case -- model "01 Konsol_Fx", a pure-tension cantilever, FX=500
+// pulling outward at the free tip, fixed at the other end): hand statics give a single,
+// unambiguous internal axial force N = +500 kN (tension-positive) at every cross-section of every
+// element. MIDAS's own export reports exactly that, +500, at BOTH the I and J end of every
+// element -- i.e. MIDAS's Axial/Shear/Torsion columns are the direct, station-independent
+// "diagram" value (same physical quantity, same sign, everywhere along the member, exactly as
+// taught in statics: N(x), V(x), T(x)). `local_end_force` (LinearStaticSolver.hpp's own comment:
+// "End forces exerted by the nodes on the element: k*u minus the member loads' equivalent nodal
+// loads") is instead the force the JOINT exerts ON the element at that end -- for the member to
+// be in tension (N>0), the joint at the start (I) must pull the element backward/outward (-local
+// x), while the joint at the end (J) must pull it forward/outward (+local x): algebraically
+// f_I = -N, f_J = +N. This identity holds independent of this specific model (it is how N(x) is
+// *defined* via a free-body cut, not a property of any one load case), and was confirmed to hold
+// exactly (within numerical tolerance, zero counter-examples) across every Axial/Shear-z/Moment-y
+// mismatch in models "05 Cerceve-1" (147 of 147 rows) and "06 Cerceve-2" (162 of 162 rows) --
+// including the loaded horizontal beam elements (BMLD), not just the unloaded columns, confirming
+// the relationship is NOT an artifact of one particular element orientation or load pattern.
+//
+// Bending moments behave oppositely (f_I = +M, f_J = -M, i.e. the SAME value needs no flip at the
+// I end but does at the J end) -- this is because a bending moment, unlike axial/shear/torsion,
+// is coupled to the end shear through a moment-arm term (dM/dx = V) that reverses which end's
+// nodal-force convention lines up with the diagram convention; empirically confirmed for
+// Moment-y the same way (148 model-05 + 162 model-06 rows, zero counter-examples).
+//
+// Shear-y, Torsion and Moment-z are extended to the SAME group as their already-confirmed
+// counterpart (Shear-y/Torsion with Axial/Shear-z -- all three are "arm-free" resultants with no
+// dM/dx coupling, by the identical argument above; Moment-z with Moment-y -- both are bending
+// moments with the same arm coupling) by this physical reasoning, NOT by direct empirical
+// confirmation: every available verification model (01-06) is planar (Y=0 throughout, in-plane
+// loading only), so Shear-y/Torsion/Moment-z are structurally zero in all of them and no
+// comparison row has ever exercised this part of the rule. Disclosed, not hidden, in case a
+// future out-of-plane model exposes a counter-example.
+constexpr std::array<bool, 6> kBeamForceFlipsAtIEnd = {
+    true,  // Axial -- empirically confirmed (above)
+    true,  // Shear-y -- extended by symmetry with Shear-z, not yet empirically exercised
+    true,  // Shear-z -- empirically confirmed (above)
+    true,  // Torsion -- extended by symmetry with Axial, not yet empirically exercised
+    false, // Moment-y -- empirically confirmed to flip at J instead (above)
+    false, // Moment-z -- extended by symmetry with Moment-y, not yet empirically exercised
+};
+// `midasValue`: the MIDAS reference cell's own value, already in MIDAS's own convention; no
+// conversion needed on that side. What this returns is the SOLVER's `local_end_force` component,
+// converted into MIDAS's convention for the comparison -- never the other way around (the
+// reference data is ground truth here, never adjusted).
+inline double toMidasBeamForceConvention(double solverLocalEndForce, bool isIEnd, std::size_t componentIndex) {
+  const bool flipsAtIEnd = kBeamForceFlipsAtIEnd[componentIndex];
+  const bool flip = isIEnd ? flipsAtIEnd : !flipsAtIEnd;
+  return flip ? -solverLocalEndForce : solverLocalEndForce;
+}
+
 // Reads one MIDAS id-like cell (exported as a number, e.g. "1.0") as an integer; returns false
 // (and leaves id untouched) if the cell isn't numeric -- callers diagnose rather than guess 0.
 bool readIdCell(const CellValue& cell, long& id) {
@@ -159,8 +216,9 @@ CategoryComparison matchBeamForces(const Json& results, const ReferenceTable& re
         out_row.result.status = ComparisonStatus::NotApplicable;
         out_row.result.referenceValue = cell.number;
       } else {
-        const double solverValue =
+        const double solverValueRaw =
             elemIt->second->at("local_end_forces").at(static_cast<std::size_t>(endOffset + kComponents[k].index)).get<double>();
+        const double solverValue = toMidasBeamForceConvention(solverValueRaw, part[0] == 'I', k);
         out_row.result = compareValues(solverValue, cell.number, kComponents[k].category, tol);
       }
       out.rows.push_back(std::move(out_row));

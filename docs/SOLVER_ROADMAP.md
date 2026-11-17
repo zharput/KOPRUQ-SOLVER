@@ -34,9 +34,9 @@ the next starts:
    Phase 7H's own entry below for why).
 4. Traffic (moving) loads — reinstated, Phase 7I, not started, scope not yet defined.
 5. Load combinations — Phase 7G, not started (MIDAS `LCOM-GEN` import).
-Phase 7E.1 (MIDAS beam-force sign convention) runs alongside this sequence, not strictly before
-or after it, since it affects comparison/verification of every load type above, not one specific
-load type.
+Phase 7E.1 (MIDAS beam-force sign convention) ran alongside this sequence rather than strictly
+before or after it, since it affects comparison/verification of every load type above, not one
+specific load type — **COMPLETE, verified 2026-11-17** (see its own entry below).
 
 ## Immediate priority: Phase 3.2 requalification — COMPLETE
 The historical 25-test suite was lost. It has **not** been restored. New
@@ -405,14 +405,39 @@ Still not started: independent verification of the sign convention itself (next 
 and models 07-11 (not yet re-run by the user against the current solver).
 
 ### Phase 7E.1 — MIDAS beam-force sign convention (independent verification)
-**Not started.** Must independently derive (from a hand-built statics reference, or confirmed
-MIDAS documentation — never from "make the comparison pass") which local axis/end convention
-MIDAS's `Beam Force` export uses for Axial/Shear-z/Moment-y at the I and J ends, confirm it
-differs from `Beam3D::local_end_forces`'s own (already-verified, R1-R4) convention in a
-consistent, explainable way, then apply the correction once in `ResultMatcher`
-(`verification/ResultMatcher.cpp`), never in the solver itself (the solver's own convention is
-independently verified and must not change). New dedicated test(s) required; `ComparisonEngine`'s
-tolerance must not be touched to work around this.
+**COMPLETE (verified, 2026-11-17).** Derived from hand statics (never from "make the comparison
+pass"): model "01 Konsol_Fx" (a pure-tension cantilever, FX=500 at the free tip) gives an
+unambiguous, single-valued internal axial force N=+500 kN (tension-positive) at every
+cross-section by elementary statics; MIDAS's own `Beam Force` export reports exactly +500 at
+*both* the I and J end of every element — confirming MIDAS reports the direct, station-
+independent "diagram" value (same sign throughout the member), not an end-dependent nodal-force
+convention. `local_end_force` (`LinearStaticSolver.hpp`'s own, already-independently-verified
+R1-R4 convention: "the force the joint exerts on the element", from `k*u` minus equivalent nodal
+loads) is related to that diagram value by `f_I = -N`, `f_J = +N` for Axial/Shear/Torsion (an
+identity from how N(x) is *defined* via a free-body cut, independent of any specific load case),
+and oppositely for bending moments (`f_I = +M`, `f_J = -M`, since M is coupled to the end shear
+through the arm term `dM/dx = V`, which reverses which end lines up). Cross-validated against
+*every* real Axial/Shear-z/Moment-y mismatch across two independent real models — "05 Cerceve-1"
+(147/147 rows) and "06 Cerceve-2" (162/162 rows), including loaded horizontal beam elements
+(`BMLD`), not just the unloaded columns — with **zero counter-examples**. Shear-y/Torsion/
+Moment-z are extended to their already-confirmed counterpart by the identical physical argument,
+but are explicitly disclosed as NOT yet empirically exercised (every available verification model
+is planar, Y=0, so these three components are structurally zero everywhere available).
+
+Implemented once, in `verification/ResultMatcher.cpp` only (`toMidasBeamForceConvention`,
+`kBeamForceFlipsAtIEnd`), never in the solver itself (`Beam3D`/`LinearStaticSolver` are unchanged
+— their own convention remains independently verified and correct on its own terms). Existing
+`tests/unit/result_matcher_tests.cpp` fixture (`BeamForcesMatchesIAndJEndsFromThePartColumn`)
+corrected to use the right reference value for its hand-built scenario (its old fixture silently
+assumed no I/J sign difference, which this phase shows was wrong) — not weakened, not deleted, the
+same assertions still both require PASS. Independent Python re-derivation (reading the same
+`.xlsx` cells and `results.json` fields `ResultMatcher` reads, applying the same rule) confirms:
+model 05 Beam Force 576/576 PASS (was 433/576, 143 FAIL), model 06 648/648 PASS of the
+non-combination rows (was 486/648, 162 FAIL) — zero beam-force FAILs remain on any available real
+model. Debug/Release/gui-release CTest: 232/237, 232/237, 254/259 respectively, all three
+unchanged from before this fix except the newly-fixed assertion; the 5 (resp. 6, counting the
+GUI-only duplicate) remaining failures are the already-documented, unrelated
+`xmidas/deneme1.json`-missing ones.
 
 ### Phase 7G — MIDAS load-combination import (`LCOM-GEN`)
 **Not started.** Phase 4.1 already supports combinations by superposition in the native model

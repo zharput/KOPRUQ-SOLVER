@@ -1629,10 +1629,45 @@ than leaving a stale model displayed. No new JSON parser was written.
   stage, with the exact same 5 pre-existing/permanent `xmidas/deneme1.json`-removal failures
   listed above -- no regressions introduced by the viewer work at any stage.
 - Not yet done: interactive mouse-driven GUI testing (standing constraint from this project's
-  mouse-automation privacy incident -- CLI/code-level verification only); Debug-configuration
-  CTest run (only Release/`gui-release` was exercised for this feature).
+  mouse-automation privacy incident -- CLI/code-level verification only).
 - Deferred by the approved spec to a later version: deformed shape, force/stress diagrams, solid
   section rendering, traffic/moving load visualization, BIM export, CAD editing.
+
+## GUI V2.2 — post-Stage-C corrections (2026-11-17/18)
+User-driven follow-up fixes after the Stage A/B/C viewer was approved, all verified against the
+same stable 269/274 `gui-release` CTest baseline (the 5 pre-existing failures listed above; no
+other regressions at any step) before being reported and approved:
+- **Camera/axis corrections** (`ModelViewerWidget.cpp`), iterated through several rounds of user
+  screenshot feedback until the orientation was rigorously re-derived (not guessed) from the
+  screen-projection formulas `R = cross(forward, up)`, `U = cross(R, forward)`: Z-up convention
+  (`ba33a85`), X/Y swap fix (`c3947b6`), +X sign fix (`5daeee6`), full re-derivation to match the
+  user's reference axis diagram (`15fa0e7`), and Top/Front/Side view-preset screen-direction
+  fix, derived the same rigorous way from the start and confirmed correct on the first attempt
+  (`4fe236c`). Final camera formula: `dir = (-cos(pitch)*cos(yaw), cos(pitch)*sin(yaw),
+  sin(pitch))`, `upVector_ = (0,0,1)` except the Top preset which uses `(0,1,0)`.
+- **GUI layout/icon reorganization** (`ba33a85`): icon-based toolbar (`QStyle::standardIcon`), a
+  right-hand "Görünüm Seçenekleri" checkbox panel, single-line selection info bar -- scope
+  explicitly limited to layout/icons only, per the user's own choice, no new rendering features.
+- **Single-line element/node info** (`87f57f0`): `describeNode`/`describeBeam` rewritten to one
+  `QStringLiteral(...).arg(...)` line each instead of a multi-line block, per a reference
+  screenshot the user supplied.
+- **Results Comparison table legibility** (unrelated to the 3D viewer; `791e1fa`, `9f2d60a`,
+  `fa1ff69`): PASS/FAIL row coloring (green/red) added to every comparison table and the category
+  summary table; N/A cells changed from an empty string to a visible "—" placeholder.
+  **Root-cause bug found and fixed in `fa1ff69`**: every comparison table had
+  `setSortingEnabled(true)` set once at construction (`ResultsComparisonPanel::buildTable`), and
+  `QTableWidget` re-sorts its rows after *every* `setItem()` call when sorting is active --
+  filling a row column-by-column let Qt move that row mid-fill, scattering its own cells across
+  other rows. Only one row per table ended up fully populated; this matched the user's
+  screenshots exactly (SOLVER Değeri/MIDAS Değeri/Durum blank even on rows whose Yük Durumu
+  showed a value). Fixed by disabling sorting before populating each table (detail tables,
+  diagnostics table, category table) and re-enabling it after. Also added N/A/Unsupported row
+  coloring (orange) alongside PASS/FAIL, extended to the category table's own PASS/FAIL/N/A
+  status derivation (previously collapsed an all-N/A category to "PASS") and to the Özet tab's
+  N/A count tile.
+- Verified 2026-11-18: `gui-release` CTest **269/274 PASS**; `debug` (non-GUI target set) CTest
+  **239/244 PASS** -- both runs show only the same 5 pre-existing/permanent
+  `xmidas/deneme1.json`-removal failures listed above, no regressions.
 
 ## Next autonomous action
 Phase 3.2, Phase 4, Phase 5 (5.1-5.6), Phase 6 (6.1, 6.1b, 6.2, 6.2b; 6.3 cancelled), Phase 7A,

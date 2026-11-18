@@ -12,6 +12,7 @@
 #include "../../include/kopruq/io/Cli.hpp"
 #include "../../include/kopruq/assembly/MatrixAssembler.hpp"
 #include <QCloseEvent>
+#include <QColor>
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
@@ -48,6 +49,17 @@ QString statusText(ComparisonStatus s) { return QString::fromUtf8(kopruq::verifi
 
 QString fmt(double v) { return QString::number(v, 'g', 10); }
 
+// User-requested (2026-11-18): PASS rows green, FAIL rows red, in every comparison table and the
+// category summary table. N/A/Unsupported rows keep the default text color (neither pass nor
+// fail, so neither color applies) -- set explicitly on every cell rather than relying on any
+// inherited/stylesheet color, so every compared value stays visible regardless of row state.
+void colorizeRow(QTableWidget* table, int row, ComparisonStatus status) {
+  if (status != ComparisonStatus::Pass && status != ComparisonStatus::Fail) return;
+  const QColor color = status == ComparisonStatus::Pass ? QColor(0x22, 0xC5, 0x5E) : QColor(0xEF, 0x44, 0x44);
+  for (int col = 0; col < table->columnCount(); ++col)
+    if (auto* item = table->item(row, col)) item->setForeground(color);
+}
+
 // Shared by Displacements and Reactions: identical 10-column layout (loadCase, id, component,
 // reference, solver, signed/abs/rel diff, unit, status) -- see ResultsComparisonPanel.cpp.
 void populateNodeBasedTable(QTableWidget* table, const std::vector<ComparisonRow>& rows) {
@@ -68,6 +80,7 @@ void populateNodeBasedTable(QTableWidget* table, const std::vector<ComparisonRow
     table->setItem(i, c++, new QTableWidgetItem(statusText(r.result.status)));
     for (int col = 0; col < table->columnCount(); ++col)
       if (auto* item = table->item(i, col)) item->setFlags(item->flags() & ~Qt::ItemIsEditable);
+    colorizeRow(table, i, r.result.status);
   }
 }
 
@@ -91,6 +104,7 @@ void populateBeamOrLinkTable(QTableWidget* table, const std::vector<ComparisonRo
     table->setItem(i, c++, new QTableWidgetItem(statusText(r.result.status)));
     for (int col = 0; col < table->columnCount(); ++col)
       if (auto* item = table->item(i, col)) item->setFlags(item->flags() & ~Qt::ItemIsEditable);
+    colorizeRow(table, i, r.result.status);
   }
 }
 
@@ -113,6 +127,7 @@ void populateEigenvalueTable(QTableWidget* table, const std::vector<ComparisonRo
     table->setItem(i, c++, new QTableWidgetItem(statusText(r.result.status)));
     for (int col = 0; col < table->columnCount(); ++col)
       if (auto* item = table->item(i, col)) item->setFlags(item->flags() & ~Qt::ItemIsEditable);
+    colorizeRow(table, i, r.result.status);
   }
 }
 
@@ -678,6 +693,12 @@ void MainWindow::onCompare() {
     catTable->setItem(i, c++, new QTableWidgetItem(tr("İlgili sekmeye bakın")));
     for (int col = 0; col < catTable->columnCount(); ++col)
       if (auto* item = catTable->item(i, col)) item->setFlags(item->flags() & ~Qt::ItemIsEditable);
+    // Category summary rows: same PASS=green/FAIL=red convention as the per-row tables.
+    if (status == tr("PASS") || status == tr("FAIL")) {
+      const QColor color = status == tr("PASS") ? QColor(0x22, 0xC5, 0x5E) : QColor(0xEF, 0x44, 0x44);
+      for (int col = 0; col < catTable->columnCount(); ++col)
+        if (auto* item = catTable->item(i, col)) item->setForeground(color);
+    }
   }
   resultsPanel_->setSummaryCounts(totalAll, passAll, failAll, naAll);
 

@@ -760,6 +760,71 @@ discrete vehicle positions; which code, if any, e.g. EN 1991-2 load models — h
 decided and must not be assumed) plus independent analytical reference cases, per this project's
 standing verification requirements.
 
+### Phase 5.4b addendum — MIDAS NSPR import; Phase 5.1 addendum — MIDAS FRLS import; SPLC ANGLE
+### generalized (2026-11-18, user-supplied models 17/18/19)
+User supplied three new real MIDAS NX sample models and asked for tests: `17 Spektrum-2` (two-
+direction CQC response spectrum), `18 Köprü_mafsal` (beam end releases / "mafsal"), `19 Basit
+Kiris point spring` (two ELNK links + 12 NSPR nodal springs).
+
+**NSPR (Joint Spring) import, COMPLETE:** `MidasJsonImporter.hpp` now imports `NSPR` records
+(keyed by node id, `TYPE:"LINEAR"` only) as `JointSpringConnection`. `SDR` maps to local
+`kx..krz`. `F_S` must be all-false, `DAMPING` must be false, and `Cr`/`EFFAREA`/`DK` must all be
+at their default (zero) value -- any non-default value in any of them is rejected, not guessed
+(their meaning for a nonlinear/damped spring is not confirmed). **Found and fixed during
+verification**: MIDAS's own `Reaction(Global).xlsx` reports a joint spring's force as that node's
+reaction, even for a node with no explicit restraint there -- `NodeResults::reaction`
+(`LinearStaticSolver.hpp`) did not reflect this (only explicitly-restrained components were
+populated), so every joint-spring-only node's reaction showed as zero. Fixed: for any DOF
+component NOT separately restrained, the joint spring's negated force is now added into that
+node's own `reaction` (previously this fold only went into the model-level
+`force_balance`/`moment_balance`, not the per-node value user-facing output actually shows).
+**Verified against model 19's real MIDAS export** (49 nodes, 2 ELNK, 12 NSPR) via a standalone
+(uncommitted) diagnostic: Beam Force **552/552 PASS**; Reaction **84/84 PASS** (0/12 before the
+reaction-fold fix, confirming it was a real, necessary fix, not a style choice); Displacements
+**293/294 PASS** (one isolated rotational mismatch, ~4% relative, not investigated further --
+consistent in scale with other small accepted discrepancies elsewhere in this project, e.g. Phase
+7I.1's 2 beam-force rows on model 16). New permanent regression tests,
+`tests/unit/midas_joint_spring_tests.cpp` (5 tests): a small inline NSPR fixture import + solve
+against a hand-derived closed form, plus rejection tests for non-LINEAR type, a true `F_S` entry,
+and a non-default `EFFAREA`.
+
+**FRLS (beam end release / "mafsal") import, COMPLETE:** `MidasJsonImporter.hpp`'s `ELEM`/`BEAM`
+handling now also reads a matching `FRLS` record (keyed by element id), mapping `FLAG_I`/`FLAG_J`
+(7-character strings) onto `Beam3DConnection::releases` using the same per-DOF-flag convention
+already confirmed for `CONS`'s `CONSTRAINT` (first 6 characters = UX,UY,UZ,RX,RY,RZ; the 7th is
+ignored, its meaning unconfirmed, same as `CONS`). `bVALUE=true` (a partial/semi-rigid release
+with its own stiffness) is rejected, not approximated as a full release, since
+`Beam3DConnection::releases` is boolean-only. Import-level parsing verified against model 18 (10
+elements with real `FRLS` records, correctly parsed) -- **full numerical verification against
+model 18's own real reference data is blocked** by the next item.
+
+**New blocker found, not yet resolved: MIDAS `SECT.SHAPE:"T"` (T-section) is unsupported.**
+Models 17 and 18 both use a `T`-shaped `DBUSER` section (`vSIZE=[2.0,2.0,1.0,1.0,...]`,
+presumably depth/width/web-thickness/flange-thickness, not confirmed); `MidasSectionLibrary.hpp`
+only implements `SB`/`B`/`SR`. Both models' full solve currently fails with "element property
+reference missing". Implementing a T-section requires independently deriving its
+area/Iy/Iz/J/shear-area formulas (this project's standing rule: never derive expected results
+from the production code under test) -- a real section-library task (Phase 7S extension), not
+attempted this session; left for the user's decision on priority. Model 19 is unaffected (`SB`
+only).
+
+**SPLC `ANGLE` generalized from "must be exactly 0" to "any multiple of 90 degrees within the
+plane `DIR` names", COMPLETE:** model 17's `SPECY` case has `DIR="XY"`, `ANGLE=90` -- the prior
+code rejected any nonzero `ANGLE` outright. Re-derived the direction rule from two real exports:
+model 16's sole case (`DIR="XY"` `ANGLE=0` -> X, already verified) and model 17's `SPECY`
+(`DIR="XY"` `ANGLE=90` -> same `DIR` string, only `ANGLE` differs, so `DIR` alone cannot encode
+the direction) -- concluded `ANGLE` selects which of `DIR`'s two named axes applies (0 deg =
+first letter, 90 deg = second letter), reduced modulo 180 (a response-spectrum envelope does not
+depend on sign). Confirmed physically sensible against model 17's real `Reaction(Global).xlsx`:
+`SPECX(RS)` rows show dominant FX reactions, `SPECY(RS)` rows show dominant FY reactions, exactly
+as the X/Y resolution predicts. A full end-to-end numerical verification of model 17 (matching
+Phase 7I.1's model-16 treatment) is blocked by the T-section gap above, same as model 18.
+
+Verified (NSPR + FRLS + SPLC changes together): Debug CTest **256/261 PASS**, gui-release
+**286/291 PASS**, same 5 pre-existing/permanent `xmidas/deneme1.json`-removal failures as every
+prior baseline, no regressions; 16 new tests (11 solver-core from the same-day 5.4/5.4b work,
+5 MIDAS-NSPR-import) all passing.
+
 ### Phase 7F — Final standalone release
 Not started; depends on 7A-7I.
 

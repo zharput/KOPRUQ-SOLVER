@@ -1792,6 +1792,40 @@ no regressions.
 Not yet done: MIDAS NX `NSPR` (Joint Spring) import -- still blocked on the complete absence of
 real `NSPR` sample data (0 records in all 17 MIDAS exports available to this project).
 
+## Phase 5.4b / 5.1 addenda — MIDAS NSPR + FRLS import; SPLC ANGLE generalized; new T-section
+## blocker found (2026-11-18, user-supplied models 17/18/19)
+User supplied 3 new real MIDAS models and asked for tests. **NSPR now unblocked** (model 19
+supplies real sample data the previous entry above said was missing) -- imported as
+`JointSpringConnection` (`TYPE:"LINEAR"` only; `F_S`/`DAMPING`/`Cr`/`EFFAREA`/`DK` must be at
+default, rejected otherwise). **Found and fixed a real bug during verification**:
+`NodeResults::reaction` did not include a joint spring's force for a node's unrestrained
+components, so every joint-spring-only node's reaction reported as zero -- MIDAS's own export
+reports it as a reaction, confirmed by the mismatch (0/12 reaction rows matching before the fix,
+84/84 after). Verified against model 19's real data: Beam Force 552/552, Reaction 84/84,
+Displacements 293/294 (one small isolated rotational mismatch, not investigated, consistent with
+other already-accepted small discrepancies elsewhere). New tests:
+`tests/unit/midas_joint_spring_tests.cpp` (5).
+
+**FRLS (beam end release / "mafsal") import also added** (`Beam3DConnection::releases`, same
+per-DOF-flag convention as `CONS`'s `CONSTRAINT`); parsing verified correct against model 18's 10
+real `FRLS` records, but full numerical verification is blocked by a new gap below.
+
+**SPLC `ANGLE` generalized**: previously any nonzero `ANGLE` was rejected outright; now any
+multiple of 90 degrees within the plane `DIR` names resolves to one of `DIR`'s two axes (0=first
+letter, 90=second, mod 180). Needed because model 17's `SPECY` case has `DIR="XY"` `ANGLE=90` --
+the same `DIR` string as model 16's already-verified `ANGLE=0` case, so `DIR` alone could not
+have been the whole story. Confirmed physically sensible against model 17's real
+`Reaction(Global).xlsx` (`SPECX(RS)` rows dominated by FX, `SPECY(RS)` by FY).
+
+**New blocker, not resolved**: MIDAS `SECT.SHAPE:"T"` (T-section) is unsupported
+(`MidasSectionLibrary.hpp` only has SB/B/SR) -- blocks full solve/verification of both model 17
+and model 18 (both use it). Implementing it needs an independently-derived T-section
+area/Iy/Iz/J/shear-area formula set (a real Phase 7S task), not attempted this session; priority
+is the user's decision.
+
+Verified: Debug CTest **256/261 PASS**, gui-release **286/291 PASS**, same 5 permanent failures,
+no regressions; 16 new tests all passing.
+
 ## Next autonomous action
 Phase 3.2, Phase 4, Phase 5 (5.1-5.6), Phase 6 (6.1, 6.1b, 6.2, 6.2b; 6.3 cancelled), Phase 7A,
 7B (including ETMP thermal wiring), 7C, 7D, 7M, 7S(1) and 7T are all complete and verified -- CI

@@ -18,6 +18,7 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QCheckBox>
+#include <QComboBox>
 #include <QFileInfo>
 #include <QGroupBox>
 #include <QHBoxLayout>
@@ -200,6 +201,18 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
   viewerToolBar->addSeparator();
   addIconAction(tr("Yakınlaştır"), QStyle::SP_ArrowUp, &ModelViewerWidget::zoomIn);
   addIconAction(tr("Uzaklaştır"), QStyle::SP_ArrowDown, &ModelViewerWidget::zoomOut);
+  viewerToolBar->addSeparator();
+  // V2.2 Stage D: load-case selector for the "Yükler" display toggle below -- populated only from
+  // the currently loaded model's own kopruq::io::ModelInput::load_cases (loadViewerModel()),
+  // never a fabricated/default list. Index 0 is always "Yok" (no case selected, no arrows drawn).
+  viewerToolBar->addWidget(new QLabel(tr("Yük Durumu:"), this));
+  loadCaseCombo_ = new QComboBox(this);
+  loadCaseCombo_->addItem(tr("Yok"));
+  loadCaseCombo_->setEnabled(false);
+  viewerToolBar->addWidget(loadCaseCombo_);
+  connect(loadCaseCombo_, &QComboBox::currentIndexChanged, modelViewer_, [this](int index) {
+    modelViewer_->setActiveLoadCase(index - 1); // -1 for the leading "Yok" entry
+  });
 
   // Display toggles, moved out of the toolbar into a dedicated right-hand panel.
   auto* optionsPanel = new QGroupBox(tr("Görünüm Seçenekleri"), this);
@@ -219,6 +232,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
   addToggle(tr("Mesnetler"), true, &ModelViewerWidget::setShowSupports);
   addToggle(tr("Elastik Bağlantılar"), true, &ModelViewerWidget::setShowElasticLinks);
   addToggle(tr("Lokal Eksenler"), false, &ModelViewerWidget::setShowLocalAxes);
+  // V2.2 Stage D: default OFF -- only meaningful once a load case is picked from the toolbar.
+  addToggle(tr("Yükler"), false, &ModelViewerWidget::setShowLoads);
   optionsLayout->addStretch(1);
   optionsPanel->setMaximumWidth(220);
 
@@ -354,6 +369,12 @@ void MainWindow::fullReset() {
 
 void MainWindow::loadViewerModel() {
   modelViewer_->clearModel(); // never leave a stale model displayed while (re)loading
+  loadCaseCombo_->blockSignals(true);
+  loadCaseCombo_->clear();
+  loadCaseCombo_->addItem(tr("Yok"));
+  loadCaseCombo_->setCurrentIndex(0);
+  loadCaseCombo_->setEnabled(false);
+  loadCaseCombo_->blockSignals(false);
   if (!fileInputPanel_->isUsable(FileInputPanel::Row::MidasModel)) return;
   const std::string path = fileInputPanel_->filePath(FileInputPanel::Row::MidasModel).toStdString();
   std::string text;
@@ -371,6 +392,13 @@ void MainWindow::loadViewerModel() {
     return;
   }
   modelViewer_->setModel(model);
+  const QStringList cases = modelViewer_->loadCaseNames();
+  if (!cases.isEmpty()) {
+    loadCaseCombo_->blockSignals(true);
+    loadCaseCombo_->addItems(cases);
+    loadCaseCombo_->setEnabled(true);
+    loadCaseCombo_->blockSignals(false);
+  }
 }
 
 void MainWindow::onModelRowChanged() {

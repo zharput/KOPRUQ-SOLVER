@@ -65,6 +65,8 @@ void ModelViewerWidget::setModel(const kopruq::io::ModelInput& model) {
     if (p1 && p2) links_.push_back({s.id, *p1, *p2});
   }
   hasModel_ = !nodes_.empty();
+  activeLoadCase_ = -1;
+  loadArrows_.clear();
   rebuildGeometry();
   fitToModel();
   emit selectionCleared();
@@ -76,11 +78,31 @@ void ModelViewerWidget::clearModel() {
   nodes_.clear();
   beams_.clear();
   links_.clear();
+  loadArrows_.clear();
+  activeLoadCase_ = -1;
   hasModel_ = false;
   selectedNodeId_.reset();
   selectedElementId_.reset();
   boundsMin_ = boundsMax_ = QVector3D(0, 0, 0);
   emit selectionCleared();
+  update();
+}
+
+QStringList ModelViewerWidget::loadCaseNames() const {
+  QStringList names;
+  names.reserve(static_cast<int>(model_.load_cases.size()));
+  for (const auto& lc : model_.load_cases) names << QString::fromStdString(lc.name);
+  return names;
+}
+
+void ModelViewerWidget::setActiveLoadCase(int index) {
+  activeLoadCase_ = index;
+  rebuildLoadArrows();
+  update();
+}
+
+void ModelViewerWidget::setShowLoads(bool on) {
+  showLoads_ = on;
   update();
 }
 
@@ -92,6 +114,89 @@ void ModelViewerWidget::rebuildGeometry() {
     boundsMin_.setX(std::min(boundsMin_.x(), p.x())); boundsMax_.setX(std::max(boundsMax_.x(), p.x()));
     boundsMin_.setY(std::min(boundsMin_.y(), p.y())); boundsMax_.setY(std::max(boundsMax_.y(), p.y()));
     boundsMin_.setZ(std::min(boundsMin_.z(), p.z())); boundsMax_.setZ(std::max(boundsMax_.z(), p.z()));
+  }
+}
+
+// Stage D: builds load-arrow glyphs for the active load case from kopruq::io::ModelInput's own
+// LoadCase data (NodalLoad, MemberLoad, MemberPointLoad) -- the exact same structures the solver
+// consumes, never a separate/approximate representation. Member-load direction for
+// LoadAxes::Local is resolved by calling kopruq::Beam3D::axes() on the real member geometry (the
+// solver's own orientation logic), matching how local axis arrows are drawn. Self-weight
+// (LoadCase::self_weight != 0) is not drawn: its true per-member force depends on section area
+// and material unit weight, which would require either duplicating the solver's self-weight
+// calculation here or showing a misleadingly arbitrary arrow length -- out of scope for this
+// pass, left as a known limitation rather than fabricated.
+void ModelViewerWidget::rebuildLoadArrows() {
+  loadArrows_.clear();
+  maxForceMag_ = maxMomentMag_ = 0.0;
+  if (activeLoadCase_ < 0 || activeLoadCase_ >= static_cast<int>(model_.load_cases.size())) return;
+  const auto& lc = model_.load_cases[static_cast<std::size_t>(activeLoadCase_)];
+
+  auto findNode = [&](kopruq::Id id) -> const QVector3D* {
+    for (const auto& n : nodes_) if (n.id == id) return &n.pos;
+    return nullptr;
+  };
+  auto findBeam = [&](kopruq::Id id) -> const BeamEntry* {
+    for (const auto& b : beams_) if (b.id == id) return &b;
+    return nullptr;
+  };
+  auto addArrow = [&](const QVector3D& origin, const QVector3D& dir, double magnitude, bool isMoment) {
+    if (dir.lengthSquared() < 1e-12f || magnitude == 0.0) return;
+    loadArrows_.push_back({origin, dir.normalized(), magnitude, isMoment});
+    if (isMoment) maxMomentMag_ = std::max(maxMomentMag_, std::abs(magnitude));
+    else maxForceMag_ = std::max(maxForceMag_, std::abs(magnitude));
+  };
+
+  for (const auto& nl : lc.nodal) {
+    const QVector3D* p = findNode(nl.node);
+    if (!p) continue;
+    const QVector3D force(static_cast<float>(nl.values(0)), static_cast<float>(nl.values(1)), static_cast<float>(nl.values(2)));
+    const QVector3D moment(static_cast<float>(nl.values(3)), static_cast<float>(nl.values(4)), static_cast<float>(nl.values(5)));
+    if (force.lengthSquared() > 1e-18f) addArrow(*p, force, force.length(), false);
+    if (moment.lengthSquared() > 1e-18f) addArrow(*p, moment, moment.length(), true);
+  }
+
+  // Resolves a MemberLoad/MemberPointLoad (axes, direction index) to a global unit vector using
+  // the same kopruq::Beam3D::axes() call drawLocalAxes() uses for the real member geometry.
+  auto directionFor = [&](const BeamEntry& b, kopruq::LoadAxes axes, int direction) -> std::optional<QVector3D> {
+    if (axes == kopruq::LoadAxes::Global) {
+      QVector3D d(0, 0, 0);
+      if (direction == 0) d.setX(1.0f); else if (direction == 1) d.setY(1.0f); else d.setZ(1.0f);
+      return d;
+    }
+    kopruq::Beam3DGeometry g{Eigen::Vector3d(b.a.x(), b.a.y(), b.a.z()), Eigen::Vector3d(b.b.x(), b.b.y(), b.b.z()), b.referenceY};
+    kopruq::Beam3DAxes axesOut;
+    try { axesOut = kopruq::Beam3D::axes(g); } catch (const std::exception&) { return std::nullopt; }
+    const Eigen::Vector3d& v = direction == 0 ? axesOut.x : direction == 1 ? axesOut.y : axesOut.z;
+    return QVector3D(static_cast<float>(v.x()), static_cast<float>(v.y()), static_cast<float>(v.z()));
+  };
+
+  for (const auto& pl : lc.point) {
+    const BeamEntry* b = findBeam(pl.element);
+    if (!b) continue;
+    const auto dir = directionFor(*b, pl.axes, pl.direction);
+    if (!dir) continue;
+    const QVector3D origin = b->a + (b->b - b->a) * static_cast<float>(pl.position);
+    addArrow(origin, *dir, pl.value, pl.kind == kopruq::MemberLoadKind::Moment);
+  }
+
+  // Distributed member loads: sampled at a fixed number of stations across [start, end] so a
+  // uniform or linearly-varying intensity both read clearly as a row of arrows, each scaled to
+  // its own local intensity (linear interpolation between w1 and w2, exactly as the solver's own
+  // consistent equivalent-nodal-load derivation assumes -- see kopruq/loads/Loads.hpp).
+  constexpr int kStations = 5;
+  for (const auto& ml : lc.member) {
+    const BeamEntry* b = findBeam(ml.element);
+    if (!b) continue;
+    const auto dir = directionFor(*b, ml.axes, ml.direction);
+    if (!dir) continue;
+    for (int i = 0; i < kStations; ++i) {
+      const double s = kStations == 1 ? 0.5 : static_cast<double>(i) / (kStations - 1);
+      const double frac = ml.start + (ml.end - ml.start) * s;
+      const double w = ml.w1 + (ml.w2 - ml.w1) * s;
+      const QVector3D origin = b->a + (b->b - b->a) * static_cast<float>(frac);
+      addArrow(origin, *dir, w, ml.kind == kopruq::MemberLoadKind::Moment);
+    }
   }
 }
 
@@ -220,6 +325,7 @@ void ModelViewerWidget::paintGL() {
   if (showElasticLinks_) drawElasticLinks();
   if (showSupports_) drawSupports(symbolSize);
   if (showLocalAxes_) drawLocalAxes(symbolSize);
+  if (showLoads_) drawLoads(symbolSize);
   drawAxisGizmo();
 }
 
@@ -307,6 +413,53 @@ void ModelViewerWidget::drawLocalAxes(float s) {
     drawArrow(axes.x, 1.0f, 0.2f, 0.2f);
     drawArrow(axes.y, 0.2f, 1.0f, 0.2f);
     drawArrow(axes.z, 0.3f, 0.5f, 1.0f);
+  }
+}
+
+void ModelViewerWidget::drawLoads(float s) {
+  // Loads: #FBBF24 (forces), #EC4899 (moments, additionally ringed at the base to read as
+  // distinct from a force arrow at a glance). Each arrow's length is scaled only relative to the
+  // largest magnitude of its own kind (force vs moment) in this load case -- never shown as an
+  // absolute physical length, since kN and kN*m are not comparable that way.
+  const float refLength = s * 5.0f;
+  const float minFrac = 0.25f;
+  for (const auto& a : loadArrows_) {
+    const double maxMag = a.isMoment ? maxMomentMag_ : maxForceMag_;
+    const float frac = maxMag > 0.0 ? std::max(minFrac, static_cast<float>(std::abs(a.magnitude) / maxMag)) : minFrac;
+    const float length = refLength * frac;
+    const QVector3D tip = a.origin + a.dir * length;
+    if (a.isMoment) glColor3f(0xEC / 255.0f, 0x48 / 255.0f, 0x99 / 255.0f);
+    else glColor3f(0xFB / 255.0f, 0xBF / 255.0f, 0x24 / 255.0f);
+
+    glBegin(GL_LINES);
+    glVertex3f(a.origin.x(), a.origin.y(), a.origin.z());
+    glVertex3f(tip.x(), tip.y(), tip.z());
+    glEnd();
+
+    // Arrowhead: two short lines back from the tip, in a plane roughly perpendicular to dir.
+    QVector3D arbitrary(0, 0, 1);
+    if (std::abs(QVector3D::dotProduct(arbitrary, a.dir)) > 0.95f) arbitrary = QVector3D(1, 0, 0);
+    const QVector3D perp1 = QVector3D::crossProduct(a.dir, arbitrary).normalized();
+    const QVector3D perp2 = QVector3D::crossProduct(a.dir, perp1).normalized();
+    const float headLen = std::min(length * 0.3f, s * 0.6f);
+    const QVector3D head1 = tip - a.dir * headLen + perp1 * headLen * 0.5f;
+    const QVector3D head2 = tip - a.dir * headLen - perp1 * headLen * 0.5f;
+    glBegin(GL_LINES);
+    glVertex3f(tip.x(), tip.y(), tip.z()); glVertex3f(head1.x(), head1.y(), head1.z());
+    glVertex3f(tip.x(), tip.y(), tip.z()); glVertex3f(head2.x(), head2.y(), head2.z());
+    glEnd();
+
+    if (a.isMoment) {
+      constexpr int kSegments = 12;
+      const float r = s * 0.4f;
+      glBegin(GL_LINE_LOOP);
+      for (int i = 0; i < kSegments; ++i) {
+        const float ang = 2.0f * 3.14159265f * i / kSegments;
+        const QVector3D p = a.origin + perp1 * (r * std::cos(ang)) + perp2 * (r * std::sin(ang));
+        glVertex3f(p.x(), p.y(), p.z());
+      }
+      glEnd();
+    }
   }
 }
 

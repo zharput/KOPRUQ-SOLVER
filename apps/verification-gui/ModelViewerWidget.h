@@ -25,6 +25,7 @@
 #include <QOpenGLWidget>
 #include <QPoint>
 #include <QString>
+#include <QStringList>
 #include <QVector3D>
 #include <array>
 #include <optional>
@@ -45,6 +46,10 @@ public:
   void setModel(const kopruq::io::ModelInput& model);
   void clearModel();
 
+  // Stage D: load-case names for the host window's "Yük Durumu" selector, in the same order as
+  // kopruq::io::ModelInput::load_cases (so the index passed to setActiveLoadCase lines up).
+  QStringList loadCaseNames() const;
+
 signals:
   void nodeInfoChanged(const QString& text);
   void elementInfoChanged(const QString& text);
@@ -64,6 +69,9 @@ public slots:
   void setShowSupports(bool on);
   void setShowElasticLinks(bool on);
   void setShowLocalAxes(bool on);
+  // Stage D: -1 = no load case selected (no arrows drawn regardless of setShowLoads).
+  void setActiveLoadCase(int index);
+  void setShowLoads(bool on);
 
 protected:
   void initializeGL() override;
@@ -80,13 +88,19 @@ private:
   struct BeamEntry { kopruq::Id id, node1, node2, material, section; QVector3D a, b; Eigen::Vector3d referenceY; };
   struct LinkEntry { kopruq::Id id; QVector3D a, b; };
   enum class SupportKind { Fixed, Pinned, Roller, Custom };
+  // Stage D: one arrow glyph. `magnitude` is the real force [kN] or moment [kN*m] value (never
+  // fabricated/estimated) -- only used to scale the drawn length relative to the case's own
+  // largest force/moment, never shown as an absolute length.
+  struct LoadArrowEntry { QVector3D origin, dir; double magnitude; bool isMoment; };
 
   void rebuildGeometry();
+  void rebuildLoadArrows();
   void applyCameraMatrix();
   void drawOverlayLabels(class QPainter& painter);
   void drawSupports(float symbolSize);
   void drawElasticLinks();
   void drawLocalAxes(float symbolSize);
+  void drawLoads(float symbolSize);
   void drawAxisGizmo();
   QPointF projectToScreen(const QVector3D& worldPos, bool* visible) const;
   void pickAt(const QPoint& pos);
@@ -106,6 +120,10 @@ private:
   bool showSupports_{true};
   bool showElasticLinks_{true};
   bool showLocalAxes_{false};
+  bool showLoads_{false};
+  int activeLoadCase_{-1};
+  std::vector<LoadArrowEntry> loadArrows_;
+  double maxForceMag_{0}, maxMomentMag_{0};
   std::optional<kopruq::Id> selectedNodeId_;
   std::optional<kopruq::Id> selectedElementId_;
 

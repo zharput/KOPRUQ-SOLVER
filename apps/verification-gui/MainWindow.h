@@ -25,6 +25,7 @@ class SolverRunner;
 class ModelViewerWidget;
 class QCloseEvent;
 class QTableWidget;
+class QComboBox;
 
 class MainWindow : public QMainWindow {
   Q_OBJECT
@@ -69,6 +70,7 @@ private:
   ModelInfoPanel* modelInfoPanel_{};
   ResultsComparisonPanel* resultsPanel_{};
   ModelViewerWidget* modelViewer_{};
+  QComboBox* loadCaseCombo_{}; // Stage D: "Yük Durumu" selector for Model Görünümü's load arrows
   SolverRunner* solverRunner_{};
 
   WorkflowState state_{WorkflowState::InputReady};

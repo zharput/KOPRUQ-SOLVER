@@ -1767,6 +1767,31 @@ conceptually separate single-node elastic support ("Joint Spring", MIDAS NX `NSP
   pre-existing/permanent `xmidas/deneme1.json`-removal failures as every prior baseline in this
   document, no regressions; 11 new tests all passing.
 
+## Phase 5.4 addendum — MIDAS ELNK import wired and empirically verified (2026-11-18)
+Followed up the same day: `MidasJsonImporter.hpp` now imports `ELNK` (`LINK:"GEN"`) records as
+`SpringConnection` (previously always rejected). Orientation reuses the already-confirmed
+`ELEM`/`BEAM` node1->node2 + `ANGLE` convention (`midasReferenceY`); `SDR` maps to local
+`kx..krz`; `R_S` must be all-false (any release flag true is rejected, not guessed); `DR` is read
+but not used (no formulation concept to apply it to).
+
+**Verification**: a standalone diagnostic (not committed) imported, solved and compared
+`verification/models/07 Basit Kiris Uniform yayli`'s real MIDAS export -- one non-coincident ELNK
+(node 10 at Z=-0.5 linked to node 1 at Z=0.0) -- against that model's own real MIDAS
+Displacements/Beam Force/Reaction `.xlsx` files: **168/168 rows PASS, 0 FAIL, 0 N/A**. This is
+strong empirical evidence the orientation/stiffness interpretation (and the choice to ignore
+`DR`/require `R_S` all-false) is correct for MIDAS's `GEN` link type. A permanent regression test,
+`tests/unit/midas_elastic_link_tests.cpp`, embeds model 07's real DBG payload inline (so it runs
+in CI without depending on the untracked `verification/models/` directory) and checks node 1's
+displacement/rotation plus node 9/10's reactions against values transcribed from that same real
+export; node 10 is fully restrained and touches the structure *only* through the ELNK spring, so
+this is a genuine check of the import's correctness, not a smoke test.
+
+Verified: Debug CTest **251/256 PASS**, gui-release **281/286 PASS**, same 5 permanent failures,
+no regressions.
+
+Not yet done: MIDAS NX `NSPR` (Joint Spring) import -- still blocked on the complete absence of
+real `NSPR` sample data (0 records in all 17 MIDAS exports available to this project).
+
 ## Next autonomous action
 Phase 3.2, Phase 4, Phase 5 (5.1-5.6), Phase 6 (6.1, 6.1b, 6.2, 6.2b; 6.3 cancelled), Phase 7A,
 7B (including ETMP thermal wiring), 7C, 7D, 7M, 7S(1) and 7T are all complete and verified -- CI

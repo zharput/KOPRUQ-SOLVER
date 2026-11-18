@@ -157,6 +157,31 @@ exact rigid-body consistency across a real separation should use `RigidLink` ins
 `ElasticLink`. New test: `SpringIo.AcceptsNonCoincidentNodes` (replaces the old
 `RejectsNonCoincidentNodes`, which tested behavior no longer true).
 
+**5.4 revision addendum (2026-11-18) — MIDAS NX `ELNK` (`LINK:"GEN"`) import wired and
+empirically verified, COMPLETE:** `MidasJsonImporter.hpp`'s ELNK handling now imports `LINK:"GEN"`
+records as `SpringConnection` instead of rejecting them outright. Orientation reuses the exact
+same node1->node2 + `ANGLE` Beta-angle convention already confirmed for `ELEM`/`BEAM`
+(`midasReferenceY`) -- not a separately invented rule, since MIDAS's Element Coordinate System
+convention applies to its line elements generally. `SDR` maps directly to local
+`kx,ky,kz,krx,kry,krz`. Only `R_S` all-false (no release) is accepted; any true entry is rejected,
+not guessed. `DR` is read but deliberately not used (`SpringLink`'s formulation has no concept of
+an interior/offset point for it to feed into). **Empirically verified** against
+`verification/models/07 Basit Kiris Uniform yayli`'s real MIDAS export (one non-coincident ELNK,
+node 10 at Z=-0.5 to node 1 at Z=0.0): importing, solving and comparing against that model's own
+real `Displacements(Global).xlsx`/`Beam Force.xlsx`/`Reaction(Global).xlsx` gives **168/168 PASS,
+0 FAIL, 0 N/A** (a standalone diagnostic program, not committed, built against `kopruq_verification`
++ `xlnt`) -- strong evidence the orientation/stiffness interpretation above is correct, including
+that `DR`/`R_S` truly do not matter for this model. New permanent regression test
+`tests/unit/midas_elastic_link_tests.cpp` (`MidasElasticLink.ImportsGenLinkAndSolvesMatchingRealMidasReference`)
+embeds model 07's real DBG payload inline (self-contained, no dependency on the untracked
+`verification/models/` directory) and checks node 1's displacement/rotation and node 9/10's
+reactions against values transcribed from that same real MIDAS export -- node 10 is fully
+restrained and connects to the structure *only* through the ELNK spring, so this is a genuine,
+non-trivial check of the import, not a "does it throw" smoke test.
+`MidasImportReport::springs` (new field) counts imported links; `elastic_links_rejected` now
+means "not imported" (unsupported LINK type, unconfirmed R_S, missing node, bad SDR), not
+"always rejected".
+
 **5.4b new: single-node elastic support ("Joint Spring" / MIDAS NX `NSPR` Nodal Spring) —
 COMPLETE (verified this session):** `JointSpring.hpp`, a new, deliberately separate element
 (`JointSpringConnection`, `Model::joint_springs`, independent id space from both beams' and

@@ -17,7 +17,10 @@
 // temperature CHANGE, the same quantity that load takes). ELNK with
 // LINK:"GEN" and every R_S entry false -> SpringConnection (Phase 5.4
 // revision, 2026-11-18, see the ELNK handling below for exactly what is
-// and is not used from each record, and why).
+// and is not used from each record, and why). NSPR with TYPE="LINEAR" and
+// every F_S/DAMPING/Cr/EFFAREA/DK at its default value -> JointSpringConnection
+// (Phase 5.4b, 2026-11-18). FRLS with bVALUE=false -> Beam3DConnection::releases
+// (per-DOF end releases / "mafsal", 2026-11-18).
 //
 // Explicitly REJECTED, not silently ignored or approximated (recorded in
 // MidasImportReport::rejected with the record identified): any ELEM TYPE
@@ -52,9 +55,11 @@
 // SPLC/SPFC (response-spectrum requests) ARE now translated into `response_spectra` entries,
 // confirmed from a real MIDAS NX JSON export (`verification/models/16 Spektrum-1`, 2026-11-17)
 // -- see the SPLC/SPFC handling below for the exact field shapes. Explicitly NOT translated, and
-// explicitly rejected (not silently approximated) when present: SPLC `ANGLE` != 0 (an arbitrary-
-// angle spectrum direction, not an axis-aligned one -- `ResponseSpectrumInput::direction` only
-// accepts global X/Y/Z); any `aUSEMODE` entry with `bUSE=false` or `MSFACTOR != 1.0` (per-mode
+// explicitly rejected (not silently approximated) when present: SPLC `ANGLE` not a multiple of
+// 90 degrees within the plane its `DIR` names (an arbitrary-angle spectrum direction --
+// `ResponseSpectrumInput::direction` only accepts global X/Y/Z; ANGLE=0/90/180/270 resolve to
+// DIR's two named axes, confirmed against two real exports, models 16 and 17 -- see the SPLC
+// handling below); any `aUSEMODE` entry with `bUSE=false` or `MSFACTOR != 1.0` (per-mode
 // exclusion/scaling, which `ResponseSpectrumInput` has no way to express); any `SPLC.COMTYPE`
 // other than "CQC" or "SRSS". `SPLC.CQCRATIO`'s exact meaning was not confirmed from accessible
 // documentation (possibly a closely-spaced-mode cutoff ratio in some codes' CQC variants, not a
@@ -66,6 +71,8 @@
 #include "MidasSectionLibrary.hpp"
 #include <algorithm>
 #include <array>
+#include <cctype>
+#include <cmath>
 #include <map>
 #include <stdexcept>
 #include <string>
@@ -77,6 +84,7 @@ struct MidasImportReport {
   std::size_t nodes{}, beams{}, materials{}, sections{}, supports{}, rigid_links{}, load_cases{}, member_loads{}, thermal_loads{};
   std::size_t nodal_loads{}; // CNLD records imported (concentrated nodal forces/moments)
   std::size_t springs{}; // ELNK (LINK:"GEN") records imported as SpringConnection
+  std::size_t joint_springs{}; // NSPR records imported as JointSpringConnection
   std::size_t elastic_links_rejected{}; // ELNK records present but NOT imported (unsupported LINK type, unconfirmed R_S release, missing node, or bad SDR) -- not a count of `springs`
   std::vector<std::string> assumptions; // disclosed substitutions, e.g. "material 1: poisson_ratio=0.2 (...)"
   std::vector<std::string> rejected;    // records explicitly not imported, with the reason
@@ -258,6 +266,49 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
     }
   out.report.springs = out.input.model.springs.size();
 
+  // --- NSPR: single-node elastic supports ("Nodal Spring") -> JointSpringConnection (Phase
+  // 5.4b, 2026-11-18). Keyed by node id (not its own id space), each with an ITEMS[0] holding
+  // the actual record -- real field shapes confirmed from verification/models/19's own JSON.
+  // Only TYPE="LINEAR" (every record seen in real data) is implemented; nonlinear spring types
+  // are rejected, not approximated as linear. SDR maps directly to local kx,ky,kz,krx,kry,krz
+  // (same layout as ELNK's SDR). Orientation: NSPR carries no local_x/reference_y/ANGLE field at
+  // all in any real export seen -- a single-node spring with no second node and no beta angle has
+  // no MIDAS-documented orientation convention available, so it is imported with
+  // JointSpringConnection's own default axes (global X/Y, i.e. local axes = global axes), the
+  // same default `springs`/`joint_springs` already use when nothing else is specified. F_S (per-
+  // DOF release-like flags), DAMPING, Cr, EFFAREA and DK are only confirmed safe to ignore when
+  // every one is false/zero (the only values seen in real data); any non-default value in any of
+  // them is rejected rather than guessed.
+  if (dbg.contains("NSPR")) {
+    Id jointSpringIdCounter = 1;
+    for (auto it = dbg.at("NSPR").begin(); it != dbg.at("NSPR").end(); ++it) {
+      const Id node = detail::parseId(it.key());
+      if (!it.value().contains("ITEMS") || it.value().at("ITEMS").empty()) { out.report.rejected.push_back("joint spring at node " + it.key() + ": no ITEMS entry"); continue; }
+      const auto& item = it.value().at("ITEMS")[0];
+      const std::string type = item.value("TYPE", std::string());
+      if (type != "LINEAR") { out.report.rejected.push_back("joint spring at node " + it.key() + ": unsupported TYPE '" + type + "' (only LINEAR is implemented)"); continue; }
+      if (item.value("DAMPING", false)) { out.report.rejected.push_back("joint spring at node " + it.key() + ": DAMPING=true is not implemented"); continue; }
+      bool nonDefault = false;
+      if (item.contains("Cr")) for (const auto& c : item.at("Cr")) if (c.get<Real>() != 0) nonDefault = true;
+      if (item.value("EFFAREA", Real(0)) != 0) nonDefault = true;
+      if (item.contains("DK")) for (const auto& d : item.at("DK")) if (d.get<Real>() != 0) nonDefault = true;
+      if (nonDefault) { out.report.rejected.push_back("joint spring at node " + it.key() + ": Cr/EFFAREA/DK has a non-default value, meaning not confirmed -- not implemented"); continue; }
+      if (item.contains("F_S")) {
+        bool anyReleased = false;
+        for (const auto& f : item.at("F_S")) if (f.get<bool>()) anyReleased = true;
+        if (anyReleased) { out.report.rejected.push_back("joint spring at node " + it.key() + ": F_S (release flags) has a true entry, meaning not confirmed -- not implemented"); continue; }
+      }
+      auto found = std::find_if(out.input.model.nodes.begin(), out.input.model.nodes.end(), [&](const Node& n){ return n.id == node; });
+      if (found == out.input.model.nodes.end()) { out.report.rejected.push_back("joint spring at node " + it.key() + ": references a missing node"); continue; }
+      if (!item.contains("SDR") || item.at("SDR").size() != 6) { out.report.rejected.push_back("joint spring at node " + it.key() + ": SDR must have 6 entries (kx,ky,kz,krx,kry,krz)"); continue; }
+      JointSpringConnection e; e.id = jointSpringIdCounter++; e.node = node;
+      const auto sdr = detail::toRealVector(item.at("SDR"));
+      for (int i = 0; i < 6; ++i) e.stiffness[(std::size_t)i] = sdr[(std::size_t)i];
+      out.input.model.joint_springs.push_back(e);
+    }
+  }
+  out.report.joint_springs = out.input.model.joint_springs.size();
+
   // --- ELEM (BEAM only) ---
   if (dbg.contains("ELEM"))
     for (auto it = dbg.at("ELEM").begin(); it != dbg.at("ELEM").end(); ++it) {
@@ -281,6 +332,25 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
       } catch (const std::exception& ex) {
         out.report.rejected.push_back("element " + it.key() + ": " + ex.what());
         continue;
+      }
+      // FRLS (beam end releases, "mafsal"/hinge): keyed by element id, ITEMS[0] has FLAG_I/
+      // FLAG_J (7-character strings, same per-DOF-flag convention as CONS's CONSTRAINT -- first
+      // 6 chars = UX,UY,UZ,RX,RY,RZ, confirmed by cross-checking against a real export's own
+      // Reaction/Beam Force/Displacements results, verification/models/18; the 7th char's meaning
+      // is unconfirmed, same as CONS, and is ignored, not guessed) and `bVALUE` (true = a partial/
+      // semi-rigid release with its own stiffness via VALUE_I/VALUE_J, which Beam3DConnection's
+      // boolean-only releases cannot express -- rejected, not approximated as a full release).
+      if (dbg.contains("FRLS") && dbg.at("FRLS").contains(it.key())) {
+        const auto& frls = dbg.at("FRLS").at(it.key());
+        if (!frls.contains("ITEMS") || frls.at("ITEMS").empty()) { out.report.rejected.push_back("element " + it.key() + ": FRLS present with no ITEMS entry"); continue; }
+        const auto& item = frls.at("ITEMS")[0];
+        if (item.value("bVALUE", false)) { out.report.rejected.push_back("element " + it.key() + ": FRLS bVALUE=true (partial/semi-rigid release) is not implemented"); continue; }
+        const std::string flagI = item.value("FLAG_I", std::string());
+        const std::string flagJ = item.value("FLAG_J", std::string());
+        if (flagI.size() < 6 || flagJ.size() < 6) { out.report.rejected.push_back("element " + it.key() + ": FRLS FLAG_I/FLAG_J too short"); continue; }
+        for (int i = 0; i < 6; ++i) { e.releases[(std::size_t)i] = flagI[(std::size_t)i] != '0'; e.releases[(std::size_t)(i+6)] = flagJ[(std::size_t)i] != '0'; }
+        if (flagI.size() > 6 || flagJ.size() > 6)
+          out.report.assumptions.push_back("element " + it.key() + ": FRLS FLAG_I/FLAG_J has more than 6 characters; extra character(s) ignored (meaning unconfirmed, same as CONS, see docs/MIDAS_JSON_DATA_AUDIT.md 4.4)");
       }
       out.input.model.beams.push_back(e);
       out.report.originalToInternalElementId[id] = id;
@@ -411,20 +481,33 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
       bool ok = true;
       std::string reason;
 
-      // Direction: only a single axis-aligned, zero-angle direction is supported -- SPLC's own
-      // ANGLE lets a spectrum be applied at an arbitrary horizontal angle, which
-      // ResponseSpectrumInput::direction (global X/Y/Z only) cannot express.
+      // Direction: SPLC's DIR names the horizontal plane the spectrum can be applied in (e.g.
+      // "XY"), and ANGLE picks which axis of that plane, 0 degrees = DIR's first letter, 90
+      // degrees = DIR's second letter (confirmed against two real MIDAS exports,
+      // verification/models/16 and /17: model 16's single SPECX case is DIR="XY" ANGLE=0 ->
+      // X, already verified; model 17 adds SPECY, DIR="XY" ANGLE=90 -> Y, same DIR string, only
+      // ANGLE differs, so DIR alone cannot be the whole story). A response-spectrum analysis
+      // envelopes modal response magnitudes, so 180/270 degrees give the same case as 0/90 (sign
+      // does not matter) -- angle is reduced modulo 180 before matching. Any angle that is not a
+      // multiple of 90 degrees within the named plane is a genuinely arbitrary direction
+      // ResponseSpectrumInput::direction (global X/Y/Z only) cannot express, and is rejected, not
+      // approximated.
+      auto axisOf = [](char c) -> int { c = static_cast<char>(std::toupper(static_cast<unsigned char>(c))); return c == 'X' ? 0 : c == 'Y' ? 1 : c == 'Z' ? 2 : -1; };
       int direction = -1;
       const double angle = splc.value("ANGLE", 0.0);
       const std::string dir = splc.value("DIR", std::string());
-      if (angle != 0.0) { ok = false; reason = "ANGLE != 0 (an arbitrary-angle spectrum direction) is not supported"; }
-      else if (!dir.empty() && (dir[0] == 'X' || dir[0] == 'x')) direction = 0;
-      else if (!dir.empty() && (dir[0] == 'Y' || dir[0] == 'y')) direction = 1;
-      else if (!dir.empty() && (dir[0] == 'Z' || dir[0] == 'z')) direction = 2;
-      else { ok = false; reason = "DIR '" + dir + "' not recognized (expected to start with X/Y/Z)"; }
+      if (dir.size() >= 2 && axisOf(dir[0]) >= 0 && axisOf(dir[1]) >= 0) {
+        double angleMod = std::fmod(angle, 180.0); if (angleMod < 0) angleMod += 180.0;
+        if (std::abs(angleMod) < 1e-6) direction = axisOf(dir[0]);
+        else if (std::abs(angleMod - 90.0) < 1e-6) direction = axisOf(dir[1]);
+        else { ok = false; reason = "ANGLE " + std::to_string(angle) + " is not a multiple of 90 degrees within DIR plane '" + dir + "' -- an arbitrary-angle spectrum direction is not supported"; }
+      } else if (dir.size() == 1 && axisOf(dir[0]) >= 0) {
+        if (angle != 0.0) { ok = false; reason = "ANGLE != 0 with single-axis DIR '" + dir + "' is not supported"; }
+        else direction = axisOf(dir[0]);
+      } else { ok = false; reason = "DIR '" + dir + "' not recognized (expected one or two of X/Y/Z)"; }
       if (ok && dir.size() > 1)
-        out.report.assumptions.push_back("SPLC " + caseName + ": DIR='" + dir + "' with ANGLE=0 -- direction taken as its first letter ('" +
-            std::string(1, dir[0]) + "'); nothing past the first letter of a compound DIR is otherwise interpreted");
+        out.report.assumptions.push_back("SPLC " + caseName + ": DIR='" + dir + "' ANGLE=" + std::to_string(angle) +
+            " -- direction taken as axis '" + std::string(1, "XYZ"[direction]) + "' (0 deg = DIR's first letter, 90 deg = second, mod 180)");
 
       // Modal combination: only CQC and SRSS are implemented (Phase 7I.1, 2026-11-17).
       ModalCombination combo = ModalCombination::SRSS;

@@ -79,7 +79,8 @@ inline void reportMidasImport(const midas::MidasImportReport& r, std::ostream& e
       << " materials, " << r.sections << " sections, " << r.supports << " supports, "
       << r.rigid_links << " rigid links, " << r.load_cases << " load cases, " << r.nodal_loads
       << " nodal loads, " << r.member_loads << " member loads, " << r.thermal_loads
-      << " thermal loads, " << r.elastic_links_rejected << " elastic links rejected\n";
+      << " thermal loads, " << r.springs << " elastic links, " << r.joint_springs
+      << " joint springs, " << r.elastic_links_rejected << " elastic links rejected\n";
   if (r.hasBoundingBox) {
     err << "midas-nx-json bounds: X[" << r.minX << "," << r.maxX << "] Y[" << r.minY << "," << r.maxY
         << "] Z[" << r.minZ << "," << r.maxZ << "]\n";

@@ -200,6 +200,16 @@ static AnalysisResults recoverAssembled(const Model&m,const Restraints&rs,const 
     for(int i=0;i<3;++i)if(!restrained[i])f(i)=fg(i);
     for(int i=0;i<3;++i)if(!restrained[i+3])mm(i)=fg(i+3);
     ar-=f;arm-=(mm+r.cross(f)); // reaction = -fg, see comment above
+    // NodeResults::reaction ALSO gets this, for the same unrestrained components -- confirmed
+    // necessary (not a style choice) against verification/models/19's real MIDAS export: MIDAS's
+    // own Reaction(Global).xlsx reports a joint spring's force as that node's reaction, even
+    // though the node carries no explicit restraint there. A restrained component already has
+    // this baked into its q-based reaction, so it is not added twice.
+    for (auto& nr : o.nodes) if (nr.node_id == e.node) {
+      for (int i = 0; i < 3; ++i) if (!restrained[i]) nr.reaction[i] -= f(i);
+      for (int i = 0; i < 3; ++i) if (!restrained[i+3]) nr.reaction[i+3] -= mm(i);
+      break;
+    }
   }
   o.force_balance=af+ar;o.moment_balance=am+arm;o.force_balance_norm=o.force_balance.norm();o.moment_balance_norm=o.moment_balance.norm();
   // Force scale: applied plus reaction forces, plus moments (about the model's bounding-box centre) divided by the model

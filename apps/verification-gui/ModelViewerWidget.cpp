@@ -354,18 +354,16 @@ QPointF ModelViewerWidget::projectToScreen(const QVector3D& worldPos, bool* visi
 }
 
 QString ModelViewerWidget::describeNode(const NodeEntry& n) const {
-  QString text = QStringLiteral("Düğüm Bilgisi\n\nID: %1\nX: %2 m\nY: %3 m\nZ: %4 m\n")
-    .arg(n.id).arg(n.pos.x(), 0, 'f', 4).arg(n.pos.y(), 0, 'f', 4).arg(n.pos.z(), 0, 'f', 4);
   auto it = model_.restraints.find(n.id);
-  text += QStringLiteral("Mesnet Koşulları: %1")
-    .arg(it != model_.restraints.end() ? formatRestraints(it->second) : QStringLiteral("(serbest)"));
-  return text;
+  const QString restraints = it != model_.restraints.end() ? formatRestraints(it->second) : QStringLiteral("(serbest)");
+  return QStringLiteral("Düğüm ID: %1  |  X: %2 m  |  Y: %3 m  |  Z: %4 m  |  Mesnet Koşulları: %5")
+    .arg(n.id).arg(n.pos.x(), 0, 'f', 4).arg(n.pos.y(), 0, 'f', 4).arg(n.pos.z(), 0, 'f', 4).arg(restraints);
 }
 
 QString ModelViewerWidget::describeBeam(const BeamEntry& b) const {
   const double length = (b.b - b.a).length();
-  return QStringLiteral("Eleman Bilgisi\n\nID: %1\nTip: Beam3D\nBaşlangıç Düğüm: %2\nBitiş Düğüm: %3\n"
-                         "Uzunluk: %4 m\nKesit (Section) ID: %5\nMalzeme (Material) ID: %6")
+  return QStringLiteral("Eleman ID: %1  |  Tip: Beam3D  |  Başlangıç Düğümü: %2  |  Bitiş Düğümü: %3  |  "
+                         "Uzunluk: %4 m  |  Kesit ID: %5  |  Malzeme ID: %6")
     .arg(b.id).arg(b.node1).arg(b.node2).arg(length, 0, 'f', 4).arg(b.section).arg(b.material);
 }
 

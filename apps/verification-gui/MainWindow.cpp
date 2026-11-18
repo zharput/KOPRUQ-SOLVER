@@ -20,6 +20,7 @@
 #include <QFileInfo>
 #include <QGroupBox>
 #include <QHBoxLayout>
+#include <QLabel>
 #include <QPlainTextEdit>
 #include <QRegularExpression>
 #include <QSplitter>
@@ -189,13 +190,13 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 
   // V2.2 Stage B: full-width selection-info bar, filled only from ModelViewerWidget's own
   // selection signals -- its text is built from real model fields, never fabricated here.
-  auto* viewerInfoBar = new QPlainTextEdit(this);
-  viewerInfoBar->setReadOnly(true);
-  viewerInfoBar->setPlainText(tr("Seçim yok."));
-  viewerInfoBar->setMaximumHeight(90);
-  connect(modelViewer_, &ModelViewerWidget::nodeInfoChanged, viewerInfoBar, &QPlainTextEdit::setPlainText);
-  connect(modelViewer_, &ModelViewerWidget::elementInfoChanged, viewerInfoBar, &QPlainTextEdit::setPlainText);
-  connect(modelViewer_, &ModelViewerWidget::selectionCleared, viewerInfoBar, [viewerInfoBar, this] { viewerInfoBar->setPlainText(tr("Seçim yok.")); });
+  // Single-line strip (not a multi-line text block) per the approved reference layout.
+  auto* viewerInfoBar = new QLabel(tr("Seçili Eleman/Düğüm Bilgisi: Seçim yok."), this);
+  viewerInfoBar->setTextInteractionFlags(Qt::TextSelectableByMouse);
+  viewerInfoBar->setContentsMargins(8, 4, 8, 4);
+  connect(modelViewer_, &ModelViewerWidget::nodeInfoChanged, viewerInfoBar, &QLabel::setText);
+  connect(modelViewer_, &ModelViewerWidget::elementInfoChanged, viewerInfoBar, &QLabel::setText);
+  connect(modelViewer_, &ModelViewerWidget::selectionCleared, viewerInfoBar, [viewerInfoBar, this] { viewerInfoBar->setText(tr("Seçili Eleman/Düğüm Bilgisi: Seçim yok.")); });
 
   auto* viewerMiddle = new QWidget(this);
   auto* viewerMiddleLayout = new QHBoxLayout(viewerMiddle);

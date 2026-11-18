@@ -14,14 +14,16 @@
 // (CMD="BEAM", TYPE="UNILOAD", DIRECTION="GZ" uniform member loads),
 // ETMP (uniform element temperature -- maps directly onto
 // MemberThermalLoad::uniform_delta_t, Phase 7T; TEMP is already a
-// temperature CHANGE, the same quantity that load takes).
+// temperature CHANGE, the same quantity that load takes). ELNK with
+// LINK:"GEN" and every R_S entry false -> SpringConnection (Phase 5.4
+// revision, 2026-11-18, see the ELNK handling below for exactly what is
+// and is not used from each record, and why).
 //
 // Explicitly REJECTED, not silently ignored or approximated (recorded in
 // MidasImportReport::rejected with the record identified): any ELEM TYPE
 // other than BEAM; any MATL TYPE other than CONC or any code family other
-// than EN..(RC); any SECT shape other than SB/B/SR; ELNK (elastic links
-// between non-coincident nodes -- SpringLink, Phase 5.4, requires
-// coincident nodes, a real formulation limit, not a missing-data gap);
+// than EN..(RC); any SECT shape other than SB/B/SR; any ELNK whose LINK is
+// not "GEN" or whose R_S has any true entry (see the ELNK handling below);
 // GTMP/BTMP (gradient/beam-section temperature -- MIDAS's T1/T2
 // top-fiber sign convention could not be confirmed from accessible
 // documentation, and guessing would silently flip which way a member
@@ -74,7 +76,8 @@ namespace kopruq::io::midas {
 struct MidasImportReport {
   std::size_t nodes{}, beams{}, materials{}, sections{}, supports{}, rigid_links{}, load_cases{}, member_loads{}, thermal_loads{};
   std::size_t nodal_loads{}; // CNLD records imported (concentrated nodal forces/moments)
-  std::size_t elastic_links_rejected{}; // ELNK records present but rejected outright (not a count of anything imported)
+  std::size_t springs{}; // ELNK (LINK:"GEN") records imported as SpringConnection
+  std::size_t elastic_links_rejected{}; // ELNK records present but NOT imported (unsupported LINK type, unconfirmed R_S release, missing node, or bad SDR) -- not a count of `springs`
   std::vector<std::string> assumptions; // disclosed substitutions, e.g. "material 1: poisson_ratio=0.2 (...)"
   std::vector<std::string> rejected;    // records explicitly not imported, with the reason
   std::map<Id, Id> originalToInternalNodeId;    // identity mapping in this importer (MIDAS IDs preserved), kept
@@ -205,12 +208,55 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
     }
   out.report.rigid_links = out.input.model.rigid_links.size();
 
-  // --- ELNK: rejected outright (non-coincident elastic links, SpringLink requires coincident nodes) ---
+  // --- ELNK: "GEN" (General) elastic links -> SpringConnection (Phase 5.4 revision, 2026-11-18:
+  // SpringLink no longer requires coincident nodes -- see docs/MIDAS_JSON_DATA_AUDIT.md 4.5).
+  // Orientation reuses the exact same node1->node2 + "ANGLE" Beta-angle convention already
+  // confirmed for ELEM/BEAM (midasReferenceY, above) rather than inventing a separate rule --
+  // MIDAS's Element Coordinate System convention applies to its line elements generally, this is
+  // not assumed independently per element type. Only LINK:"GEN" is implemented (the only type
+  // seen in any real export available to this project, verification/models/07); any other LINK
+  // type is rejected, not silently treated as GEN. `R_S` (per-DOF release-like flags) are only
+  // confirmed safe to ignore when every one of the 6 is false (the only value seen in real data);
+  // any true entry is rejected rather than guessed. `DR` is read but deliberately NOT used:
+  // SpringLink's stiffness directly couples node1's and node2's own DOFs with no interior point,
+  // so there is no formulation concept for DR to feed into -- if it represents some MIDAS-internal
+  // offset/insertion-point behavior this import does not reproduce, that would only be caught by
+  // comparing results against the model's own real MIDAS reference export (not assumed benign).
   if (dbg.contains("ELNK"))
     for (auto it = dbg.at("ELNK").begin(); it != dbg.at("ELNK").end(); ++it) {
-      out.report.rejected.push_back("elastic link " + it.key() + ": ELNK is not yet supported (SpringLink, Phase 5.4, requires coincident nodes; see docs/MIDAS_JSON_DATA_AUDIT.md 4.5)");
-      ++out.report.elastic_links_rejected;
+      const Id id = detail::parseId(it.key());
+      const auto& v = it.value();
+      const std::string linkType = v.value("LINK", std::string());
+      if (linkType != "GEN") { out.report.rejected.push_back("elastic link " + it.key() + ": unsupported LINK type '" + linkType + "' (only GEN is implemented)"); ++out.report.elastic_links_rejected; continue; }
+      if (v.contains("R_S")) {
+        bool anyReleased = false;
+        for (const auto& r : v.at("R_S")) if (r.get<bool>()) anyReleased = true;
+        if (anyReleased) { out.report.rejected.push_back("elastic link " + it.key() + ": R_S (release flags) has a true entry, meaning not confirmed -- not implemented"); ++out.report.elastic_links_rejected; continue; }
+      }
+      SpringConnection e;
+      e.id = id;
+      e.node1 = v.at("NODE")[0].get<Id>();
+      e.node2 = v.at("NODE")[1].get<Id>();
+      auto n1 = std::find_if(out.input.model.nodes.begin(), out.input.model.nodes.end(), [&](const Node& n){ return n.id == e.node1; });
+      auto n2 = std::find_if(out.input.model.nodes.begin(), out.input.model.nodes.end(), [&](const Node& n){ return n.id == e.node2; });
+      if (n1 == out.input.model.nodes.end() || n2 == out.input.model.nodes.end()) { out.report.rejected.push_back("elastic link " + it.key() + ": references a missing node"); ++out.report.elastic_links_rejected; continue; }
+      const auto sdr = detail::toRealVector(v.at("SDR"));
+      if (sdr.size() != 6) { out.report.rejected.push_back("elastic link " + it.key() + ": SDR must have 6 entries (kx,ky,kz,krx,kry,krz)"); ++out.report.elastic_links_rejected; continue; }
+      for (int i = 0; i < 6; ++i) e.stiffness[(std::size_t)i] = sdr[(std::size_t)i];
+      try {
+        Eigen::Vector3d p1(n1->x, n1->y, n1->z), p2(n2->x, n2->y, n2->z);
+        const Real angleDeg = v.value("ANGLE", Real(0));
+        if ((p2 - p1).norm() > 1e-9) {
+          e.local_x = (p2 - p1).normalized();
+          e.reference_y = midasReferenceY(e.local_x, angleDeg);
+        } // else: coincident nodes, keep SpringConnection's own default (1,0,0)/(0,1,0) -- no
+          // direction to derive, exactly as for a bearing/isolator (see SpringLink.hpp).
+      } catch (const std::exception& ex) {
+        out.report.rejected.push_back("elastic link " + it.key() + ": " + ex.what()); ++out.report.elastic_links_rejected; continue;
+      }
+      out.input.model.springs.push_back(e);
     }
+  out.report.springs = out.input.model.springs.size();
 
   // --- ELEM (BEAM only) ---
   if (dbg.contains("ELEM"))

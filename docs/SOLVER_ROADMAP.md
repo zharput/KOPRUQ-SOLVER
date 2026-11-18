@@ -141,15 +141,44 @@ an exact no-op. JSON `offset1`/`offset2` on beams.
 — COMPLETE (verified, CI run `39069625215`, commits `9126760`, `189df29`,
 `7a6fb83`):** `SpringLink.hpp` -- a two-node, six-independent-DOF discrete
 spring (kx,ky,kz,krx,kry,krz, no coupling between them), covering bearings,
-isolators and soil springs. **Formulation limit, found by CI and now
-enforced, not worked around:** node1 and node2 must be at the same
-location -- the decoupled per-DOF stiffness has no lever-arm coupling
-between a node's translational springs and the other node's position, so
-it is only rigid-body consistent (passes the equilibrium-residual check
-used throughout this codebase) when the nodes coincide. This is not a
-general two-point rigid link for spatially separated nodes; a spring/link
-always was, and remains, a single-point bearing/isolator/soil-spring
-model. JSON `springs` array.
+isolators and soil springs. JSON `springs` array.
+
+**5.4 revision (2026-11-18, user decision) — ElasticLink generalized to non-coincident nodes,
+COMPLETE (verified this session):** the original coincident-node-only restriction (found by CI,
+see `docs/MIDAS_JSON_DATA_AUDIT.md` 4.5 for why it blocked MIDAS `ELNK` import) is lifted.
+`checkSpringNodesCoincident()` is removed; `SpringLink.hpp`'s header comment now documents the
+deliberate consequence: the decoupled per-DOF stiffness still has no lever-arm coupling between a
+node's translational springs and the other node's position, so a *separated*-node link is only
+rigid-body consistent for small/no separation, matching (not exceeding) the fidelity MIDAS NX's
+own "General" type Elastic Link is believed to offer for non-coincident nodes (undocumented in
+any source available to this project; the user explicitly chose this option over adding a rigid-
+offset/lever-arm coupling that would risk diverging from MIDAS's own numbers). A model needing
+exact rigid-body consistency across a real separation should use `RigidLink` instead, not
+`ElasticLink`. New test: `SpringIo.AcceptsNonCoincidentNodes` (replaces the old
+`RejectsNonCoincidentNodes`, which tested behavior no longer true).
+
+**5.4b new: single-node elastic support ("Joint Spring" / MIDAS NX `NSPR` Nodal Spring) —
+COMPLETE (verified this session):** `JointSpring.hpp`, a new, deliberately separate element
+(`JointSpringConnection`, `Model::joint_springs`, independent id space from both beams' and
+`springs`') for a six-independent-DOF elastic support directly to ground at one node -- distinct
+from `ElasticLink`/`springs` (two-node, flexible connection between two model nodes) and from
+`RigidLink` (kinematic master-slave constraint). Global assembly adds its local 6x6 stiffness
+directly to the node's own DOF block (`MatrixAssembler::assemble`). `LinearStaticSolver`'s
+`recoverAssembled` reports each joint spring's own force/energy in a new
+`AnalysisResults::joint_springs` and folds its force into the model-level force/moment
+equilibrium check for any DOF component not separately restrained at that node (its negative is
+the true external ground reaction -- see `AnalysisResults.hpp`'s comment for the sign derivation,
+found and fixed via `JointSpring.TiltedLoadedSpringSatisfiesEquilibrium` initially failing with
+force_equilibrium_error=1.0 before the sign was corrected). JSON `joint_springs` array (new
+`$defs/joint_spring` in `schemas/model.schema.json`). Not yet wired: MIDAS NX `NSPR` import --
+every one of this project's 17 MIDAS sample exports has 0 `NSPR` records, so there is no real
+sample data to verify an import mapping against; deferred until one is available (see "Next
+autonomous action" below).
+
+Historical note (now superseded by the 5.4 revision above): node1/node2 were required to be at
+the same location -- the decoupled per-DOF stiffness has no lever-arm coupling between a node's
+translational springs and the other node's position, so it was only rigid-body consistent (passed
+the equilibrium-residual check used throughout this codebase) when the nodes coincided.
 
 **5.5 general rigid links / multi-point constraints — COMPLETE (verified,
 CI run `39104401638`, commit `18b6a70`):** `RigidLink.hpp` -- a slave

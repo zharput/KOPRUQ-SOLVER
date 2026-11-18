@@ -1721,6 +1721,52 @@ Resolving this (Windows long-path registry setting, moving/relocating the shared
 or `subst`) requires an IT-authority decision the user asked to defer -- VTK stays out of scope
 until that decision is made.
 
+## Phase 5.4 revision + 5.4b — ElasticLink generalized, Joint Spring added (2026-11-18)
+User-requested, with an explicit formulation decision taken first (see Approval Request below --
+approved): (1) generalize the existing two-node `SpringLink` ("ElasticLink") to non-coincident
+nodes, matching MIDAS NX's own `ELNK` General-link behavior (no lever-arm coupling added, by the
+user's explicit choice over the alternative of adding rigid-offset coupling); (2) add a new,
+conceptually separate single-node elastic support ("Joint Spring", MIDAS NX `NSPR` Nodal Spring).
+`RigidLink` (already two-joint, kinematic) needed no change.
+
+- `include/kopruq/elements/SpringLink.hpp`: `checkSpringNodesCoincident()` removed, all 3 call
+  sites updated (`MatrixAssembler.hpp`, `Validate.hpp`, `ModelJson.hpp`); header comment rewritten
+  to document the new scope and the deliberately-kept lever-arm-coupling limitation.
+- `include/kopruq/elements/JointSpring.hpp` (new): `JointSpringConnection`
+  (id, node, local_x, reference_y, stiffness -- same per-DOF-diagonal convention as `SpringLink`),
+  `jointSpringGlobalStiffness()`.
+- `Model::joint_springs` (new field, own id space); `MatrixAssembler::assemble` adds each joint
+  spring's 6x6 global stiffness directly to its node's own DOF block; `Validate.hpp` validates it
+  the same way springs are validated (id/node/stiffness/orientation).
+- `LinearStaticSolver.hpp`'s `recoverAssembled`: new `AnalysisResults::joint_springs` (per-spring
+  force/energy); its force is folded into the model-level force/moment equilibrium check for any
+  DOF component not separately restrained at that node, with the **negative** sign (the ground's
+  reaction through the spring, Newton's third law) -- found via
+  `JointSpring.TiltedLoadedSpringSatisfiesEquilibrium` initially failing with
+  `force_equilibrium_error == 1.0` (fully unbalanced) when the sign was wrong; fixed and
+  re-verified at `< 1e-9`.
+- Native JSON I/O: `joint_springs` array (reader + writer, `ModelJson.hpp`), new
+  `schemas/model.schema.json` `$defs/joint_spring` entry (`ModelJson.SchemaFileMatchesReaderKeys`
+  updated to check it, not weakened).
+- Tests: `spring_io_tests.cpp`'s `RejectsNonCoincidentNodes` replaced with
+  `AcceptsNonCoincidentNodes` (hand-derived closed form, since the old assertion tested behavior
+  the user explicitly asked to change -- not a hidden failure). New files
+  `tests/unit/joint_spring_tests.cpp` (3 tests: axis-aligned stiffness vs. dense formula, simple
+  axial closed form, tilted/general-load equilibrium) and `tests/unit/joint_spring_io_tests.cpp`
+  (8 tests: parse/solve parity, defaults, rejections, independent id space from `springs`).
+- **Not done this session**: MIDAS NX `ELNK`/`NSPR` import wiring. Model `07 Basit Kiris Uniform
+  yayli`'s real `ELNK` record (node 10 at Z=-0.5 to node 1 at Z=0.0, 0.5 m apart, `SDR` stiffness,
+  `ANGLE`/`DR` fields of genuinely unconfirmed meaning -- no MIDAS documentation available to this
+  project) would be the natural verification target for `ELNK` import, but `ANGLE`/`DR`'s exact
+  meaning needs to be resolved empirically (try an interpretation, solve, compare against the
+  model's own real `Beam Force.xlsx`/`Displacements(Global).xlsx` MIDAS reference) before trusting
+  an import mapping -- not attempted yet, to avoid fabricating an unverified interpretation. `NSPR`
+  import has no real sample at all (0 records in all 17 MIDAS sample exports), so it cannot be
+  verified yet either.
+- Verified: Debug CTest **250/255 PASS** (gui-release: **280/285 PASS**), same 5
+  pre-existing/permanent `xmidas/deneme1.json`-removal failures as every prior baseline in this
+  document, no regressions; 11 new tests all passing.
+
 ## Next autonomous action
 Phase 3.2, Phase 4, Phase 5 (5.1-5.6), Phase 6 (6.1, 6.1b, 6.2, 6.2b; 6.3 cancelled), Phase 7A,
 7B (including ETMP thermal wiring), 7C, 7D, 7M, 7S(1) and 7T are all complete and verified -- CI

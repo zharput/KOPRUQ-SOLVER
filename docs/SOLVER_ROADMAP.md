@@ -825,6 +825,29 @@ Verified (NSPR + FRLS + SPLC changes together): Debug CTest **256/261 PASS**, gu
 prior baseline, no regressions; 16 new tests (11 solver-core from the same-day 5.4/5.4b work,
 5 MIDAS-NSPR-import) all passing.
 
+### Phase 7S addendum — MIDAS T-section added; new unresolved discrepancy found on models 17/18
+**`tSection()` COMPLETE** (`MidasSectionLibrary.hpp`): resolves `SHAPE:"T"` (composite flange+web
+parallel-axis decomposition, classical open-section torsion approximation, web/flange-only shear
+areas), unblocking both models 17 and 18's "BASLIK" pier-cap section. New hand-computed test
+`MidasSectionLibrary.TSectionMatchesHandComputation_Baslik`.
+
+**New, unresolved finding (NOT a T-section bug):** verifying model 18 against its real MIDAS
+export (standalone, uncommitted diagnostic) gives Reaction **96/96 PASS** (exact), but Beam Force
+only **1806/1872 PASS** and Displacements only **919/948 PASS**. The dominant failure mode is a
+**consistent exact sign flip** in Moment-z across elements 62-71 (section 4, shape `SR`, not `T`
+-- ruling out the new T-section formula as the cause), plus smaller magnitude-only differences
+(~10% constant Axial offset on elements 17-24, ~1-3% Moment-y/Shear-z on 57-61/72-75) and matching
+displacement errors at nearby nodes. None of the affected elements carry an `FRLS` release either.
+Candidate unexplored cause: the `ELEM` records' `STYPE` field (currently read nowhere), which
+might flag these as a different member behavior MIDAS treats specially within an otherwise
+BEAM-typed arch. **Not investigated further this session** -- left as an open, disclosed item,
+not silently accepted or tolerance-widened away. Model 17 now also solves without error (the
+T-section was its only blocker) but has not yet been numerically compared against its own real
+reference data at all.
+
+Verified: Debug CTest **257/262 PASS**, gui-release **287/292 PASS**, same 5 permanent failures,
+no regressions.
+
 ### Phase 7F — Final standalone release
 Not started; depends on 7A-7I.
 

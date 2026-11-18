@@ -1826,6 +1826,37 @@ is the user's decision.
 Verified: Debug CTest **256/261 PASS**, gui-release **286/291 PASS**, same 5 permanent failures,
 no regressions; 16 new tests all passing.
 
+## T-section added; models 17/18 solve but show a new, unresolved discrepancy (2026-11-18)
+`MidasSectionLibrary.hpp` gained `tSection()` for MIDAS `SHAPE:"T"` (composite flange+web
+parallel-axis decomposition for area/IH, no-offset IB, classical open-section J approximation,
+web-only/flange-only shear areas) -- unblocks models 17 and 18's "BASLIK" pier-cap section. New
+hand-computed test `MidasSectionLibrary.TSectionMatchesHandComputation_Baslik`.
+
+Both models now solve without error. Verified against model 18's real MIDAS export via a
+standalone (uncommitted) diagnostic:
+- **Reaction: 96/96 PASS** (exact match -- the overall section/stiffness is sound enough for
+  global equilibrium).
+- **Beam Force: 1806/1872 PASS, 66 FAIL.** Most failures are a **consistent exact sign flip** in
+  Moment-z for one specific member group (elements 62-71, section 4/SR, an arch or pier leg) --
+  not a magnitude error, a sign convention mismatch, and NOT related to the T-section (these
+  elements use SR, not T). A smaller set of elements (17-24) show a constant ~10% Axial force
+  offset, and a few more (57-61, 72-75) show smaller (~1-3%) Moment-y/Shear-z differences.
+- **Displacements: 919/948 PASS, 29 FAIL**, concentrated at nodes adjacent to the same member
+  group (DZ off by up to ~5%, RY by a few %).
+
+**This is a genuine, unresolved finding, not accepted or worked around.** It was not present as a
+blocker before (the T-section gap masked the whole model from solving at all) and is unrelated to
+FRLS releases (none of the failing elements carry a release) or the T-section formula itself
+(the failing elements use SR). Candidate causes not yet investigated: an `STYPE` field on these
+`ELEM` records (currently ignored, might indicate a special member type MIDAS treats differently,
+e.g. a cable/truss-like element within an otherwise-BEAM-typed arch); a local-axis orientation
+effect specific to this member group's geometry. Left for the user's decision on priority --
+**model 17 (also now solving thanks to the T-section fix) has not yet been numerically verified
+at all** (only confirmed to solve without error); its own comparison is pending.
+
+Verified: Debug CTest **257/262 PASS**, gui-release **287/292 PASS**, same 5 permanent failures,
+no regressions.
+
 ## Next autonomous action
 Phase 3.2, Phase 4, Phase 5 (5.1-5.6), Phase 6 (6.1, 6.1b, 6.2, 6.2b; 6.3 cancelled), Phase 7A,
 7B (including ETMP thermal wiring), 7C, 7D, 7M, 7S(1) and 7T are all complete and verified -- CI

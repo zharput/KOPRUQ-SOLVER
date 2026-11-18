@@ -62,6 +62,9 @@ void colorizeRow(QTableWidget* table, int row, ComparisonStatus status) {
 
 // Shared by Displacements and Reactions: identical 10-column layout (loadCase, id, component,
 // reference, solver, signed/abs/rel diff, unit, status) -- see ResultsComparisonPanel.cpp.
+// Cells that have no number (N/A/Unsupported rows: no finite solver value, so no diff to show)
+// render as "—" rather than an empty string (2026-11-18, user-requested: no comparison cell
+// should ever render visually blank).
 void populateNodeBasedTable(QTableWidget* table, const std::vector<ComparisonRow>& rows) {
   table->setRowCount(static_cast<int>(rows.size()));
   for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
@@ -72,10 +75,10 @@ void populateNodeBasedTable(QTableWidget* table, const std::vector<ComparisonRow
     table->setItem(i, c++, new QTableWidgetItem(QString::fromStdString(r.id)));
     table->setItem(i, c++, new QTableWidgetItem(QString::fromStdString(r.component)));
     table->setItem(i, c++, new QTableWidgetItem(fmt(r.result.referenceValue)));
-    table->setItem(i, c++, new QTableWidgetItem(hasNumbers ? fmt(r.result.solverValue) : QString()));
-    table->setItem(i, c++, new QTableWidgetItem(hasNumbers ? fmt(r.result.signedDiff) : QString()));
-    table->setItem(i, c++, new QTableWidgetItem(hasNumbers ? fmt(r.result.absDiff) : QString()));
-    table->setItem(i, c++, new QTableWidgetItem(hasNumbers ? QString::number(r.result.relDiff * 100.0, 'f', 3) + "%" : QString()));
+    table->setItem(i, c++, new QTableWidgetItem(hasNumbers ? fmt(r.result.solverValue) : QStringLiteral("—")));
+    table->setItem(i, c++, new QTableWidgetItem(hasNumbers ? fmt(r.result.signedDiff) : QStringLiteral("—")));
+    table->setItem(i, c++, new QTableWidgetItem(hasNumbers ? fmt(r.result.absDiff) : QStringLiteral("—")));
+    table->setItem(i, c++, new QTableWidgetItem(hasNumbers ? QString::number(r.result.relDiff * 100.0, 'f', 3) + "%" : QStringLiteral("—")));
     table->setItem(i, c++, new QTableWidgetItem(QString::fromStdString(r.unit)));
     table->setItem(i, c++, new QTableWidgetItem(statusText(r.result.status)));
     for (int col = 0; col < table->columnCount(); ++col)
@@ -97,9 +100,9 @@ void populateBeamOrLinkTable(QTableWidget* table, const std::vector<ComparisonRo
     table->setItem(i, c++, new QTableWidgetItem(QString::fromStdString(r.id)));
     table->setItem(i, c++, new QTableWidgetItem(QString::fromStdString(r.location)));
     table->setItem(i, c++, new QTableWidgetItem(QString::fromStdString(r.component)));
-    table->setItem(i, c++, new QTableWidgetItem(hasNumbers ? fmt(r.result.referenceValue) : QString()));
-    table->setItem(i, c++, new QTableWidgetItem(hasNumbers ? fmt(r.result.solverValue) : QString()));
-    table->setItem(i, c++, new QTableWidgetItem(hasNumbers ? fmt(r.result.signedDiff) : QString()));
+    table->setItem(i, c++, new QTableWidgetItem(hasNumbers ? fmt(r.result.referenceValue) : QStringLiteral("—")));
+    table->setItem(i, c++, new QTableWidgetItem(hasNumbers ? fmt(r.result.solverValue) : QStringLiteral("—")));
+    table->setItem(i, c++, new QTableWidgetItem(hasNumbers ? fmt(r.result.signedDiff) : QStringLiteral("—")));
     table->setItem(i, c++, new QTableWidgetItem(QString::fromStdString(r.unit)));
     table->setItem(i, c++, new QTableWidgetItem(statusText(r.result.status)));
     for (int col = 0; col < table->columnCount(); ++col)
@@ -119,10 +122,10 @@ void populateEigenvalueTable(QTableWidget* table, const std::vector<ComparisonRo
     table->setItem(i, c++, new QTableWidgetItem(QString::fromStdString(r.id)));
     table->setItem(i, c++, new QTableWidgetItem(QString::fromStdString(r.component)));
     table->setItem(i, c++, new QTableWidgetItem(fmt(r.result.referenceValue)));
-    table->setItem(i, c++, new QTableWidgetItem(hasNumbers ? fmt(r.result.solverValue) : QString()));
-    table->setItem(i, c++, new QTableWidgetItem(hasNumbers ? fmt(r.result.signedDiff) : QString()));
-    table->setItem(i, c++, new QTableWidgetItem(hasNumbers ? fmt(r.result.absDiff) : QString()));
-    table->setItem(i, c++, new QTableWidgetItem(hasNumbers ? QString::number(r.result.relDiff * 100.0, 'f', 3) + "%" : QString()));
+    table->setItem(i, c++, new QTableWidgetItem(hasNumbers ? fmt(r.result.solverValue) : QStringLiteral("—")));
+    table->setItem(i, c++, new QTableWidgetItem(hasNumbers ? fmt(r.result.signedDiff) : QStringLiteral("—")));
+    table->setItem(i, c++, new QTableWidgetItem(hasNumbers ? fmt(r.result.absDiff) : QStringLiteral("—")));
+    table->setItem(i, c++, new QTableWidgetItem(hasNumbers ? QString::number(r.result.relDiff * 100.0, 'f', 3) + "%" : QStringLiteral("—")));
     table->setItem(i, c++, new QTableWidgetItem(QString::fromStdString(r.unit)));
     table->setItem(i, c++, new QTableWidgetItem(statusText(r.result.status)));
     for (int col = 0; col < table->columnCount(); ++col)

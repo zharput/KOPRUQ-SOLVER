@@ -56,11 +56,26 @@ TEST(MidasSectionLibrary, HollowBoxMatchesHandComputation_Pier2) {
   rel(p.J, 7.59375, "Bredt torsion constant", 1e-6);
 }
 
+TEST(MidasSectionLibrary, TSectionMatchesHandComputation_Baslik) {
+  // SECT 3 "BASLIK" (verification/models/17 and /18, a pier cap): vSIZE=[2.0,2.0,1.0,1.0] --
+  // H=2, B=2, tw=1, tf=1. Hand-computed via composite-section parallel-axis theorem (flange +
+  // web, centroid measured down from the top fiber).
+  auto p = tSection(2.0, 2.0, 1.0, 1.0);
+  rel(p.area, 3.0, "area = 2*1 + 1*1");
+  rel(p.IH, 0.9166666666666666, "IH (composite, parallel axis)", 1e-9);
+  rel(p.IB, 0.75, "IB = 1*8/12 + 1*1/12", 1e-9);
+  rel(p.J, 1.0, "J = (2*1 + 1*1)/3", 1e-9);
+  rel(p.AsH, 1.0, "AsH = web area = 1*1");
+  rel(p.AsB, 5.0/6.0*2.0, "AsB = (5/6)*flange area");
+}
+
 TEST(MidasSectionLibrary, RejectsUnsupportedShapeAndInvalidDimensions) {
   EXPECT_THROW(resolveDbUserSection("H", {1.0, 1.0}), std::invalid_argument);
   EXPECT_THROW(solidRectangle(-1.0, 2.0), std::invalid_argument);
   EXPECT_THROW(solidCircle(0.0), std::invalid_argument);
   EXPECT_THROW(hollowBox(1.0, 1.0, 0.6, 0.1), std::invalid_argument); // 2*tw=1.2 >= B=1.0, no interior
+  EXPECT_THROW(tSection(1.0, 1.0, 0.1, 1.0), std::invalid_argument); // tf >= H, no web height left
+  EXPECT_THROW(tSection(2.0, 1.0, 1.5, 0.5), std::invalid_argument); // tw > B, impossible web
 }
 
 TEST(MidasSectionLibrary, DispatchMatchesDirectCalls) {

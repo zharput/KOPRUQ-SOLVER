@@ -114,6 +114,43 @@ inline ResolvedSectionProperties hollowBox(Real H, Real B, Real tw, Real tf) {
   return p;
 }
 
+// T-section (flange on top, web below): outer height H, flange width B, web thickness tw,
+// flange thickness tf -- same vSIZE order [H,B,tw,tf] as "B" (hollow box), confirmed by the only
+// real sample seen (verification/models/17 and /18, SECT_NAME "BASLIK" = pier cap, vSIZE=
+// [2.0,2.0,1.0,1.0]). Area/IH/IB via the standard composite-section (flange + web rectangles)
+// parallel-axis-theorem decomposition -- classical mechanics of materials, not MIDAS-specific.
+// IH uses the overall centroid (flange and web have different individual centroids, so each
+// rectangle's own I plus its own A*d^2 offset is summed, per the standard formula); IB needs no
+// offset since a standard T is symmetric about its vertical axis, so both pieces already share
+// its centroidal line. J (open thin-walled section, flange + web as two rectangular strips) uses
+// the classical J = (1/3)*sum(b_i*t_i^3) approximation (e.g. Roark's Formulas for Stress and
+// Strain) -- an open-section approximation, not exact, same sourcing standard and same caveat as
+// the hollow box's Bredt formula above. Shear areas use the standard I/T-beam engineering
+// approximation that vertical (H-direction) shear is carried by the web alone (AsH = web area)
+// and lateral (B-direction) shear by the flange alone, with the flange's own rectangular shear
+// correction factor (5/6) applied to it -- same "coarser web/flange-area approximation" caveat as
+// the hollow box's shear areas; not yet empirically cross-checked against MIDAS (USE_SHEAR_DEFORM
+// is true for the only real sample seen, so this does affect that model's results).
+inline ResolvedSectionProperties tSection(Real H, Real B, Real tw, Real tf) {
+  if (!(H > 0) || !(B > 0) || !(tw > 0) || !(tf > 0)) throw std::invalid_argument("T section requires positive H, B, tw and tf");
+  const Real hw = H - tf;
+  if (!(hw > 0)) throw std::invalid_argument("T section flange thickness tf must be less than H");
+  if (!(tw <= B)) throw std::invalid_argument("T section web thickness tw must not exceed flange width B");
+  ResolvedSectionProperties p;
+  const Real Af = B * tf, Aw = tw * hw;
+  p.area = Af + Aw;
+  const Real yf = tf / 2, yw = tf + hw / 2; // centroid of each piece, measured down from the top fiber
+  const Real ybar = (Af * yf + Aw * yw) / p.area; // overall centroid, down from the top fiber
+  const Real IfOwn = B * tf * tf * tf / 12, IwOwn = tw * hw * hw * hw / 12;
+  const Real df = ybar - yf, dw = ybar - yw;
+  p.IH = IfOwn + Af * df * df + IwOwn + Aw * dw * dw;
+  p.IB = tf * B * B * B / 12 + hw * tw * tw * tw / 12; // symmetric about the vertical axis, no offset needed
+  p.J = (B * tf * tf * tf + hw * tw * tw * tw) / 3;
+  p.AsH = Aw;
+  p.AsB = detail::kRectangularShearFactor * Af;
+  return p;
+}
+
 // Dispatches on MIDAS's SHAPE code and vSIZE length; rejects anything not implemented.
 inline ResolvedSectionProperties resolveDbUserSection(const std::string& shape, const std::vector<Real>& vSize) {
   if (shape == "SB") {
@@ -128,7 +165,11 @@ inline ResolvedSectionProperties resolveDbUserSection(const std::string& shape, 
     if (vSize.size() < 4) throw std::invalid_argument("B section requires at least 4 vSIZE values (H,B,tw,tf)");
     return hollowBox(vSize[0], vSize[1], vSize[2], vSize[3]);
   }
-  throw std::invalid_argument("unsupported DBUSER section shape '" + shape + "' (only SB, B, SR are implemented)");
+  if (shape == "T") {
+    if (vSize.size() < 4) throw std::invalid_argument("T section requires at least 4 vSIZE values (H,B,tw,tf)");
+    return tSection(vSize[0], vSize[1], vSize[2], vSize[3]);
+  }
+  throw std::invalid_argument("unsupported DBUSER section shape '" + shape + "' (only SB, B, SR, T are implemented)");
 }
 
 } // namespace kopruq::io::midas

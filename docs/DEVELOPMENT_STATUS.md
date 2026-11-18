@@ -1669,6 +1669,58 @@ other regressions at any step) before being reported and approved:
   **239/244 PASS** -- both runs show only the same 5 pre-existing/permanent
   `xmidas/deneme1.json`-removal failures listed above, no regressions.
 
+## GUI V2.2 Stage D — load visualization (2026-11-18, commit `1254ca0`)
+User requested the viewer display loads, local section orientation, and solve results (reactions/
+displacements/forces); asked to use VTK "if needed." VTK was attempted first (see below) but is
+currently blocked by a Windows environment limitation outside the project's control, so Stage D
+proceeds on the existing Qt OpenGL (fixed-function) viewer, explicitly disclosed rather than
+silently dropping the VTK decision -- to be revisited once the environment issue is resolved.
+
+- Adds a "Yük Durumu" (load case) selector to the viewer toolbar and a "Yükler" display toggle
+  (default OFF) to the options panel.
+- Draws arrow glyphs for the selected `kopruq::io::ModelInput` load case's `NodalLoad` (force/
+  moment resultants), `MemberPointLoad`, and `MemberLoad` (distributed, sampled at 5 stations
+  across `[start,end]` with linear `w1`->`w2` interpolation) -- the exact structures the solver
+  consumes, never a separate representation. Local-axis member-load directions are resolved via
+  `kopruq::Beam3D::axes()` on the real member geometry, exactly as the existing local-axis arrows
+  already do. Forces (#FBBF24) and moments (#EC4899, additionally ringed at the base) are colored
+  separately; each arrow's length is scaled only relative to the largest magnitude of its own kind
+  within the selected case, never as an absolute physical length.
+- Self-weight (`LoadCase::self_weight`) is deliberately **not** drawn: its true per-member force
+  depends on section area and material unit weight, which would mean either duplicating the
+  solver's self-weight calculation in the viewer or showing a misleadingly arbitrary arrow length
+  -- left as a documented limitation.
+- `NodalLoad::values(0..5)` index layout (Fx,Fy,Fz,Mx,My,Mz) confirmed directly against
+  `ModelJson.hpp`'s own writer code before use, not assumed.
+- Verified: `gui-release` CTest **269/274 PASS**, same 5 pre-existing failures, no regressions.
+  Interactive mouse testing not performed (standing constraint this session: CLI/code-level
+  verification only, after an earlier screenshot-automation privacy incident).
+- Not yet done (next planned): Stage E (Kesit Yönleri -- section/local-axis orientation display
+  beyond the existing axis arrows), Stage F (Reaksiyon/Deplasman/Kuvvet -- requires wiring actual
+  solve results into the viewer for the first time).
+
+### VTK attempt — blocked (2026-11-18)
+Added `vtk` (minimal `opengl`+`qt` features, default-features off) to `vcpkg.json`'s `gui`
+feature and ran a vcpkg install. Failed partway through building `qtdeclarative` (one of VTK's
+Qt-integration dependencies):
+```
+fatal error C1083: Cannot open compiler generated file: '': Invalid argument
+```
+preceded by vcpkg's own warning that qtdeclarative's buildsystem uses very long paths and may
+fail. Root cause: the local vcpkg install's buildtree path
+(`C:\_ZHarput_Data\Tools\vcpkg\buildtrees\qtdeclarative\...`) combined with Qt's own long
+generated filenames exceeds Windows' classic `MAX_PATH` (260 characters) limit. This is a
+machine/environment limitation (shared vcpkg install location, Windows long-path support), not a
+project code issue. Reverted the `vcpkg.json` change (confirmed it was blocking the normal
+build/run workflow, including the VS Code "Run GUI" task, since every reconfigure re-attempted
+the same failing install) and rebuilt/retested to confirm **269/274 PASS** restored with no
+VTK dependency. Leftover partial buildtree directories
+(`C:\_ZHarput_Data\Tools\vcpkg\buildtrees\{qtdeclarative,vtk,vtk-compile-tools}`) were removed as
+routine disk cleanup; they held no lock and were not referenced by any active build.
+Resolving this (Windows long-path registry setting, moving/relocating the shared vcpkg install,
+or `subst`) requires an IT-authority decision the user asked to defer -- VTK stays out of scope
+until that decision is made.
+
 ## Next autonomous action
 Phase 3.2, Phase 4, Phase 5 (5.1-5.6), Phase 6 (6.1, 6.1b, 6.2, 6.2b; 6.3 cancelled), Phase 7A,
 7B (including ETMP thermal wiring), 7C, 7D, 7M, 7S(1) and 7T are all complete and verified -- CI

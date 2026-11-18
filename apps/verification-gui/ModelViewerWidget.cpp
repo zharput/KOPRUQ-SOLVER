@@ -109,13 +109,18 @@ void ModelViewerWidget::resetView() {
   distance_ = 10.0f;
   yawDeg_ = -45.0f;
   pitchDeg_ = 25.0f;
+  upVector_ = QVector3D(0, 0, 1);
   update();
 }
 
-void ModelViewerWidget::viewIsometric() { yawDeg_ = -45.0f; pitchDeg_ = 30.0f; update(); }
-void ModelViewerWidget::viewTop() { yawDeg_ = 0.0f; pitchDeg_ = 89.9f; update(); }
-void ModelViewerWidget::viewFront() { yawDeg_ = 0.0f; pitchDeg_ = 0.0f; update(); }
-void ModelViewerWidget::viewSide() { yawDeg_ = 90.0f; pitchDeg_ = 0.0f; update(); }
+// View presets, per the approved convention: Üstten (Top) screen-horizontal=+X/vertical=+Y,
+// Önden (Front) screen-horizontal=+X/vertical=+Z, Yandan (Side) screen-horizontal=-Y/vertical=+Z.
+// Derived from the same screen-right/screen-up projection used for panning (R = cross(forward,
+// up), U = cross(R, forward)), not guessed.
+void ModelViewerWidget::viewIsometric() { yawDeg_ = -45.0f; pitchDeg_ = 30.0f; upVector_ = QVector3D(0, 0, 1); update(); }
+void ModelViewerWidget::viewTop() { yawDeg_ = 0.0f; pitchDeg_ = 90.0f; upVector_ = QVector3D(0, 1, 0); update(); }
+void ModelViewerWidget::viewFront() { yawDeg_ = -90.0f; pitchDeg_ = 0.0f; upVector_ = QVector3D(0, 0, 1); update(); }
+void ModelViewerWidget::viewSide() { yawDeg_ = 0.0f; pitchDeg_ = 0.0f; upVector_ = QVector3D(0, 0, 1); update(); }
 void ModelViewerWidget::zoomIn() { distance_ = std::max(distance_ * 0.8f, kMinDistance); update(); }
 void ModelViewerWidget::zoomOut() { distance_ = distance_ * 1.25f; update(); }
 
@@ -160,7 +165,7 @@ void ModelViewerWidget::applyCameraMatrix() {
   const QVector3D eye = target_ + distance_ * QVector3D(-std::cos(pitch) * std::cos(yaw), std::cos(pitch) * std::sin(yaw), std::sin(pitch));
 
   QMatrix4x4 view;
-  view.lookAt(eye, target_, QVector3D(0, 0, 1)); // Z is the consistent vertical axis for every view
+  view.lookAt(eye, target_, upVector_);
 
   lastMvp_ = proj * view;
   glMatrixMode(GL_PROJECTION);
@@ -319,7 +324,7 @@ void ModelViewerWidget::drawAxisGizmo() {
   const float pitch = qDegreesToRadians(pitchDeg_);
   const QVector3D dir(-std::cos(pitch) * std::cos(yaw), std::cos(pitch) * std::sin(yaw), std::sin(pitch));
   QMatrix4x4 view;
-  view.lookAt(dir * 4.0f, QVector3D(0, 0, 0), QVector3D(0, 0, 1));
+  view.lookAt(dir * 4.0f, QVector3D(0, 0, 0), upVector_);
   QMatrix4x4 mvp = proj * view;
   glMatrixMode(GL_PROJECTION);
   glLoadIdentity();
@@ -447,6 +452,9 @@ void ModelViewerWidget::mousePressEvent(QMouseEvent* event) {
   lastMousePos_ = pressPos_ = event->pos();
   rotating_ = (event->button() == Qt::LeftButton);
   panning_ = (event->button() == Qt::MiddleButton);
+  // Leaving the Top preset's special up=(0,1,0) requires reverting to the standard Z-up vector
+  // before any further orbiting, since (0,1,0) is only valid for that one exact view.
+  if (rotating_) upVector_ = QVector3D(0, 0, 1);
 }
 
 void ModelViewerWidget::mouseMoveEvent(QMouseEvent* event) {

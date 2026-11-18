@@ -112,8 +112,13 @@ private:
   QMatrix4x4 lastMvp_;
   int viewportW_{1}, viewportH_{1};
 
-  // Camera: orbits a target point at a given distance; yaw/pitch in degrees.
+  // Camera: orbits a target point at a given distance; yaw/pitch in degrees. upVector_ is
+  // (0,0,1) for every orbiting view, except the Top preset: looking straight down the Z axis
+  // makes (0,0,1) parallel to the view direction (an undefined/degenerate "up" for lookAt), so
+  // Top uses (0,1,0) instead (screen-vertical = +Y, per the approved view convention). Any
+  // manual rotation drag resets it back to (0,0,1).
   QVector3D target_{0, 0, 0};
+  QVector3D upVector_{0, 0, 1};
   float distance_{10.0f};
   float yawDeg_{-45.0f};
   float pitchDeg_{25.0f};

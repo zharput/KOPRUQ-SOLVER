@@ -157,7 +157,7 @@ void ModelViewerWidget::applyCameraMatrix() {
   const float pitch = qDegreesToRadians(pitchDeg_);
   // KOPRUQ-SOLVER's global axes are UX/UY/UZ with Z vertical (CLAUDE.md) -- yaw sweeps the
   // horizontal XY plane, pitch lifts the eye along Z, and Z is the up vector for every view.
-  const QVector3D eye = target_ + distance_ * QVector3D(-std::cos(pitch) * std::sin(yaw), std::cos(pitch) * std::cos(yaw), std::sin(pitch));
+  const QVector3D eye = target_ + distance_ * QVector3D(-std::cos(pitch) * std::cos(yaw), std::cos(pitch) * std::sin(yaw), std::sin(pitch));
 
   QMatrix4x4 view;
   view.lookAt(eye, target_, QVector3D(0, 0, 1)); // Z is the consistent vertical axis for every view
@@ -317,7 +317,7 @@ void ModelViewerWidget::drawAxisGizmo() {
   proj.ortho(-1.6f, 1.6f, -1.6f, 1.6f, -10.0f, 10.0f);
   const float yaw = qDegreesToRadians(yawDeg_);
   const float pitch = qDegreesToRadians(pitchDeg_);
-  const QVector3D dir(-std::cos(pitch) * std::sin(yaw), std::cos(pitch) * std::cos(yaw), std::sin(pitch));
+  const QVector3D dir(-std::cos(pitch) * std::cos(yaw), std::cos(pitch) * std::sin(yaw), std::sin(pitch));
   QMatrix4x4 view;
   view.lookAt(dir * 4.0f, QVector3D(0, 0, 0), QVector3D(0, 0, 1));
   QMatrix4x4 mvp = proj * view;
@@ -458,7 +458,7 @@ void ModelViewerWidget::mouseMoveEvent(QMouseEvent* event) {
     update();
   } else if (panning_) {
     const float yaw = qDegreesToRadians(yawDeg_);
-    const QVector3D right(-std::cos(yaw), -std::sin(yaw), 0.0f);
+    const QVector3D right(-std::sin(yaw), -std::cos(yaw), 0.0f);
     const QVector3D up(0.0f, 0.0f, 1.0f); // Z vertical
     const float panScale = distance_ * 0.002f;
     target_ -= right * (delta.x() * panScale);

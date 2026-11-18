@@ -3,6 +3,7 @@
 #include "Material.hpp"
 #include "Section.hpp"
 #include "../elements/SpringLink.hpp"
+#include "../elements/JointSpring.hpp"
 #include <Eigen/Dense>
 #include <array>
 #include <map>
@@ -11,11 +12,15 @@
 // offset1/offset2: rigid end offsets (kopruq/elements/Offsets.hpp), global-axis vector from node1/node2 to the
 // member's actual end point; {0,0,0} (default) is a no-op, preserving prior results for every model that omits them.
 namespace kopruq { struct Beam3DConnection { Id id{}, node1{}, node2{}, material{}, section{}; Eigen::Vector3d reference_y{0,1,0}; std::array<bool,12> releases{}; Eigen::Vector3d offset1{0,0,0}, offset2{0,0,0}; };
-// springs: discrete two-node spring/link elements (kopruq/elements/SpringLink.hpp); id space is independent of beams'.
+// springs: discrete two-node ElasticLink elements (kopruq/elements/SpringLink.hpp; MIDAS "ELNK" General
+// link), id space independent of beams'. joint_springs: single-node-to-ground elastic supports
+// (kopruq/elements/JointSpring.hpp; MIDAS "NSPR" Nodal Spring), id space independent of both beams' and
+// springs'. These are two deliberately separate concepts (two-node flexible link vs. one-node elastic
+// support), not variations of one element -- see each header's own comment.
 // rigid_links: master-slave multi-point constraints (kopruq/assembly/RigidLink.hpp); a slave's 6 DOFs are
 // entirely determined by its master's via rigid-body kinematics. Supported by LinearStaticSolver only so far
 // (ModalSolver/ResponseSpectrumSolver explicitly reject a model that has any).
 struct RigidLink { Id id{}, master{}, slave{}; };
-struct Model { std::vector<Node> nodes; std::vector<Material> materials; std::vector<Section> sections; std::vector<Beam3DConnection> beams; std::vector<SpringConnection> springs; std::vector<RigidLink> rigid_links; };
+struct Model { std::vector<Node> nodes; std::vector<Material> materials; std::vector<Section> sections; std::vector<Beam3DConnection> beams; std::vector<SpringConnection> springs; std::vector<JointSpringConnection> joint_springs; std::vector<RigidLink> rigid_links; };
 // Restraint flags per node, UX..RZ; a map naturally forbids more than one entry per node.
 using Restraints = std::map<Id, std::array<bool,6>>; }

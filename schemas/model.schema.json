@@ -51,7 +51,14 @@
       "items": {
         "$ref": "#/$defs/spring"
       },
-      "description": "Discrete two-node spring/link elements (bearings, isolators, soil springs); see SpringLink.hpp."
+      "description": "Discrete two-node ElasticLink elements (bearings, isolators, soil springs, MIDAS NX ELNK General link); see SpringLink.hpp."
+    },
+    "joint_springs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/joint_spring"
+      },
+      "description": "Single-node elastic supports (foundation/soil springs to ground, MIDAS NX NSPR Nodal Spring); see JointSpring.hpp. Distinct from `springs` (two-node) and `rigid_links` (kinematic constraint)."
     },
     "rigid_links": {
       "type": "array",
@@ -325,7 +332,7 @@
     },
     "spring": {
       "type": "object",
-      "description": "Two-node discrete spring/link: six independent linear springs, one per local DOF (UX,UY,UZ,RX,RY,RZ). node1/node2 may coincide (zero-length link); orientation is given directly via local_x/reference_y rather than derived from the nodes.",
+      "description": "Two-node discrete ElasticLink: six independent linear springs, one per local DOF (UX,UY,UZ,RX,RY,RZ), no lever-arm coupling between them (matches MIDAS NX's own ELNK General link, see SpringLink.hpp). node1/node2 may coincide (zero-length link, the common bearing/isolator case) or be apart; orientation is given directly via local_x/reference_y rather than derived from the nodes.",
       "properties": {
         "id": {
           "type": "integer",
@@ -374,6 +381,56 @@
       "required": [
         "id",
         "nodes",
+        "stiffness"
+      ],
+      "additionalProperties": false
+    },
+    "joint_spring": {
+      "type": "object",
+      "description": "Single-node elastic support to ground: six independent linear springs, one per local DOF (UX,UY,UZ,RX,RY,RZ), matching MIDAS NX's NSPR Nodal Spring (see JointSpring.hpp). Orientation is given directly via local_x/reference_y, exactly as for `spring`.",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "node": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "local_x": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3,
+          "default": [1, 0, 0],
+          "description": "Joint spring local x direction, global axes"
+        },
+        "reference_y": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3,
+          "default": [0, 1, 0],
+          "description": "Defines local y: its component normal to local_x"
+        },
+        "stiffness": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0
+          },
+          "minItems": 6,
+          "maxItems": 6,
+          "description": "kx,ky,kz [kN/m], krx,kry,krz [kNm/rad], local axes"
+        }
+      },
+      "required": [
+        "id",
+        "node",
         "stiffness"
       ],
       "additionalProperties": false

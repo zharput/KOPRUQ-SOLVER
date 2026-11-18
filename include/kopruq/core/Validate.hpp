@@ -15,6 +15,7 @@
 #include "../elements/Beam3D.hpp"
 #include "../elements/Releases.hpp"
 #include "../elements/SpringLink.hpp"
+#include "../elements/JointSpring.hpp"
 #include "../loads/Loads.hpp"
 #include <cmath>
 #include <map>
@@ -52,6 +53,7 @@ class ModelValidator {
     sections(m);
     beams(m);
     springs(m);
+    jointSprings(m);
     rigidLinks(m, rs);
     restraints(m, rs);
     for (std::size_t i = 0; i < cases.size(); ++i) loadCase(m, cases[i], "load_cases[" + std::to_string(i) + "]");
@@ -148,8 +150,23 @@ class ModelValidator {
       if (!finite(e.reference_y)) { issue(p + ".reference_y", "must be finite"); valid = false; }
       if (!springStiffnessValid(e.stiffness)) { issue(p + ".stiffness", "must be finite and non-negative"); valid = false; }
       if (!valid) continue;
-      try { checkSpringNodesCoincident(coords_.at(e.node1), coords_.at(e.node2)); }
-      catch (const std::exception& ex) { issue(p, ex.what()); }
+      try { springAxes(e.local_x, e.reference_y); }
+      catch (const std::exception& ex) { issue(p, std::string("invalid orientation: ") + ex.what()); }
+    }
+  }
+  void jointSprings(const Model& m) {
+    std::set<Id> jointSpringIds;
+    for (std::size_t i = 0; i < m.joint_springs.size(); ++i) {
+      const auto& e = m.joint_springs[i];
+      const std::string p = "joint_springs[" + std::to_string(i) + "]";
+      if (e.id == 0) { issue(p + ".id", "must be nonzero"); continue; }
+      if (!jointSpringIds.insert(e.id).second) { issue(p + ".id", "duplicate joint spring id " + std::to_string(e.id)); continue; }
+      bool valid = true;
+      if (!coords_.count(e.node)) { issue(p + ".node", "references unknown node " + std::to_string(e.node)); valid = false; }
+      if (!finite(e.local_x)) { issue(p + ".local_x", "must be finite"); valid = false; }
+      if (!finite(e.reference_y)) { issue(p + ".reference_y", "must be finite"); valid = false; }
+      if (!springStiffnessValid(e.stiffness)) { issue(p + ".stiffness", "must be finite and non-negative"); valid = false; }
+      if (!valid) continue;
       try { springAxes(e.local_x, e.reference_y); }
       catch (const std::exception& ex) { issue(p, std::string("invalid orientation: ") + ex.what()); }
     }

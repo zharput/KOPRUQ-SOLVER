@@ -176,6 +176,31 @@ static AnalysisResults recoverAssembled(const Model&m,const Restraints&rs,const 
   o.element_equilibrium_error=sfs>0?sfb/sfs:0;o.element_moment_equilibrium_error=sms>0?smb/sms:0;
   Eigen::Vector3d af=ap.force,ar=Eigen::Vector3d::Zero(),am=ap.moment,arm=Eigen::Vector3d::Zero();
   for(const auto&n:o.nodes){const Node*x=detail::find_by_id(nodes,n.node_id);Eigen::Vector3d r(x->x,x->y,x->z),f(n.reaction[0],n.reaction[1],n.reaction[2]),mm(n.reaction[3],n.reaction[4],n.reaction[5]);ar+=f;arm+=mm+r.cross(f);}
+  // Joint springs (single node to ground): fl/fg (computed below, same "force exerted by the
+  // node on the element" convention as beams/springs, e.g. LinearStaticSolver.hpp's own comment
+  // on el.local_end_force) is reported in o.joint_springs; its NEGATIVE is the physical external
+  // reaction the ground supplies through the spring (Newton's third law: the ground's force on
+  // the node is -fg). For a dof the node is NOT separately restrained in, that reaction is folded
+  // into the model-level ar/arm exactly like a support reaction, so af+ar=0 remains a genuine
+  // physical equilibrium check rather than the tautological K*U=F_applied residual (which is
+  // identically zero at every free dof by construction, joint spring or not, and so alone proves
+  // nothing). A restrained component already has this contribution baked into that node's
+  // q-based reaction (K includes the joint spring's stiffness), so it is deliberately NOT added
+  // again here.
+  o.joint_springs.reserve(m.joint_springs.size());
+  for(const auto&e:m.joint_springs){
+    const Node*a=detail::find_by_id(nodes,e.node);
+    auto T=jointSpringTransformation(e.local_x,e.reference_y);auto kl=jointSpringLocalStiffness(e.stiffness);auto d=dm.node_dofs(e.node);
+    Eigen::Matrix<Real,6,1>u,ul,fl,fg;for(int i=0;i<6;++i)u(i)=U((Eigen::Index)d[i]);ul=T*u;fl=kl*ul;fg=T.transpose()*fl;
+    Real energy=0.5*ul.dot(fl);
+    ElementResults er;er.element_id=e.id;for(int i=0;i<6;++i){er.local_end_force[i]=fl(i);er.global_end_force[i]=fg(i);}er.strain_energy=energy;o.element_strain_energy+=energy;
+    o.joint_springs.push_back(er);
+    auto it=rs.find(e.node);std::array<bool,6> restrained=it!=rs.end()?it->second:std::array<bool,6>{};
+    Eigen::Vector3d r(a->x,a->y,a->z),f=Eigen::Vector3d::Zero(),mm=Eigen::Vector3d::Zero();
+    for(int i=0;i<3;++i)if(!restrained[i])f(i)=fg(i);
+    for(int i=0;i<3;++i)if(!restrained[i+3])mm(i)=fg(i+3);
+    ar-=f;arm-=(mm+r.cross(f)); // reaction = -fg, see comment above
+  }
   o.force_balance=af+ar;o.moment_balance=am+arm;o.force_balance_norm=o.force_balance.norm();o.moment_balance_norm=o.moment_balance.norm();
   // Force scale: applied plus reaction forces, plus moments (about the model's bounding-box centre) divided by the model
   // size, so a purely moment-loaded case is measured against its moments instead of against round-off forces.

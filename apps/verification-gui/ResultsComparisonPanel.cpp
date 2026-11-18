@@ -38,6 +38,11 @@ QWidget* ResultsComparisonPanel::buildSummaryTab() {
   addTile(tr("Başarılı (PASS)"), totalPass_);
   addTile(tr("Başarısız (FAIL)"), totalFail_);
   addTile(tr("Karşılaştırılamayan (N/A)"), totalNa_);
+  // User-requested (2026-11-18): tile values colored by what they always mean -- PASS green,
+  // FAIL red, N/A orange -- independent of the current counts.
+  totalPass_->setStyleSheet(QStringLiteral("color: #22C55E;"));
+  totalFail_->setStyleSheet(QStringLiteral("color: #EF4444;"));
+  totalNa_->setStyleSheet(QStringLiteral("color: #F59E0B;"));
   layout->addLayout(tiles);
 
   categoryTable_ = buildTable({tr("Kategori"), tr("Toplam"), tr("Başarılı"), tr("Başarısız"), tr("N/A"),

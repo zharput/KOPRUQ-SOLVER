@@ -49,13 +49,19 @@ QString statusText(ComparisonStatus s) { return QString::fromUtf8(kopruq::verifi
 
 QString fmt(double v) { return QString::number(v, 'g', 10); }
 
-// User-requested (2026-11-18): PASS rows green, FAIL rows red, in every comparison table and the
-// category summary table. N/A/Unsupported rows keep the default text color (neither pass nor
-// fail, so neither color applies) -- set explicitly on every cell rather than relying on any
-// inherited/stylesheet color, so every compared value stays visible regardless of row state.
+// User-requested (2026-11-18): PASS rows green, FAIL rows red, N/A/Unsupported rows orange, in
+// every comparison table and the category summary table -- set explicitly on every cell rather
+// than relying on any inherited/stylesheet color, so every compared value stays visible
+// regardless of row state.
 void colorizeRow(QTableWidget* table, int row, ComparisonStatus status) {
-  if (status != ComparisonStatus::Pass && status != ComparisonStatus::Fail) return;
-  const QColor color = status == ComparisonStatus::Pass ? QColor(0x22, 0xC5, 0x5E) : QColor(0xEF, 0x44, 0x44);
+  QColor color;
+  switch (status) {
+    case ComparisonStatus::Pass: color = QColor(0x22, 0xC5, 0x5E); break;
+    case ComparisonStatus::Fail: color = QColor(0xEF, 0x44, 0x44); break;
+    case ComparisonStatus::NotApplicable:
+    case ComparisonStatus::Unsupported: color = QColor(0xF5, 0x9E, 0x0B); break;
+    default: return;
+  }
   for (int col = 0; col < table->columnCount(); ++col)
     if (auto* item = table->item(row, col)) item->setForeground(color);
 }
@@ -65,7 +71,12 @@ void colorizeRow(QTableWidget* table, int row, ComparisonStatus status) {
 // Cells that have no number (N/A/Unsupported rows: no finite solver value, so no diff to show)
 // render as "—" rather than an empty string (2026-11-18, user-requested: no comparison cell
 // should ever render visually blank).
+// Sorting must stay off while rows are being filled: QTableWidget re-sorts after every setItem
+// call once sorting is enabled, so a row can move mid-fill and scatter its own cells across other
+// rows (2026-11-18, user-reported: tables showed only one fully-populated row, everything else
+// blank except the sorted column).
 void populateNodeBasedTable(QTableWidget* table, const std::vector<ComparisonRow>& rows) {
+  table->setSortingEnabled(false);
   table->setRowCount(static_cast<int>(rows.size()));
   for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
     const auto& r = rows[static_cast<std::size_t>(i)];
@@ -85,12 +96,14 @@ void populateNodeBasedTable(QTableWidget* table, const std::vector<ComparisonRow
       if (auto* item = table->item(i, col)) item->setFlags(item->flags() & ~Qt::ItemIsEditable);
     colorizeRow(table, i, r.result.status);
   }
+  table->setSortingEnabled(true);
 }
 
 // Beam forces and elastic links share a 9-column layout (loadCase, id, location/end, component,
 // reference, solver, a single signed diff, unit, status) -- elastic links always have
 // status == Unsupported, so their numeric cells stay blank rather than showing a misleading 0.
 void populateBeamOrLinkTable(QTableWidget* table, const std::vector<ComparisonRow>& rows) {
+  table->setSortingEnabled(false);
   table->setRowCount(static_cast<int>(rows.size()));
   for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
     const auto& r = rows[static_cast<std::size_t>(i)];
@@ -109,11 +122,13 @@ void populateBeamOrLinkTable(QTableWidget* table, const std::vector<ComparisonRo
       if (auto* item = table->item(i, col)) item->setFlags(item->flags() & ~Qt::ItemIsEditable);
     colorizeRow(table, i, r.result.status);
   }
+  table->setSortingEnabled(true);
 }
 
 // Eigenvalue (modal) comparison: same per-row fields as populateNodeBasedTable, minus "Yük
 // Durumu" (modal analysis has no load case) -- `ComparisonRow::id` holds the 1-based mode number.
 void populateEigenvalueTable(QTableWidget* table, const std::vector<ComparisonRow>& rows) {
+  table->setSortingEnabled(false);
   table->setRowCount(static_cast<int>(rows.size()));
   for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
     const auto& r = rows[static_cast<std::size_t>(i)];
@@ -132,6 +147,7 @@ void populateEigenvalueTable(QTableWidget* table, const std::vector<ComparisonRo
       if (auto* item = table->item(i, col)) item->setFlags(item->flags() & ~Qt::ItemIsEditable);
     colorizeRow(table, i, r.result.status);
   }
+  table->setSortingEnabled(true);
 }
 
 } // namespace
@@ -659,6 +675,7 @@ void MainWindow::onCompare() {
   populateEigenvalueTable(resultsPanel_->eigenvalueTable(), eigenvalueRows);
 
   auto* diag = resultsPanel_->diagnosticsTable();
+  diag->setSortingEnabled(false);
   diag->setRowCount(static_cast<int>(allDiagnostics.size()));
   for (int i = 0; i < static_cast<int>(allDiagnostics.size()); ++i) {
     diag->setItem(i, 0, new QTableWidgetItem(tr("Karşılaştırma")));
@@ -668,6 +685,7 @@ void MainWindow::onCompare() {
     for (int col = 0; col < diag->columnCount(); ++col)
       if (auto* item = diag->item(i, col)) item->setFlags(item->flags() & ~Qt::ItemIsEditable);
   }
+  diag->setSortingEnabled(true);
 
   const struct { const char* name; const std::vector<ComparisonRow>* rows; } categories[] = {
       {"Deplasmanlar (Global)", &displacementRows},
@@ -677,13 +695,17 @@ void MainWindow::onCompare() {
       {"Özdeğer (Eigenvalue)", &eigenvalueRows},
   };
   auto* catTable = resultsPanel_->categoryTable();
+  catTable->setSortingEnabled(false);
   constexpr int kCategoryCount = 5;
   catTable->setRowCount(kCategoryCount);
   int totalAll = 0, passAll = 0, failAll = 0, naAll = 0;
   for (int i = 0; i < kCategoryCount; ++i) {
     const auto stats = kopruq::verification::summarizeCategory(*categories[i].rows);
     totalAll += stats.total; passAll += stats.pass; failAll += stats.fail; naAll += stats.na;
-    const QString status = stats.total == 0 ? tr("—") : (stats.fail == 0 ? tr("PASS") : tr("FAIL"));
+    const QString status = stats.total == 0 ? tr("—")
+                            : stats.fail > 0 ? tr("FAIL")
+                            : stats.na == stats.total ? tr("N/A")
+                            : tr("PASS");
     int c = 0;
     catTable->setItem(i, c++, new QTableWidgetItem(QString::fromUtf8(categories[i].name)));
     catTable->setItem(i, c++, new QTableWidgetItem(QString::number(stats.total)));
@@ -697,12 +719,15 @@ void MainWindow::onCompare() {
     for (int col = 0; col < catTable->columnCount(); ++col)
       if (auto* item = catTable->item(i, col)) item->setFlags(item->flags() & ~Qt::ItemIsEditable);
     // Category summary rows: same PASS=green/FAIL=red convention as the per-row tables.
-    if (status == tr("PASS") || status == tr("FAIL")) {
-      const QColor color = status == tr("PASS") ? QColor(0x22, 0xC5, 0x5E) : QColor(0xEF, 0x44, 0x44);
+    if (status == tr("PASS") || status == tr("FAIL") || status == tr("N/A")) {
+      const QColor color = status == tr("PASS")   ? QColor(0x22, 0xC5, 0x5E)
+                            : status == tr("FAIL") ? QColor(0xEF, 0x44, 0x44)
+                                                    : QColor(0xF5, 0x9E, 0x0B);
       for (int col = 0; col < catTable->columnCount(); ++col)
         if (auto* item = catTable->item(i, col)) item->setForeground(color);
     }
   }
+  catTable->setSortingEnabled(true);
   resultsPanel_->setSummaryCounts(totalAll, passAll, failAll, naAll);
 
   // Cache exactly what was just shown, verbatim, for GUI-6's export -- never recomputed there.

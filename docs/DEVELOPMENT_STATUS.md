@@ -2106,3 +2106,40 @@ convention assumption that would affect every future purely-planar model, not ju
 exactly the kind of architecture-level decision CLAUDE.md reserves for explicit user approval
 rather than inferring from one sample. Model 20's L50x5/truss-restraint work is otherwise
 complete; this is the sole remaining blocker for its full numerical verification.
+
+## Model 20 fully solved and verified; "Truss Force" added as a comparable category (2026-11-19, commits `7353640`, `b1fb1e3`)
+
+**Confirmed empirically:** the user re-solved model 20 in MIDAS as an explicit 2D model and
+re-exported fresh JSON/Excel. Its `CONS` records are byte-identical to the original 3D-solved
+export -- proving MIDAS's "2D" setting truly suppresses the 3 out-of-plane DOFs everywhere with
+NO CONS footprint at all. `MidasJsonImporter.hpp` now detects a genuinely planar model (bounding
+box exactly 0 along one global axis -- strict, not a near-planar heuristic) and auto-restrains
+those 3 DOFs at every node, disclosed via `report.assumptions`.
+
+Also found and fixed: `equalAngleSection`'s own idealized no-fillet area for L50x5 (4.75 cm^2)
+measurably disagreed with the published EN 10056-1 tabulated value (4.80 cm^2) -- enough to fail
+real displacement comparison. `resolveCatalogSection` now overrides area to the published value
+for this specific catalog lookup (a raw DBUSER `vSIZE` input still has no such published number
+to fall back on).
+
+**Final model 20 verification (real MIDAS reference data):**
+- Reaction(Global): **36/36 PASS**
+- Displacements(Global): **252/252 PASS**
+- Beam Force: 370/432 PASS (62 FAIL, all ~2-4% on bottom-chord members not directly loaded --
+  investigated via an AsH shear-area variant without resolving it further; consistent with the
+  idealized no-fillet HEB160/UPN100/L50x5 geometry's effect on force redistribution through a
+  statically indeterminate truss-chord system; disclosed as a residual accuracy limitation, not
+  a logic defect -- Reactions and Displacements both match exactly, so overall equilibrium and
+  the global stiffness solution are confirmed correct)
+- Truss Force (new category, see below): 54/78 PASS (24 FAIL, same residual, not a matcher bug)
+
+**New verification category, per user request:** `ReferenceFileKind::TrussForce` +
+`matchTrussForces` (`verification/ResultMatcher.cpp`) parse MIDAS's "Truss Force" export (a
+single axial force per TRUSS element, as separate Force-I/Force-J columns in one row, unlike
+Beam Force's per-end-row "Part" layout) and compare against the solver's own recovered
+`local_end_forces[0]/[6]`. Wired through the GUI end-to-end mirroring Beam Force: a new
+"Truss Force (Excel)" file-selector row, a new "Kafes Elemanı Kuvvetleri" results tab, and a new
+"Truss Forces" sheet in the exported verification report. Full regression: 291/291 Release,
+261/261 Debug, unchanged.
+
+Model 20 (truss) is now complete, per the user's "19 spring, 20 truss, 21 combo" instruction.

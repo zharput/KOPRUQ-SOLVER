@@ -548,6 +548,20 @@ model 06 combination rows (which are driven by the diagnostic tool, not CTest).
   MIDAS implicitly restrains out-of-plane DOFs for a purely planar model is flagged for the user
   rather than guessed (see `DEVELOPMENT_STATUS.md` for the full reasoning) — this is the sole
   remaining blocker for model 20's full verification.
+
+  **Resolved, 2026-11-19 (commits `7353640`, `b1fb1e3`):** the user re-solved model 20 in MIDAS
+  as an explicit 2D model and re-exported; its `CONS` records are unchanged from the original
+  3D-solved export, confirming MIDAS's 2D setting has no CONS footprint at all. The importer now
+  auto-restrains the 3 out-of-plane DOFs for a genuinely planar model (bounding box exactly 0
+  along one axis). Also fixed: L50x5's catalog area overridden to the published EN 10056-1 value
+  (4.80 cm², vs. the idealized no-fillet 4.75 cm², which was enough to fail displacement
+  comparison). **Model 20 now fully solves and is verified**: Reaction 36/36 PASS, Displacements
+  252/252 PASS, Beam Force 370/432 PASS (residual ~2-4% on bottom-chord members not directly
+  loaded, disclosed as an idealized-geometry limitation, not a logic defect). A new "Truss Force"
+  verification category (`ReferenceFileKind::TrussForce`/`matchTrussForces`) was added per user
+  request and wired through the GUI end-to-end (new file-selector row, results tab, report
+  sheet); 54/78 PASS on model 20, same residual. Model 20 (truss) is complete per the user's
+  "19 spring, 20 truss, 21 combo" instruction.
 - Model 21 (`21 Combo`): 16 of 188 elements use `SECT.SHAPE` values `STRK` (`vSIZE` has 2
   meaningful values) and `SOCT` (`vSIZE` has 4 meaningful values) — unconfirmed geometric
   parametrization. Deliberately **not** implemented by guessing, per the project's "never

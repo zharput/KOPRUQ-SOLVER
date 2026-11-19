@@ -54,6 +54,13 @@ TEST(MidasSectionLibrary, HollowBoxMatchesHandComputation_Pier2) {
   rel(p.IH, 3.0, "IH = (5*8 - 4*1)/12");
   rel(p.IB, 15.5, "IB = (2*125 - 1*64)/12");
   rel(p.J, 7.59375, "Bredt torsion constant", 1e-6);
+  // AsH/AsB (2026-11-19): rigorous Zhuravskii/Timoshenko quadrature (detail::timoshenkoShearArea),
+  // replacing the earlier coarser "webs alone"/"flanges alone" approximation. Reference values
+  // are an independent computation (scipy.integrate.quad, a separate implementation/language/
+  // numerical method from this project's C++ midpoint-rule quadrature), not read back from the
+  // production function.
+  rel(p.AsH, 2.188448530780822, "AsH (Zhuravskii quadrature, independent scipy.integrate.quad)", 1e-5);
+  rel(p.AsB, 4.4760067199079066, "AsB (Zhuravskii quadrature, independent scipy.integrate.quad)", 1e-5);
 }
 
 TEST(MidasSectionLibrary, TSectionMatchesHandComputation_Baslik) {
@@ -65,8 +72,28 @@ TEST(MidasSectionLibrary, TSectionMatchesHandComputation_Baslik) {
   rel(p.IH, 0.9166666666666666, "IH (composite, parallel axis)", 1e-9);
   rel(p.IB, 0.75, "IB = 1*8/12 + 1*1/12", 1e-9);
   rel(p.J, 1.0, "J = (2*1 + 1*1)/3", 1e-9);
-  rel(p.AsH, 1.0, "AsH = web area = 1*1");
-  rel(p.AsB, 5.0/6.0*2.0, "AsB = (5/6)*flange area");
+  // AsH/AsB (2026-11-19): now the rigorous Zhuravskii/Timoshenko quadrature
+  // (detail::timoshenkoShearArea), not the coarser "web alone"/"flange alone" approximation
+  // this replaced. Reference values are an INDEPENDENT computation (scipy.integrate.quad, a
+  // completely separate implementation/language/numerical method from this project's C++
+  // midpoint-rule quadrature), not read back from the production function. AsH is additionally
+  // cross-checked by hand: AsH = IH^2 / integral(Q(y)^2/b(y) dy) = (11/12)^2 / (43/120) =
+  // 605/258 (exact fraction, matching the numeric value to 6 significant figures).
+  rel(p.AsH, 605.0/258.0, "AsH (Zhuravskii quadrature, hand-derived exact fraction)", 1e-6);
+  rel(p.AsB, 2.7480998869943494, "AsB (Zhuravskii quadrature, independent scipy.integrate.quad)", 1e-5);
+}
+
+TEST(MidasSectionLibrary, TimoshenkoShearAreaMatchesClosedFormRectangle) {
+  // The generic Zhuravskii/Timoshenko quadrature (detail::timoshenkoShearArea), applied to a
+  // single rectangular strip, must reproduce the EXACT classical closed-form result k=5/6 for a
+  // solid rectangle (Timoshenko & Goodier, already used directly in solidRectangle() above) --
+  // derived independently by hand: As = I^2 / integral(Q(y)^2/b dy), with Q(y)=(B/2)(H^2/4-y^2)
+  // for a rectangle of depth H, width B, centered at y=0; the integral evaluates in closed form
+  // to B*H^5/120, giving As = (B*H^3/12)^2 / (B*H^5/120) = (5/6)*B*H exactly.
+  const double H = 2.0, B = 3.0;
+  const double I = B * H * H * H / 12;
+  const double As = detail::timoshenkoShearArea({{0, H, B}}, I);
+  rel(As, (5.0 / 6.0) * B * H, "As == (5/6)*A for a solid rectangle, exact closed form", 1e-6);
 }
 
 TEST(MidasSectionLibrary, RejectsUnsupportedShapeAndInvalidDimensions) {

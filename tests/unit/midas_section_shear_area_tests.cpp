@@ -31,12 +31,18 @@ TEST(MidasSectionShearArea, SolidCircleUsesPointNineOfArea) {
   rel(p.AsB, 0.9 * area, "AsB = 0.9 * A");
 }
 
-TEST(MidasSectionShearArea, HollowBoxUsesWebAndFlangeAreaApproximation) {
+TEST(MidasSectionShearArea, HollowBoxUsesRigorousZhuravskiiQuadrature) {
   // H=2,B=5,tw=tf=0.5 (same dimensions as the existing HollowBoxMatchesHandComputation_Pier2
-  // test in midas_section_library_tests.cpp).
+  // test in midas_section_library_tests.cpp). 2026-11-19: replaced the earlier coarser "shear
+  // carried by the web/flange alone" approximation (AsH=2*tw*(H-tf), AsB=2*tf*(B-tw)) with the
+  // rigorous Zhuravskii/Timoshenko quadrature (detail::timoshenkoShearArea) -- see that file's
+  // own comment for the derivation. Reference values are an independent computation
+  // (scipy.integrate.quad, a separate implementation/language/method), not read back from the
+  // production function, matching midas_section_library_tests.cpp's own verification of the
+  // same case.
   auto p = hollowBox(2.0, 5.0, 0.5, 0.5);
-  rel(p.AsH, 2 * 0.5 * (2.0 - 0.5), "AsH = 2*tw*(H-tf)");
-  rel(p.AsB, 2 * 0.5 * (5.0 - 0.5), "AsB = 2*tf*(B-tw)");
+  rel(p.AsH, 2.188448530780822, "AsH (Zhuravskii quadrature, independent scipy.integrate.quad)", 1e-5);
+  rel(p.AsB, 4.4760067199079066, "AsB (Zhuravskii quadrature, independent scipy.integrate.quad)", 1e-5);
 }
 
 TEST(MidasSectionShearArea, ShearAreasAreZeroOnlyWhenNotComputed_AlwaysPositiveHere) {

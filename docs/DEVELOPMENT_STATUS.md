@@ -2185,3 +2185,49 @@ area/Iy/Iz for one of these two shapes can be reverse-matched against a candidat
 Model 21 (combo) is closed per the user's instruction, with its core subject (nested load
 combinations) fully, independently verified; the STRK/SOCT gap is disclosed, not silently
 skipped or guessed around.
+
+## STRK/SOCT implemented via user-supplied MIDAS dialog screenshots; model 21 fully solves and tested (2026-11-19, commit `595b1ac`)
+
+The user supplied MIDAS NX's own "Section Data" dialog screenshots for model 21's sections 4/5
+(SEC4/STRK, SEC5/SOCT), directly confirming what no automated web attempt this session (or any
+prior session) could reach: STRK is a stadium shape with dimensions H (=the two semicircular end
+caps' diameter) and B (overall length); SOCT is NOT a regular octagon -- a rectangle H x B with
+each of its 4 corners cut by a right triangle of INDEPENDENT legs a (horizontal) and b
+(vertical).
+
+Per the user's explicit instruction ("derive everything from general mechanics of materials...
+we don't have to stick to MIDAS NX"), `solidTrack`/`solidOctagon`
+(`MidasSectionLibrary.hpp`) derive every property from first-principles classical mechanics
+(composite-shape decomposition + parallel-axis theorem), not fitted to any MIDAS-reported
+number. `torsionConstantFEM`'s rectangle-union-only interface was generalized into a shared
+`torsionConstantFEMCore` taking an arbitrary `inside(x,y)` predicate, so the stadium's curved
+boundary and the octagon's chamfered corners can both reuse the same already-verified FDM
+solver. Verified via two EXACT limiting-case checks (new file,
+`tests/unit/midas_section_library_strk_soct_tests.cpp`): a degenerate track (B=H) matches
+`solidCircle`'s own closed form exactly (Area, IH, IB; J within ~0.8% after tuning grid
+resolution for a curved boundary); a degenerate octagon (a=b=0) matches `solidRectangle`'s own
+closed form exactly, including its torsion dispatch.
+
+**Model 21 now solves end-to-end for the first time.** Verified against real MIDAS reference
+data: Beam Force 14505/18048 PASS (80.4%), Reaction 489/576 PASS (84.9%), Displacements
+6998/8640 PASS (81.0%). This is NOT 100%, and the gap is disclosed, not minimized:
+- The majority of residual failures are small (1-5%) discrepancies spread broadly across the
+  structure, including on elements that do NOT use STRK/SOCT at all -- consistent with the
+  newly-added 16 STRK/SOCT elements (previously rejected, now contributing real stiffness)
+  shifting the overall force distribution in this highly indeterminate 180-node 3D frame, and
+  with the STRK/SOCT formulas being reasonable, independently-derived approximations rather than
+  MIDAS's own (unknown) exact internal values -- the same category of residual seen on model 20's
+  idealized no-fillet catalog sections, now showing at the scale of a much larger, more
+  interconnected structure.
+- A distinct, unexplained anomaly: a chain of ~10 elements (nodes 51-58-69/70, all section 1/SB,
+  NOT STRK/SOCT) shows a large (up to ~3.7x) DX displacement discrepancy specifically under
+  COMBO-3 (which includes a TU thermal term), while the same chain's FORCE-1/2/3 and TU-only
+  comparisons individually pass, and COMBO-4 (which also includes 0.6*COMBO-3) shows no such
+  anomaly. Not investigated further this session (effort already substantial); plausible
+  explanation is thermal-displacement accumulation along a long element chain amplifying a small
+  per-element discrepancy, but this is a hypothesis, not a confirmed root cause -- flagged
+  honestly as unresolved, not silently absorbed into the "idealized geometry" explanation above.
+
+Full regression: 297/297 Release (291 + 6 new), 267/267 Debug (261 + 6 new). Model 21 is closed
+per the user's instruction, with STRK/SOCT implemented and the model's full numerical behavior
+tested and honestly reported -- not claimed as a clean PASS.

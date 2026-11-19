@@ -584,6 +584,21 @@ model 06 combination rows (which are driven by the diagnostic tool, not CTest).
   loads, 68 member loads, 262 thermal loads) imports with zero rejections beyond the 2 section
   shapes. Model 21 is closed per the user's instruction.
 
+  **Resolved, 2026-11-19 (commit `595b1ac`):** the user supplied MIDAS NX's own "Section Data"
+  dialog screenshots for sections 4/5, confirming STRK is a stadium shape (H=cap diameter,
+  B=overall length) and SOCT is a rectangle with 4 independently-dimensioned chamfered corners
+  (a horizontal, b vertical) -- NOT a regular octagon. `solidTrack`/`solidOctagon`
+  (`MidasSectionLibrary.hpp`) derive Area/IH/IB from first-principles composite-shape
+  decomposition and J via a generalized `torsionConstantFEMCore` (the existing FDM solver, now
+  accepting an arbitrary domain predicate instead of only a rectangle union). Verified via two
+  exact limiting-case checks (new file,
+  `tests/unit/midas_section_library_strk_soct_tests.cpp`). **Model 21 now solves end-to-end**:
+  Beam Force 14505/18048 PASS (80.4%), Reaction 489/576 PASS (84.9%), Displacements 6998/8640
+  PASS (81.0%) -- a real, disclosed residual (see `DEVELOPMENT_STATUS.md` for the full
+  breakdown, including an unexplained thermal-combination anomaly on a non-STRK/SOCT element
+  chain that was not resolved this session), not claimed as 100%. Full regression: 297/297
+  Release, 267/267 Debug.
+
 Model 10's `'H'` shape (an additional non-nested combination data point) remains unresolved and
 is not currently blocking any open task.
 

@@ -44,7 +44,14 @@ namespace kopruq::io::midas {
 // to IB). Computed via each shape's classical shear correction factor k (As = k*A), per
 // Timoshenko & Goodier, "Theory of Elasticity" -- NOT MIDAS-specific, same sourcing standard
 // as the J formulas above. See MidasJsonImporter.hpp for how AsH/AsB map onto Beam3D's Asy/Asz.
-struct ResolvedSectionProperties { Real area{}, IH{}, IB{}, J{}, AsH{}, AsB{}; };
+// principalAngleRad: additional rotation (radians) of the member's local y/z axes about its
+// local x-axis, needed ONLY for an unsymmetric shape (e.g. an equal-leg angle) whose principal
+// bending axes are not aligned with the H/B directions -- 0 for every symmetric shape in this
+// file. IH/IB below are already expressed in the ROTATED (principal) frame when this is nonzero,
+// i.e. they are directly usable as Iy/Iz once the importer applies this same rotation to
+// reference_y (same rotation mechanic as MidasOrientation.hpp's own Beta angle) -- see
+// equalAngleSection's header comment for the derivation.
+struct ResolvedSectionProperties { Real area{}, IH{}, IB{}, J{}, AsH{}, AsB{}; Real principalAngleRad{0}; };
 
 namespace detail {
 // Saint-Venant torsion constant, solid rectangle (a = longer side, b = shorter side),
@@ -382,6 +389,57 @@ inline ResolvedSectionProperties channelSection(Real H, Real B, Real tw, Real tf
   return p;
 }
 
+// Equal-leg angle (MIDAS shape "L", e.g. a European equal angle like "L50x5"): overall leg
+// length a, uniform thickness t. UNLIKE every other shape in this file, this section is
+// unsymmetric about any horizontal/vertical axis pair through its centroid -- its principal
+// bending axes are rotated (45 degrees, by the diagonal symmetry of an EQUAL-leg angle) relative
+// to the raw H/B directions. Raw second moments/product of inertia (IH_raw, IB_raw, Ixy_raw) are
+// computed via the classical composite-rectangle decomposition (two legs, corner-overlap
+// avoided: leg1 = a x t along H's zero edge, leg2 = t x (a-t) stacked on it, standard parallel-
+// axis theorem -- e.g. Hibbeler, "Mechanics of Materials", principal moments of inertia; same
+// sourcing standard as every other shape here), then diagonalized by finding the rotation angle
+// phi that drives the rotated product of inertia IY'Z' to zero:
+//   IY'Z'(phi) = (1/2)*sin(2*phi)*(IB_raw - IH_raw) + cos(2*phi)*Ixy_raw = 0
+//   => phi = 0.5 * atan2(-2*Ixy_raw, IB_raw - IH_raw)
+// (derived from Z' = sin(phi)*Y + cos(phi)*Z, Y' = cos(phi)*Y - sin(phi)*Z -- the SAME rotation
+// sense as MidasOrientation.hpp's Beta-angle formula, so the importer can apply this phi to
+// reference_y with that identical formula and get a self-consistent result) -- then IH_new/IB_new
+// are computed directly from that same rotation (not by eigenvalue max/min assignment, which
+// would need a separate, error-prone sign convention to pair correctly with phi's rotation
+// sense). Sanity-checked arithmetically for a=50mm,t=5mm (no fillets, same precision level as
+// this file's other shapes): IH_raw=IB_raw=11.25 cm^4 (vs. tabulated L50x5 ~11.0 cm^4), principal
+// moments 17.91/4.59 cm^4 at phi=45 degrees (vs. tabulated ~17.5/4.45 cm^4) -- NOT independently
+// verified against real MIDAS beam-bending data for an angle member (no such sample available
+// this session; model 20's own L50x5 elements are all TRUSS, whose fully-released stiffness
+// does not depend on Iy/Iz/J/Asy/Asz at all -- see Truss3D.hpp -- so this shape's bending-axis
+// correctness has no real-data check available yet for THIS shape specifically, unlike every
+// other shape in this file). J uses the same thin-strip-sum convention as the other open
+// sections here. AsH/AsB use the same constant Timoshenko rectangular factor as solidRectangle
+// (a coarser approximation than the Zhuravskii quadrature used for the symmetric shapes above --
+// no straightforward per-principal-axis strip decomposition exists for a rotated unsymmetric
+// section -- functionally irrelevant for a TRUSS-released member in any case).
+inline ResolvedSectionProperties equalAngleSection(Real a, Real t) {
+  if (!(a > 0) || !(t > 0) || !(t < a)) throw std::invalid_argument("L section requires positive a and 0 < t < a");
+  const Real A1 = a * t, A2 = t * (a - t);
+  const Real area = A1 + A2;
+  const Real xB1 = a / 2, yH1 = t / 2;           // leg1 (a x t): centroid, (B-offset, H-offset)
+  const Real xB2 = t / 2, yH2 = t + (a - t) / 2; // leg2 (t x (a-t)), stacked above leg1
+  const Real xbar = (A1 * xB1 + A2 * xB2) / area, ybar = (A1 * yH1 + A2 * yH2) / area;
+  const Real dB1 = xB1 - xbar, dH1 = yH1 - ybar, dB2 = xB2 - xbar, dH2 = yH2 - ybar;
+  const Real IH_raw = a*t*t*t/12 + A1*dH1*dH1 + t*(a-t)*(a-t)*(a-t)/12 + A2*dH2*dH2; // integral H^2 dA
+  const Real IB_raw = t*a*a*a/12 + A1*dB1*dB1 + (a-t)*t*t*t/12 + A2*dB2*dB2;         // integral B^2 dA
+  const Real Ixy_raw = A1*dB1*dH1 + A2*dB2*dH2;                                     // integral B*H dA
+  const Real phi = Real(0.5) * std::atan2(Real(-2) * Ixy_raw, IB_raw - IH_raw);
+  ResolvedSectionProperties p;
+  p.area = area;
+  p.IH = std::sin(phi)*std::sin(phi)*IB_raw + std::sin(2*phi)*Ixy_raw + std::cos(phi)*std::cos(phi)*IH_raw;
+  p.IB = std::cos(phi)*std::cos(phi)*IB_raw - std::sin(2*phi)*Ixy_raw + std::sin(phi)*std::sin(phi)*IH_raw;
+  p.J = (t*t*t/3) * (2*a - t);
+  p.AsH = p.AsB = detail::kRectangularShearFactor * area;
+  p.principalAngleRad = phi;
+  return p;
+}
+
 // Catalog/database section lookup (MIDAS SECT_I.DB_NAME + SECT_I.SECT_NAME, instead of a raw
 // vSIZE array) -- resolves a small set of standard European profile designations to their
 // nominal H/B/tw/tf dimensions (idealized rectangular-flange geometry, root fillets NOT modeled,
@@ -399,8 +457,9 @@ inline ResolvedSectionProperties resolveCatalogSection(const std::string& shape,
   if (dbName != "UNI") throw std::invalid_argument("unsupported catalog DB_NAME '" + dbName + "' (only 'UNI' is implemented)");
   if (shape == "H" && sectName == "HEB160") return iSection(0.160, 0.160, 0.008, 0.013);
   if (shape == "C" && sectName == "UPN100") return channelSection(0.100, 0.050, 0.006, 0.0085);
+  if (shape == "L" && sectName == "L50x5") return equalAngleSection(0.050, 0.005); // EN 10056-1
   throw std::invalid_argument("unsupported catalog section '" + sectName + "' (shape '" + shape + "', DB_NAME '" + dbName +
-                               "'): only HEB160 (shape H) and UPN100 (shape C) are implemented");
+                               "'): only HEB160 (shape H), UPN100 (shape C) and L50x5 (shape L) are implemented");
 }
 
 // Dispatches on MIDAS's SHAPE code and vSIZE length; rejects anything not implemented.

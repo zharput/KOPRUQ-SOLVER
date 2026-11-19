@@ -76,6 +76,7 @@
 #include <cmath>
 #include <functional>
 #include <map>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <tuple>
@@ -172,6 +173,13 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
     }
   out.report.materials = out.input.model.materials.size();
 
+  // sectionPrincipalRotation: section id -> extra rotation (radians) of reference_y about the
+  // member's local x-axis, needed only for an unsymmetric catalog section (e.g. an equal-leg
+  // angle) whose principal bending axes are not aligned with the raw H/B directions -- see
+  // MidasSectionLibrary.hpp's ResolvedSectionProperties::principalAngleRad and
+  // equalAngleSection's header comment. 0 (absent from the map) for every symmetric shape.
+  std::map<Id, Real> sectionPrincipalRotation;
+
   // --- SECT ---
   if (dbg.contains("SECT"))
     for (auto it = dbg.at("SECT").begin(); it != dbg.at("SECT").end(); ++it) {
@@ -198,6 +206,7 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
         const Real Asy = useShear ? p.AsB : Real(0);
         const Real Asz = useShear ? p.AsH : Real(0);
         out.input.model.sections.push_back(Section{id, p.area, /*Iy=*/p.IH, /*Iz=*/p.IB, p.J, Asy, Asz});
+        if (p.principalAngleRad != 0) sectionPrincipalRotation[id] = p.principalAngleRad;
         if (useShear)
           out.report.assumptions.push_back("section " + it.key() + ": USE_SHEAR_DEFORM is set in the source; shear areas computed from the shape's classical Timoshenko shear correction factor (see MidasSectionLibrary.hpp), not read from MIDAS directly (MIDAS does not export an effective shear area for a DBUSER section)");
       } catch (const std::exception& e) {
@@ -326,6 +335,15 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
   }
   out.report.joint_springs = out.input.model.joint_springs.size();
 
+  // Nodes touched by a TRUSS element vs. a BEAM element -- used below to auto-restrain the
+  // rotational DOFs (RX/RY/RZ) of any node connected ONLY by trusses, since such a node has no
+  // physical rotational stiffness source at all (Truss3D.hpp's own header: "a node connected
+  // only by trusses still has no rotational stiffness source and must have its RX/RY/RZ
+  // restrained"), matching MIDAS's own implicit convention for a pin-jointed truss boundary
+  // condition (MIDAS does not export an explicit restraint for this -- it is a disclosed,
+  // reported assumption, not a silent one).
+  std::set<Id> trussNodes, beamNodes;
+
   // --- ELEM (BEAM only) ---
   if (dbg.contains("ELEM"))
     for (auto it = dbg.at("ELEM").begin(); it != dbg.at("ELEM").end(); ++it) {
@@ -353,12 +371,25 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
         e.releases = trussReleases();
         out.input.model.beams.push_back(e);
         out.report.originalToInternalElementId[id] = id;
+        trussNodes.insert(e.node1); trussNodes.insert(e.node2);
         continue;
       }
+      beamNodes.insert(e.node1); beamNodes.insert(e.node2);
       try {
         Eigen::Vector3d p1(n1->x, n1->y, n1->z), p2(n2->x, n2->y, n2->z);
         const Real angleDeg = v.value("ANGLE", Real(0));
-        e.reference_y = midasReferenceY((p2 - p1).normalized(), angleDeg);
+        Eigen::Vector3d y0 = midasReferenceY((p2 - p1).normalized(), angleDeg);
+        // Unsymmetric catalog section (e.g. equal-leg angle): apply the section's own extra
+        // principal-axis rotation on top of MIDAS's Beta -- same rotation formula/sense as
+        // MidasOrientation.hpp's own Beta (see MidasSectionLibrary.hpp's equalAngleSection),
+        // so Iy/Iz as already resolved for this section (above) are directly valid.
+        if (auto found = sectionPrincipalRotation.find(e.section); found != sectionPrincipalRotation.end()) {
+          const Eigen::Vector3d x = (p2 - p1).normalized();
+          const Eigen::Vector3d z0 = x.cross(y0);
+          const Real phi = found->second;
+          y0 = std::cos(phi) * y0 - std::sin(phi) * z0;
+        }
+        e.reference_y = y0;
       } catch (const std::exception& ex) {
         out.report.rejected.push_back("element " + it.key() + ": " + ex.what());
         continue;
@@ -386,6 +417,15 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
       out.report.originalToInternalElementId[id] = id;
     }
   out.report.beams = out.input.model.beams.size();
+
+  for (Id node : trussNodes) {
+    if (beamNodes.count(node)) continue; // also touched by a BEAM, which supplies rotational stiffness
+    auto& flags = out.input.restraints[node]; // default-constructed (all false) if not already present
+    bool added = false;
+    for (int i = 3; i < 6; ++i) { if (!flags[(std::size_t)i]) added = true; flags[(std::size_t)i] = true; }
+    if (added)
+      out.report.assumptions.push_back("node " + std::to_string(node) + ": connected only by TRUSS elements, which carry no rotational stiffness (Truss3D.hpp); RX/RY/RZ auto-restrained, matching MIDAS's own implicit pin-jointed-truss convention (not present as an explicit CONS restraint in the export)");
+  }
 
   std::map<std::string, std::size_t> caseIndex;
   auto caseFor = [&](const std::string& name) -> LoadCase& {

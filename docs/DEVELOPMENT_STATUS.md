@@ -2070,3 +2070,39 @@ this checkpoint's scope — rejected with a clear diagnostic rather than approxi
 **Verified:** model 20 now imports and solves its 12/25 HEB160/UPN100 elements, both load cases
 (`FORCE`, `POINT`) and their `COM1` combination. Full regression: 291/291 Release, 261/261 Debug,
 unchanged.
+
+## L50x5 angle (Iyz) resolved via import-time principal-axis rotation; a SEPARATE, deeper model-20 blocker found (2026-11-19, commit `9745c16`)
+
+Per user approval ("Task 1"), implemented the equal-leg-angle Iyz gap from the previous entry --
+`equalAngleSection` (`MidasSectionLibrary.hpp`) diagonalizes the raw H/B second moments and
+product of inertia at IMPORT TIME (finds the rotation angle phi that zeroes the rotated product
+of inertia, same rotation sense as `MidasOrientation.hpp`'s Beta formula) rather than adding a
+product-of-inertia term to `kopruq::Section`/`Beam3D` itself -- avoids any core stiffness-
+formulation change. Sanity-checked arithmetically (not against real data, see below): L50x5 raw
+IH=IB=11.25 cm^4 (tabulated ~11.0), principal 17.91/4.59 cm^4 at phi=45 degrees (tabulated
+~17.5/4.45). Also added: a node connected only by TRUSS elements has no rotational stiffness
+source at all (documented in `Truss3D.hpp`), so RX/RY/RZ are now auto-restrained there
+(disclosed via `report.assumptions`), matching MIDAS's implicit pin-jointed-truss convention.
+
+**All 25 of model 20's elements now import without rejection** (previously 12/25). The model
+still does NOT solve: a from-scratch eigenvalue diagnostic of the assembled free-DOF stiffness
+matrix (not kept in the tree) found 3 genuine zero-eigenvalue modes. Root cause, confirmed by
+direct structural reasoning and the numeric eigenvectors together: model 20 mixes continuous
+BEAM chords (top: nodes 1-7 at Z=0; bottom: nodes 8-14 at Z=-0.8) with pin-ended TRUSS
+diagonals/verticals, entirely within the Y=0 plane. TRUSS members carry zero out-of-plane
+(global Y) stiffness by construction (axial-only, and none of them has a Y-component to their
+own axis here). The model's only 2 supports (nodes 8, 14) are on the BOTTOM chord, so the bottom
+chord's out-of-plane translation is pinned there -- but the TOP chord has no path to resist
+global-Y translation at all (its own weak-axis bending stiffness is "free-free", unsupported at
+either end, since the only coupling to the rest of the structure is via zero-Y-stiffness
+trusses). This is a structurally genuine instability in how the KOPRUQ-SOLVER model is currently
+assembled from this JSON, not a bug in the Iyz work above or in the T/box/I/channel
+Iy-Iz-mapping convention (independently re-confirmed correct via the eigenvector inspection).
+
+**Not resolved, deliberately -- flagged for the user rather than guessed:** whether MIDAS
+implicitly restrains out-of-plane DOFs (UY, and likely RX/RZ) for a model whose entire geometry
+lies in one plane (confirmed here: bounding box Y[0,0]) is a disclosed, but broad, modeling-
+convention assumption that would affect every future purely-planar model, not just this one --
+exactly the kind of architecture-level decision CLAUDE.md reserves for explicit user approval
+rather than inferring from one sample. Model 20's L50x5/truss-restraint work is otherwise
+complete; this is the sole remaining blocker for its full numerical verification.

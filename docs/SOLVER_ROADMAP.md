@@ -537,6 +537,17 @@ model 06 combination rows (which are driven by the diagnostic tool, not CTest).
   bending axes are rotated relative to H/B, needing a product-of-inertia term `kopruq::Section`
   does not have — out of this checkpoint's scope (a `Section`/`Beam3D` formulation change, not
   an importer mapping), rejected with a clear diagnostic rather than approximated.
+
+  **Update, 2026-11-19 (commit `9745c16`), per user approval ("Task 1"):** resolved via
+  import-time principal-axis rotation instead (`equalAngleSection` + an additional `reference_y`
+  rotation, no `Section`/`Beam3D` change — see `DEVELOPMENT_STATUS.md`). All 25 elements now
+  import. The model still does NOT solve: a separate, deeper issue — 3 genuine zero-eigenvalue
+  modes from mixing continuous BEAM chords with zero-out-of-plane-stiffness TRUSS
+  diagonals/verticals in an entirely planar (Y=0) layout, where only the bottom chord's 2
+  supports pin the out-of-plane direction and the top chord has no path to it at all. Whether
+  MIDAS implicitly restrains out-of-plane DOFs for a purely planar model is flagged for the user
+  rather than guessed (see `DEVELOPMENT_STATUS.md` for the full reasoning) — this is the sole
+  remaining blocker for model 20's full verification.
 - Model 21 (`21 Combo`): 16 of 188 elements use `SECT.SHAPE` values `STRK` (`vSIZE` has 2
   meaningful values) and `SOCT` (`vSIZE` has 4 meaningful values) — unconfirmed geometric
   parametrization. Deliberately **not** implemented by guessing, per the project's "never

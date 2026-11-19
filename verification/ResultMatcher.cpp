@@ -56,21 +56,32 @@ struct ComponentSpec { const char* excelName; int index; QuantityCategory catego
 // nodal-force convention lines up with the diagram convention; empirically confirmed for
 // Moment-y the same way (148 model-05 + 162 model-06 rows, zero counter-examples).
 //
-// Shear-y, Torsion and Moment-z are extended to the SAME group as their already-confirmed
-// counterpart (Shear-y/Torsion with Axial/Shear-z -- all three are "arm-free" resultants with no
-// dM/dx coupling, by the identical argument above; Moment-z with Moment-y -- both are bending
-// moments with the same arm coupling) by this physical reasoning, NOT by direct empirical
-// confirmation: every available verification model (01-06) is planar (Y=0 throughout, in-plane
-// loading only), so Shear-y/Torsion/Moment-z are structurally zero in all of them and no
-// comparison row has ever exercised this part of the rule. Disclosed, not hidden, in case a
-// future out-of-plane model exposes a counter-example.
+// Shear-y and Torsion are extended to the SAME group as their already-confirmed counterpart
+// (Shear-z/Axial -- all are "arm-free" resultants with no dM/dx coupling, by the identical
+// argument above) by this physical reasoning, NOT by direct empirical confirmation: models 01-06
+// are planar (Y=0 throughout, in-plane loading only), so Shear-y/Torsion are structurally zero in
+// all of them and no comparison row has exercised this part of the rule. Disclosed, not hidden,
+// in case a future out-of-plane model exposes a counter-example.
+//
+// Moment-z is NOT the same group as Moment-y, despite both being "bending moments with arm
+// coupling" -- empirically confirmed 2026-11-19 against model "18 Köprü_mafsal" (real MIDAS
+// export with genuine out-of-plane bending, the first available model where Moment-z is
+// structurally nonzero: vertical pylon members 62-71, section 4). The original symmetry argument
+// assumed the xy bending plane (Moment-z) behaves like the xz bending plane (Moment-y), but the
+// two planes are NOT symmetric under the right-handed local-axis convention: z = x cross y
+// (direct), while y = z cross x (an extra cyclic step) -- this antisymmetry between the two
+// bending planes is exactly why Moment-z's I/J flip is the OPPOSITE of Moment-y's, not the same.
+// Confirmed by the data itself: with the old (false) assumption, every Moment-z row for elements
+// 62-71 (both I and J ends) was an exact sign flip against MIDAS's real reference value; setting
+// it to `true` (matching the Axial/Shear/Torsion group instead of Moment-y) resolves every one of
+// them exactly, to within the material-value rounding already present elsewhere in this model.
 constexpr std::array<bool, 6> kBeamForceFlipsAtIEnd = {
     true,  // Axial -- empirically confirmed (above)
     true,  // Shear-y -- extended by symmetry with Shear-z, not yet empirically exercised
     true,  // Shear-z -- empirically confirmed (above)
     true,  // Torsion -- extended by symmetry with Axial, not yet empirically exercised
     false, // Moment-y -- empirically confirmed to flip at J instead (above)
-    false, // Moment-z -- extended by symmetry with Moment-y, not yet empirically exercised
+    true,  // Moment-z -- empirically confirmed (above, model 18) -- NOT the same group as Moment-y
 };
 // `midasValue`: the MIDAS reference cell's own value, already in MIDAS's own convention; no
 // conversion needed on that side. What this returns is the SOLVER's `local_end_force` component,

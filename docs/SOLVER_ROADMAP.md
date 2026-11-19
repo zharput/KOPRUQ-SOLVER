@@ -569,9 +569,23 @@ model 06 combination rows (which are driven by the diagnostic tool, not CTest).
   documentation or another authoritative source before implementation, not inferred from the
   `vSIZE` array alone.
 
-Any one of these, once resolved, would also unblock the corresponding model's full end-to-end
-verification (model 20 for truss behavior; model 21 for the nested-`CB` combination path still
-pending from Phase 7G above; model 10 for an additional non-nested combination data point).
+  **Closed, 2026-11-19, STRK/SOCT still not implemented (see `DEVELOPMENT_STATUS.md` for full
+  detail):** two independent web-search attempts to confirm `STRK`/`SOCT`'s `vSIZE` dimension
+  order found only an internally inconsistent MIDAS shape-symbol table (one listing calls `STRK`
+  "Solid Track", another lists it as "Solid Octagon" — the same name as `SOCT`) and no dimension
+  table for either shape; `support.midasuser.com` (the likely authoritative source) returns
+  HTTP 403 to every automated fetch attempted, consistent with every earlier attempt this project
+  has made. Not implemented, per "never fabricate structural properties". **Everything else in
+  model 21 was tested and verified**: its nested `CB` combination chain (COMBO-3 references
+  COMBO-1; COMBO-4 references COMBO-1, COMBO-2 AND COMBO-3) was hand-derived independently and
+  matched the importer's actual recursive expansion exactly, term for term — the rigorous nested-
+  combination test Phase 7G had been missing (models 06/10 could only exercise the simple,
+  non-nested case). All other data (180 nodes, 188 beams, 1 material, 12 supports, 16 nodal
+  loads, 68 member loads, 262 thermal loads) imports with zero rejections beyond the 2 section
+  shapes. Model 21 is closed per the user's instruction.
+
+Model 10's `'H'` shape (an additional non-nested combination data point) remains unresolved and
+is not currently blocking any open task.
 
 ### Phase 7H — Rigid-link support in `ModalSolver`/`ResponseSpectrumSolver` (unblock MIDAS modal/spectrum import)
 **COMPLETE for the solver-level fix and its CLI dispatch (verified, this session, 2026-11-17);

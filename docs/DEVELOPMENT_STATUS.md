@@ -2143,3 +2143,45 @@ Beam Force's per-end-row "Part" layout) and compare against the solver's own rec
 261/261 Debug, unchanged.
 
 Model 20 (truss) is now complete, per the user's "19 spring, 20 truss, 21 combo" instruction.
+
+## Model 21 (combo) — nested-combination logic independently verified; closed, STRK/SOCT not implemented (2026-11-19)
+
+**Nested `CB` combination expansion, independently verified correct.** Model 21's own four
+`LCOM-GEN` entries are the rigorous test this project had been waiting for since Phase 7G
+(COMBO-3/COMBO-4 reference other combinations via `ANAL=="CB"`, not just primitive load cases).
+Hand-derived (independently, NOT by running the importer first) the expected flat expansion:
+```
+COMBO-1 = FORCE-1(1.0) + FORCE-2(1.0) + TU(0.5)                      [primitive]
+COMBO-2 = FORCE-1(1.0) + FORCE-2(2.0) + FORCE-3(3.0) + TU(1.0)        [primitive]
+COMBO-3 = 1.0*COMBO-1 + FORCE-1(0.5) + TU(1.0)
+        = FORCE-1(1.5) + FORCE-2(1.0) + TU(1.5)
+COMBO-4 = 1.0*COMBO-1 + 2.0*COMBO-2 + 0.6*COMBO-3
+        = FORCE-1(3.9) + FORCE-2(5.6) + FORCE-3(6.0) + TU(3.4)
+```
+The importer's actual output (diagnostic dump of `ModelInput::combinations`, not kept in the
+tree) matched this **exactly**, term for term, confirming Phase 7G's recursive `expand()` logic
+(`MidasJsonImporter.hpp`) is correct for genuine multi-level nesting (COMBO-4 depends on COMBO-3,
+which itself depends on COMBO-1), not just the simple non-nested case models 06/10 could exercise.
+
+**Everything else in model 21 imports cleanly:** 180 nodes, 188 beams (all `TYPE:"BEAM"`), 1
+material (CONC, already supported), 12 supports, 16 nodal loads, 68 member loads, 262 thermal
+loads -- zero rejections other than the 2 section shapes below.
+
+**STRK/SOCT (16/188 elements, 8.5%) -- deliberately NOT implemented; this is the model's sole
+remaining blocker for a full end-to-end numerical solve.** Investigated via web search (two
+subagent fetches): `STRK` is MIDAS's code for "Solid Track" per one source (a stadium/racetrack
+shape) but a different, equally-official-looking source's own shape-symbol table instead lists
+`STRK` as "Solid Octagon" (the same name as `SOCT`) -- an internally inconsistent/unclear naming
+even across what should be authoritative MIDAS documentation. Neither source gives the `vSIZE`
+dimension order for either shape. `support.midasuser.com` (which likely has the real DBUSER
+shape-dimension reference) returns HTTP 403 to automated fetches, consistent with every earlier
+attempt to reach it this project has made. Guessing a geometric parametrization from the raw
+`vSIZE` numbers alone (`STRK`: `[0.9, 2.0]`; `SOCT`: `[1.0, 2.0, 0.3, 0.2]`) would be fabricating
+structural properties -- explicitly forbidden. Resolving this needs either the user's own access
+to MIDAS's official DBUSER section reference, or a sample model whose MIDAS-reported section
+area/Iy/Iz for one of these two shapes can be reverse-matched against a candidate parametrization
+(neither available this session).
+
+Model 21 (combo) is closed per the user's instruction, with its core subject (nested load
+combinations) fully, independently verified; the STRK/SOCT gap is disclosed, not silently
+skipped or guessed around.

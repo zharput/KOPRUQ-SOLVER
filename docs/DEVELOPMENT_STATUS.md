@@ -1871,6 +1871,40 @@ at all** (only confirmed to solve without error); its own comparison is pending.
 Verified: Debug CTest **257/262 PASS**, gui-release **287/292 PASS**, same 5 permanent failures,
 no regressions.
 
+## Moment-z sign-convention bug found and fixed via model 18 (2026-11-19)
+Root cause of the Moment-z sign-flip finding above: `verification/ResultMatcher.cpp`'s
+`kBeamForceFlipsAtIEnd` table assumed Moment-z behaves like Moment-y for the I/J sign-flip rule,
+by a symmetry argument its own comment disclosed as NOT yet empirically confirmed (every model
+available before model 18 is planar, so Moment-z was always structurally zero and this part of
+the rule was never actually exercised). Model 18's vertical pylons (real, nonzero out-of-plane
+bending) falsify the assumption outright -- every Moment-z row was an exact sign flip. Fixed by
+moving Moment-z into the Axial/Shear/Torsion group instead (flips at I, not J). This also has a
+mathematical explanation, not just a data fit: the xy and xz bending planes are not symmetric
+under this project's right-handed local-axis convention (z = x cross y directly, y = z cross x,
+an extra cyclic step), which is exactly why Moment-z's flip is the opposite of Moment-y's.
+
+Verified: model 18's Beam Force comparison improved from 1806/1872 to **1834/1872 PASS** (every
+Moment-z sign-flip failure resolved). Full regression: Debug CTest **258/258**, gui-release
+**288/288** -- 100%, no regressions (every other model is planar for Moment-z, so structurally
+insensitive to this fix).
+
+**Remaining 38 Beam Force failures + 29 Displacement failures, now better understood**: all are
+in the "POINT" load case (a separate `CNLD` horizontal point-load case, not the "FORCE" uniform-
+load case) for beam forces, and in "FORCE" for displacements; both are small (~2-10%,
+magnitude-only, no more sign flips) and localized to elements using the newer `T`/`B`/`SR`
+sections (never the plain `SB` deck sections). Reactions still match **exactly** (96/96) for
+both load cases, meaning global equilibrium is correct but internal force/displacement
+*distribution* differs slightly -- the signature of a stiffness-ratio sensitivity in this
+statically-indeterminate 3D structure (`USE_SHEAR_DEFORM=true` here, unlike most prior models).
+Likely explanation: the already-disclosed approximate shear-area formulas for `T`/`B` (and to a
+lesser extent `SR`, though that one is classically exact) are precise enough for force-only
+checks but not precise enough to reproduce MIDAS's exact internal redistribution in a flexible,
+indeterminate structure. Not investigated further this session -- improving shear-area precision
+for these shapes would need either MIDAS's own effective-shear-area formula (not accessible) or a
+more sophisticated thin-walled-section shear-flow derivation, a real engineering task requiring
+its own scoping. **Model 17 still has not been numerically verified against its own real
+reference data at all** (only confirmed to solve without error).
+
 ## Next autonomous action
 Phase 3.2, Phase 4, Phase 5 (5.1-5.6), Phase 6 (6.1, 6.1b, 6.2, 6.2b; 6.3 cancelled), Phase 7A,
 7B (including ETMP thermal wiring), 7C, 7D, 7M, 7S(1) and 7T are all complete and verified -- CI

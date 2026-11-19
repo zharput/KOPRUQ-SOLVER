@@ -848,6 +848,35 @@ reference data at all.
 Verified: Debug CTest **257/262 PASS**, gui-release **287/292 PASS**, same 5 permanent failures,
 no regressions.
 
+### Phase 7E.1 addendum — Moment-z MIDAS sign-convention bug found and fixed (2026-11-19)
+The "new unresolved discrepancy" above (exact Moment-z sign flips on model 18's vertical pylons)
+was root-caused: `verification/ResultMatcher.cpp`'s `kBeamForceFlipsAtIEnd` table had Moment-z
+grouped with Moment-y (flip at J, not I) by a symmetry argument its own comment flagged as never
+empirically confirmed -- every model before 18 is planar, so Moment-z was always structurally
+zero there. Model 18's real, nonzero out-of-plane bending falsifies that assumption outright.
+Fixed by moving Moment-z into the Axial/Shear/Torsion group (flip at I, not J) instead --
+resolves every one of the 66 sign-flip failures exactly. Mathematical grounding, not just a data
+fit: the xy (Moment-z) and xz (Moment-y) bending planes are not symmetric under this project's
+right-handed local-axis convention (z = x cross y directly, y = z cross x, one extra cyclic
+step), exactly explaining why their I/J flip rules are opposite.
+
+Verified: model 18 Beam Force improves to **1834/1872 PASS**; Debug CTest **258/258**,
+gui-release **288/288** -- both 100%, no regressions (every other model is planar for Moment-z,
+structurally insensitive to this change).
+
+**Remaining 38 Beam Force + 29 Displacement mismatches, now better understood (still open)**: all
+in the "POINT" load case (`CNLD` point loads) for beam forces and "FORCE" for displacements, both
+small (2-10%, magnitude only, no sign flips) and localized to `T`/`B`/`SR`-sectioned elements
+(never plain `SB`). Reactions match exactly (96/96) in both cases -- global equilibrium is right,
+internal distribution differs slightly, the signature of stiffness-ratio sensitivity in this
+indeterminate, shear-deformable (`USE_SHEAR_DEFORM=true`) structure. Most likely explanation: the
+already-disclosed approximate shear-area formulas for `T`/`B` aren't precise enough to reproduce
+MIDAS's internal force/displacement redistribution exactly, even though they're fine for the
+force values themselves elsewhere. Improving this needs either MIDAS's own effective-shear-area
+formula (inaccessible) or a more rigorous thin-walled shear-flow derivation -- a real task
+requiring its own scoping, not attempted this session. Model 17 is still entirely unverified
+numerically.
+
 ### `xmidas/deneme1.json` tests removed entirely (2026-11-19, explicit user instruction)
 Every CTest count above citing "5 pre-existing/permanent failures" refers to the 5 tests that
 depended on the permanently-deleted `xmidas/deneme1.json` sample (see

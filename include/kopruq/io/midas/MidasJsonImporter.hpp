@@ -66,6 +66,7 @@
 // damping ratio) and is NOT used -- the CQC damping ratio instead comes from the referenced
 // SPFC's own `DRATIO`, which is unambiguous.
 #include "../ModelJson.hpp"
+#include "../../elements/Truss3D.hpp"
 #include "MidasMaterialLibrary.hpp"
 #include "MidasOrientation.hpp"
 #include "MidasSectionLibrary.hpp"
@@ -143,14 +144,25 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
     for (auto it = dbg.at("MATL").begin(); it != dbg.at("MATL").end(); ++it) {
       const Id id = detail::parseId(it.key());
       const std::string type = it.value().at("TYPE").get<std::string>();
-      if (type != "CONC") { out.report.rejected.push_back("material " + it.key() + ": unsupported TYPE '" + type + "' (only CONC is implemented)"); continue; }
-      if (!dbg.contains("MATD") || !dbg.at("MATD").contains(it.key())) { out.report.rejected.push_back("material " + it.key() + ": no matching MATD design-data record"); continue; }
-      const auto& matd = dbg.at("MATD").at(it.key());
+      if (type != "CONC" && type != "STEEL") { out.report.rejected.push_back("material " + it.key() + ": unsupported TYPE '" + type + "' (only CONC, STEEL are implemented)"); continue; }
       try {
-        const std::string codeName = matd.at("DATA1").at("CODENAME").get<std::string>();
-        const std::string gradeName = matd.at("DATA1").value("CODEMATLNAME", std::string());
-        const Real fckKNm2 = matd.at("DATA1").at("DESIGN").at("C_FC").get<Real>();
-        auto resolved = resolveConcreteGradeMaterial(id, codeName, fckKNm2 / 1000.0, gradeName); // kN/m^2 -> MPa
+        ResolvedMaterial resolved = [&]() {
+          if (type == "CONC") {
+            if (!dbg.contains("MATD") || !dbg.at("MATD").contains(it.key())) throw std::invalid_argument("no matching MATD design-data record");
+            const auto& matd = dbg.at("MATD").at(it.key());
+            const std::string codeName = matd.at("DATA1").at("CODENAME").get<std::string>();
+            const std::string gradeName = matd.at("DATA1").value("CODEMATLNAME", std::string());
+            return resolveConcreteGradeMaterial(id, codeName, matd.at("DATA1").at("DESIGN").at("C_FC").get<Real>() / 1000.0, gradeName); // kN/m^2 -> MPa
+          }
+          // STEEL: unlike CONC, the design-code family and grade live directly on MATL's own
+          // PARAM[0] (STANDARD, DB) -- there is no separate MATD record (confirmed empirically,
+          // model 20: MATD is present in the export but empty for these material ids).
+          if (!it.value().contains("PARAM") || it.value().at("PARAM").empty()) throw std::invalid_argument("no PARAM entry (design code/grade)");
+          const auto& param = it.value().at("PARAM")[0];
+          const std::string codeName = param.at("STANDARD").get<std::string>();
+          const std::string gradeName = param.value("DB", it.value().value("NAME", std::string()));
+          return resolveSteelGradeMaterial(id, codeName, gradeName);
+        }();
         out.input.model.materials.push_back(resolved.material);
         for (const auto& a : resolved.assumptions)
           out.report.assumptions.push_back("material " + it.key() + " (" + a.field + "): " + a.value + " -- " + a.source);
@@ -170,8 +182,10 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
       const std::string shape = before.at("SHAPE").get<std::string>();
       const bool useShear = before.value("USE_SHEAR_DEFORM", false);
       try {
-        const auto vSize = detail::toRealVector(before.at("SECT_I").at("vSIZE"));
-        const auto p = resolveDbUserSection(shape, vSize);
+        const auto& sectI = before.at("SECT_I");
+        const auto p = sectI.contains("DB_NAME")
+            ? resolveCatalogSection(shape, sectI.at("DB_NAME").get<std::string>(), sectI.at("SECT_NAME").get<std::string>())
+            : resolveDbUserSection(shape, detail::toRealVector(sectI.at("vSIZE")));
         // Iy = IH (the H/depth dimension's inertia): at MIDAS Beta=0 the local z axis is
         // "vertical" (MidasOrientation.hpp), and KOPRUQ-SOLVER's Iy resists bending in the
         // local x-z plane -- i.e. exactly the bending H's depth resists. Symmetrically
@@ -318,7 +332,7 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
       const Id id = detail::parseId(it.key());
       const auto& v = it.value();
       const std::string type = v.at("TYPE").get<std::string>();
-      if (type != "BEAM") { out.report.rejected.push_back("element " + it.key() + ": unsupported TYPE '" + type + "' (only BEAM is implemented)"); continue; }
+      if (type != "BEAM" && type != "TRUSS") { out.report.rejected.push_back("element " + it.key() + ": unsupported TYPE '" + type + "' (only BEAM, TRUSS are implemented)"); continue; }
       Beam3DConnection e;
       e.id = id;
       e.node1 = v.at("NODE")[0].get<Id>();
@@ -328,6 +342,19 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
       auto n1 = std::find_if(out.input.model.nodes.begin(), out.input.model.nodes.end(), [&](const Node& n){ return n.id == e.node1; });
       auto n2 = std::find_if(out.input.model.nodes.begin(), out.input.model.nodes.end(), [&](const Node& n){ return n.id == e.node2; });
       if (n1 == out.input.model.nodes.end() || n2 == out.input.model.nodes.end()) { out.report.rejected.push_back("element " + it.key() + ": references a missing node"); continue; }
+      // TRUSS: a pin-ended member, same stiffness/mass pipeline as BEAM but with every rotational
+      // DOF released (see Truss3D.hpp) -- MIDAS's own TRUSS type carries no end moment, exactly
+      // this release pattern, so FRLS (an explicit hinge record) is neither expected nor consulted
+      // for a TRUSS element below; reference_y is immaterial once every rotation is released, so
+      // Truss3D's own trussReference() is used instead of MIDAS's ANGLE-based orientation.
+      if (type == "TRUSS") {
+        Eigen::Vector3d p1(n1->x, n1->y, n1->z), p2(n2->x, n2->y, n2->z);
+        e.reference_y = trussReference(p2 - p1);
+        e.releases = trussReleases();
+        out.input.model.beams.push_back(e);
+        out.report.originalToInternalElementId[id] = id;
+        continue;
+      }
       try {
         Eigen::Vector3d p1(n1->x, n1->y, n1->z), p2(n2->x, n2->y, n2->z);
         const Real angleDeg = v.value("ANGLE", Real(0));
@@ -410,15 +437,21 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
         const std::string cmd = item.value("CMD", std::string());
         const std::string ltype = item.value("TYPE", std::string());
         const std::string dir = item.value("DIRECTION", std::string());
-        if (cmd != "BEAM" || ltype != "UNILOAD" || dir != "GZ") {
+        if (cmd != "BEAM" || dir != "GZ" || (ltype != "UNILOAD" && ltype != "CONLOAD")) {
           out.report.rejected.push_back("member load on element " + it.key() + ", case '" + lc + "': unsupported CMD/TYPE/DIRECTION combination ('" + cmd + "'/'" + ltype + "'/'" + dir + "')");
           continue;
         }
         const auto d = detail::toRealVector(item.at("D"));
         const auto p = detail::toRealVector(item.at("P"));
-        MemberLoad ml; ml.element = element; ml.axes = LoadAxes::Global; ml.direction = 2;
-        ml.w1 = p.at(0); ml.w2 = p.at(1); ml.start = d.at(0); ml.end = d.at(1);
-        caseFor(lc).member.push_back(ml);
+        if (ltype == "UNILOAD") {
+          MemberLoad ml; ml.element = element; ml.axes = LoadAxes::Global; ml.direction = 2;
+          ml.w1 = p.at(0); ml.w2 = p.at(1); ml.start = d.at(0); ml.end = d.at(1);
+          caseFor(lc).member.push_back(ml);
+        } else { // CONLOAD: a single concentrated force at fractional position D[0], magnitude P[0]
+          MemberPointLoad pl; pl.element = element; pl.axes = LoadAxes::Global; pl.direction = 2;
+          pl.kind = MemberLoadKind::Force; pl.value = p.at(0); pl.position = d.at(0);
+          caseFor(lc).point.push_back(pl);
+        }
         ++out.report.member_loads;
       }
     }

@@ -324,6 +324,85 @@ inline ResolvedSectionProperties tSection(Real H, Real B, Real tw, Real tf) {
   return p;
 }
 
+// Symmetric I/H wide-flange (web vertical, flanges top+bottom, both symmetric about H and B):
+// overall depth H, flange width B, web thickness tw, flange thickness tf (each flange). Area/IH
+// via the standard composite decomposition (outer B x H rectangle minus the two side cutouts of
+// width (B-tw)/2 and height (H-2*tf) each) -- classical mechanics of materials, not MIDAS-specific
+// (same sourcing standard as hollowBox/tSection above). IB is the two flanges' own I (parallel-axis
+// offset is zero since both flanges already share the vertical centroidal axis) plus the web's own
+// I. J uses the same thin-strip-sum approximation as tSection (J=(1/3)*sum(b_i*t_i^3)), for
+// consistency with that section's empirically-preferred (over the more "rigorous" FEM solve, see
+// tSection's header comment) convention for open thin-walled sections built from this library.
+inline ResolvedSectionProperties iSection(Real H, Real B, Real tw, Real tf) {
+  if (!(H > 0) || !(B > 0) || !(tw > 0) || !(tf > 0)) throw std::invalid_argument("I section requires positive H, B, tw and tf");
+  const Real Hi = H - 2*tf;
+  if (!(Hi > 0)) throw std::invalid_argument("I section flange thickness tf must be less than H/2");
+  if (!(tw <= B)) throw std::invalid_argument("I section web thickness tw must not exceed flange width B");
+  ResolvedSectionProperties p;
+  p.area = 2*B*tf + Hi*tw;
+  p.IH = (B*H*H*H - (B - tw)*Hi*Hi*Hi) / 12;
+  p.IB = 2*(tf*B*B*B/12) + Hi*tw*tw*tw/12;
+  p.J = (2*B*tf*tf*tf + Hi*tw*tw*tw) / 3;
+  // AsH: horizontal strips along H -- flange (full width B) / web (width tw) / flange.
+  // AsB: rotated -- outside the web's width only the two flanges are present (combined depth
+  // 2*tf), within it both flanges and the web are present (full depth H).
+  p.AsH = detail::timoshenkoShearArea({{0, tf, B}, {tf, H - tf, tw}, {H - tf, H, B}}, p.IH);
+  p.AsB = detail::timoshenkoShearArea({{0, (B - tw) / 2, 2*tf}, {(B - tw) / 2, (B + tw) / 2, H}, {(B + tw) / 2, B, 2*tf}}, p.IB);
+  return p;
+}
+
+// Channel (web on one side, two flanges projecting the same way, e.g. a MIDAS "C"-shape/European
+// UPN profile): overall depth H, overall flange width B (web face to flange tip), web thickness
+// tw, flange thickness tf. Symmetric about the horizontal (H) centroidal axis -- so IH uses the
+// SAME formula as iSection's (the flange/web decomposition's H-direction centroid is unaffected
+// by the channel's left/right asymmetry) -- but NOT about the vertical (B) axis, so IB needs its
+// own centroid (standard composite-section parallel-axis decomposition: web + two flange legs,
+// each of length (B-tw), offset from the web's outer face). J uses the same thin-strip-sum
+// convention as iSection/tSection, for consistency (see tSection's header comment).
+inline ResolvedSectionProperties channelSection(Real H, Real B, Real tw, Real tf) {
+  if (!(H > 0) || !(B > 0) || !(tw > 0) || !(tf > 0)) throw std::invalid_argument("C section requires positive H, B, tw and tf");
+  const Real Hi = H - 2*tf;
+  if (!(Hi > 0)) throw std::invalid_argument("C section flange thickness tf must be less than H/2");
+  if (!(tw < B)) throw std::invalid_argument("C section web thickness tw must be less than flange width B");
+  ResolvedSectionProperties p;
+  const Real Aweb = H*tw, Aflange = (B - tw)*tf; // each of the two flange legs (beyond the web)
+  p.area = Aweb + 2*Aflange;
+  p.IH = (B*H*H*H - (B - tw)*Hi*Hi*Hi) / 12; // same decomposition as iSection; H-symmetric
+  const Real xWeb = tw / 2, xFlange = tw + (B - tw) / 2; // from the web's outer (left) face
+  const Real xbar = (Aweb*xWeb + 2*Aflange*xFlange) / p.area;
+  const Real IwebOwn = H*tw*tw*tw / 12, IflangeOwn = tf*(B - tw)*(B - tw)*(B - tw) / 12;
+  const Real dWeb = xbar - xWeb, dFlange = xFlange - xbar;
+  p.IB = (IwebOwn + Aweb*dWeb*dWeb) + 2*(IflangeOwn + Aflange*dFlange*dFlange);
+  p.J = (2*B*tf*tf*tf + Hi*tw*tw*tw) / 3;
+  p.AsH = detail::timoshenkoShearArea({{0, tf, B}, {tf, H - tf, tw}, {H - tf, H, B}}, p.IH);
+  // AsB strips along the B direction (web outer face at 0): the web region (0..tw, full depth H)
+  // then the flange-only region (tw..B, depth 2*tf) -- timoshenkoShearArea computes its own
+  // centroid/Q from this profile directly, consistent with xbar above.
+  p.AsB = detail::timoshenkoShearArea({{0, tw, H}, {tw, B, 2*tf}}, p.IB);
+  return p;
+}
+
+// Catalog/database section lookup (MIDAS SECT_I.DB_NAME + SECT_I.SECT_NAME, instead of a raw
+// vSIZE array) -- resolves a small set of standard European profile designations to their
+// nominal H/B/tw/tf dimensions (idealized rectangular-flange geometry, root fillets NOT modeled,
+// same precision level as this file's other shapes), then dispatches to iSection/channelSection
+// above. Nominal dimensions per the relevant standard (not derived from the MIDAS export, which
+// never gives them for a catalog section -- same "clear diagnostic, not guessed" policy as
+// resolveDbUserSection for an unrecognized vSIZE shape):
+//   HEB160 (HE160B): EN 10034, h=160mm b=160mm tw=8mm tf=13mm
+//   UPN100: DIN 1026-1, h=100mm b=50mm tw=6mm tf=8.5mm
+// Any other DB_NAME/SECT_NAME combination, or a shape this catalog does not cover (e.g. an
+// unsymmetric angle "L", whose principal bending axes are rotated relative to H/B and would need
+// a product-of-inertia term kopruq::Section does not have -- see MidasJsonImporter.hpp), is
+// rejected with a clear diagnostic rather than approximated.
+inline ResolvedSectionProperties resolveCatalogSection(const std::string& shape, const std::string& dbName, const std::string& sectName) {
+  if (dbName != "UNI") throw std::invalid_argument("unsupported catalog DB_NAME '" + dbName + "' (only 'UNI' is implemented)");
+  if (shape == "H" && sectName == "HEB160") return iSection(0.160, 0.160, 0.008, 0.013);
+  if (shape == "C" && sectName == "UPN100") return channelSection(0.100, 0.050, 0.006, 0.0085);
+  throw std::invalid_argument("unsupported catalog section '" + sectName + "' (shape '" + shape + "', DB_NAME '" + dbName +
+                               "'): only HEB160 (shape H) and UPN100 (shape C) are implemented");
+}
+
 // Dispatches on MIDAS's SHAPE code and vSIZE length; rejects anything not implemented.
 inline ResolvedSectionProperties resolveDbUserSection(const std::string& shape, const std::vector<Real>& vSize) {
   if (shape == "SB") {

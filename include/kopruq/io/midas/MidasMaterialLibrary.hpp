@@ -115,4 +115,32 @@ inline ResolvedMaterial resolveConcreteGradeMaterial(kopruq::Id id, const std::s
   return r;
 }
 
+// codeName: MATD's DATA1.CODENAME for a STEEL material (e.g. "EN05(S)" for a Eurocode 3 grade).
+// gradeName: MATD's DATA1.CODEMATLNAME (e.g. "S275", "S355") -- used only for the returned
+// assumption's diagnostic text; the elastic properties below do not depend on the grade, per
+// EN1993-1-1 S3.2.6: structural steel's E, G (via Poisson) and density are the SAME fixed
+// constants for every named grade (the grade only changes yield/ultimate strength, fy/fu, which
+// this linear-elastic solver does not use). Only code names containing "EN" and "(S)" are
+// accepted; anything else is rejected rather than guessed at, mirroring
+// resolveConcreteGradeMaterial's own code-family gating above.
+inline ResolvedMaterial resolveSteelGradeMaterial(kopruq::Id id, const std::string& codeName, const std::string& gradeName = {}) {
+  if (codeName.find("EN") == std::string::npos || codeName.find("(S)") == std::string::npos)
+    throw std::invalid_argument("unsupported material design code '" + codeName + "': only the EN..(S) structural-steel family is implemented (see MidasMaterialLibrary.hpp)");
+
+  ResolvedMaterial r;
+  r.material.id = id;
+  r.material.elastic_modulus = 210000.0 * 1000.0; // EN1993-1-1 S3.2.6: E = 210000 MPa -> kN/m^2
+  r.material.poisson_ratio = 0.3;                  // EN1993-1-1 S3.2.6
+  r.material.unit_weight = 78.5;                   // EN1991-1-1 Table A.4: steel unit weight
+  r.material.thermal_expansion = 1.2e-5;           // EN1993-1-1 S3.2.6 (T <= 100 C)
+  r.assumptions = {
+    {"elastic_modulus", std::to_string(r.material.elastic_modulus) + " kN/m^2",
+     "not present in the MIDAS export for a grade-named steel material '" + gradeName + "'; EN1993-1-1 S3.2.6 fixed value (same for every EN steel grade)"},
+    {"poisson_ratio", "0.3", "not present in the MIDAS export for a grade-named material; EN1993-1-1 S3.2.6 standard value for structural steel"},
+    {"unit_weight", "78.5 kN/m^3", "not present in the MIDAS export for a grade-named material; EN1991-1-1 Table A.4 standard value for steel"},
+    {"thermal_expansion", "1.2e-5 /K", "not present in the MIDAS export for a grade-named material; EN1993-1-1 S3.2.6 standard value for structural steel (T<=100C)"},
+  };
+  return r;
+}
+
 } // namespace kopruq::io::midas

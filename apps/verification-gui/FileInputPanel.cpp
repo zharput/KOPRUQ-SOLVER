@@ -26,6 +26,7 @@ const char* kExcelFilter = "Excel dosyaları (*.xlsx)";
 const std::array<RowSpec, static_cast<std::size_t>(FileInputPanel::Row::Count)> kRows{{
   {"MIDAS NX Model (JSON)", "midasModel", "MIDAS NX JSON (*.json)", {"json"}},
   {"Beam Force (Excel)", "beamForce", kExcelFilter, kExcelSuffixes},
+  {"Truss Force (Excel)", "trussForce", kExcelFilter, kExcelSuffixes},
   {"Displacements (Global) (Excel)", "displacements", kExcelFilter, kExcelSuffixes},
   {"Elastic Link (Excel)", "elasticLink", kExcelFilter, kExcelSuffixes},
   {"Reaction (Global) (Excel)", "reactions", kExcelFilter, kExcelSuffixes},

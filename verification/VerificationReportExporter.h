@@ -18,6 +18,7 @@ struct ReportMetadata {
   std::string displacementsFileName;  // empty if that category's file was not selected/usable
   std::string reactionsFileName;
   std::string beamForceFileName;
+  std::string trussForceFileName;
   std::string elasticLinkFileName;
   double absoluteToleranceScale{1.0};
   double relativeTol{0.0};
@@ -25,7 +26,7 @@ struct ReportMetadata {
 
 struct ReportData {
   ReportMetadata metadata;
-  std::vector<ComparisonRow> displacements, reactions, beamForces, elasticLinks;
+  std::vector<ComparisonRow> displacements, reactions, beamForces, trussForces, elasticLinks;
   // Exactly the diagnostics already aggregated and shown in the GUI's Diagnostik tab -- not
   // re-collected here, so the report and the GUI can never disagree with each other.
   std::vector<std::string> diagnostics;

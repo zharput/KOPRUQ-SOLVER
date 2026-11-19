@@ -36,6 +36,14 @@ CategoryComparison matchDisplacements(const nlohmann::json& results, const Refer
 CategoryComparison matchReactions(const nlohmann::json& results, const ReferenceTable& ref, const ToleranceSettings& tol);
 CategoryComparison matchBeamForces(const nlohmann::json& results, const ReferenceTable& ref, const ToleranceSettings& tol);
 
+// MIDAS's "Truss Force" export (TYPE=="TRUSS" elements only, see MidasJsonImporter.hpp): a
+// single axial force per element per load case, given as separate "Force-I"/"Force-J" columns
+// in the SAME row (unlike Beam Force's separate-row-per-end "Part" column layout) -- for a
+// pin-ended truss member, Force-I and Force-J are numerically identical (constant axial force
+// along the member, since all transverse/bending terms are released, see Truss3D.hpp), so both
+// are compared independently against the solver's own recovered local_end_forces[0]/[6].
+CategoryComparison matchTrussForces(const nlohmann::json& results, const ReferenceTable& ref, const ToleranceSettings& tol);
+
 struct CategoryStats { int total{}, pass{}, fail{}, na{}; double maxAbsDiff{}, maxAbsDiffPercent{}; };
 
 // Shared by the GUI's Özet tab (MainWindow::onCompare) and VerificationReportExporter's Summary

@@ -75,6 +75,10 @@ ResultsComparisonPanel::ResultsComparisonPanel(QWidget* parent) : QWidget(parent
                                   tr("MIDAS Değeri"), tr("SOLVER Değeri"), tr("Fark"), tr("Birim"), tr("Durum")}, group);
   tabs_->addTab(beamForcesTable_, tr("Kiriş İç Kuvvetleri"));
 
+  trussForcesTable_ = buildTable({tr("Yük Durumu"), tr("Eleman ID"), tr("Uç/İstasyon"), tr("Kuvvet Bileşeni"),
+                                   tr("MIDAS Değeri"), tr("SOLVER Değeri"), tr("Fark"), tr("Birim"), tr("Durum")}, group);
+  tabs_->addTab(trussForcesTable_, tr("Kafes Elemanı Kuvvetleri"));
+
   elasticLinksTable_ = buildTable({tr("Yük Durumu"), tr("Link ID"), tr("Uç"), tr("Bileşen"), tr("MIDAS Değeri"),
                                     tr("SOLVER Değeri"), tr("Fark"), tr("Birim"), tr("Durum")}, group);
   tabs_->addTab(elasticLinksTable_, tr("Elastik Bağlantılar"));

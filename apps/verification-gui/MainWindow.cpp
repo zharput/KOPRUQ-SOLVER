@@ -335,12 +335,14 @@ void MainWindow::invalidateComparison() {
   lastDisplacementRows_.clear();
   lastReactionRows_.clear();
   lastBeamForceRows_.clear();
+  lastTrussForceRows_.clear();
   lastElasticLinkRows_.clear();
   lastEigenvalueRows_.clear();
   lastDiagnostics_.clear();
   resultsPanel_->displacementsTable()->setRowCount(0);
   resultsPanel_->reactionsTable()->setRowCount(0);
   resultsPanel_->beamForcesTable()->setRowCount(0);
+  resultsPanel_->trussForcesTable()->setRowCount(0);
   resultsPanel_->elasticLinksTable()->setRowCount(0);
   resultsPanel_->eigenvalueTable()->setRowCount(0);
   resultsPanel_->diagnosticsTable()->setRowCount(0);
@@ -589,6 +591,7 @@ void MainWindow::onCompare() {
   const bool anyChecked = fileInputPanel_->isIncludedInComparison(FileInputPanel::Row::Displacements) ||
                            fileInputPanel_->isIncludedInComparison(FileInputPanel::Row::Reactions) ||
                            fileInputPanel_->isIncludedInComparison(FileInputPanel::Row::BeamForce) ||
+                           fileInputPanel_->isIncludedInComparison(FileInputPanel::Row::TrussForce) ||
                            fileInputPanel_->isIncludedInComparison(FileInputPanel::Row::ElasticLink) ||
                            fileInputPanel_->isIncludedInComparison(FileInputPanel::Row::EigenvalueMode);
   if (!anyChecked) {
@@ -621,10 +624,11 @@ void MainWindow::onCompare() {
       {FileInputPanel::Row::Displacements, ReferenceFileKind::Displacements, "Displacements(Global)", &lastDisplacementsFile_},
       {FileInputPanel::Row::Reactions, ReferenceFileKind::Reaction, "Reaction(Global)", &lastReactionsFile_},
       {FileInputPanel::Row::BeamForce, ReferenceFileKind::BeamForce, "Beam Force", &lastBeamForceFile_},
+      {FileInputPanel::Row::TrussForce, ReferenceFileKind::TrussForce, "Truss Force", &lastTrussForceFile_},
       {FileInputPanel::Row::ElasticLink, ReferenceFileKind::ElasticLink, "Elastic Link", &lastElasticLinkFile_},
   };
 
-  std::vector<ComparisonRow> displacementRows, reactionRows, beamForceRows, elasticLinkRows;
+  std::vector<ComparisonRow> displacementRows, reactionRows, beamForceRows, trussForceRows, elasticLinkRows;
   QStringList allDiagnostics;
 
   for (const auto& spec : specs) {
@@ -647,6 +651,7 @@ void MainWindow::onCompare() {
       case ReferenceFileKind::Displacements: cmp = kopruq::verification::matchDisplacements(results, *read.table, tol); break;
       case ReferenceFileKind::Reaction: cmp = kopruq::verification::matchReactions(results, *read.table, tol); break;
       case ReferenceFileKind::BeamForce: cmp = kopruq::verification::matchBeamForces(results, *read.table, tol); break;
+      case ReferenceFileKind::TrussForce: cmp = kopruq::verification::matchTrussForces(results, *read.table, tol); break;
       case ReferenceFileKind::ElasticLink: cmp = kopruq::verification::markElasticLinksUnsupported(*read.table); break;
     }
     for (const auto& d : cmp.diagnostics) allDiagnostics << QString::fromStdString(d);
@@ -655,6 +660,7 @@ void MainWindow::onCompare() {
       case ReferenceFileKind::Displacements: displacementRows = std::move(cmp.rows); break;
       case ReferenceFileKind::Reaction: reactionRows = std::move(cmp.rows); break;
       case ReferenceFileKind::BeamForce: beamForceRows = std::move(cmp.rows); break;
+      case ReferenceFileKind::TrussForce: trussForceRows = std::move(cmp.rows); break;
       case ReferenceFileKind::ElasticLink: elasticLinkRows = std::move(cmp.rows); break;
     }
   }
@@ -699,6 +705,7 @@ void MainWindow::onCompare() {
   populateNodeBasedTable(resultsPanel_->displacementsTable(), displacementRows);
   populateNodeBasedTable(resultsPanel_->reactionsTable(), reactionRows);
   populateBeamOrLinkTable(resultsPanel_->beamForcesTable(), beamForceRows);
+  populateBeamOrLinkTable(resultsPanel_->trussForcesTable(), trussForceRows);
   populateBeamOrLinkTable(resultsPanel_->elasticLinksTable(), elasticLinkRows);
   populateEigenvalueTable(resultsPanel_->eigenvalueTable(), eigenvalueRows);
 
@@ -719,12 +726,13 @@ void MainWindow::onCompare() {
       {"Deplasmanlar (Global)", &displacementRows},
       {"Mesnet Tepkimeleri (Global)", &reactionRows},
       {"Kiriş İç Kuvvetleri", &beamForceRows},
+      {"Kafes Elemanı Kuvvetleri", &trussForceRows},
       {"Elastik Bağlantılar", &elasticLinkRows},
       {"Özdeğer (Eigenvalue)", &eigenvalueRows},
   };
   auto* catTable = resultsPanel_->categoryTable();
   catTable->setSortingEnabled(false);
-  constexpr int kCategoryCount = 5;
+  constexpr int kCategoryCount = 6;
   catTable->setRowCount(kCategoryCount);
   int totalAll = 0, passAll = 0, failAll = 0, naAll = 0;
   for (int i = 0; i < kCategoryCount; ++i) {
@@ -762,6 +770,7 @@ void MainWindow::onCompare() {
   lastDisplacementRows_ = std::move(displacementRows);
   lastReactionRows_ = std::move(reactionRows);
   lastBeamForceRows_ = std::move(beamForceRows);
+  lastTrussForceRows_ = std::move(trussForceRows);
   lastElasticLinkRows_ = std::move(elasticLinkRows);
   lastEigenvalueRows_ = std::move(eigenvalueRows);
   lastDiagnostics_ = allDiagnostics;
@@ -791,6 +800,7 @@ void MainWindow::onExport() {
   reportData.displacements = lastDisplacementRows_;
   reportData.reactions = lastReactionRows_;
   reportData.beamForces = lastBeamForceRows_;
+  reportData.trussForces = lastTrussForceRows_;
   reportData.elasticLinks = lastElasticLinkRows_;
   for (const auto& d : lastDiagnostics_) reportData.diagnostics.push_back(d.toStdString());
   reportData.metadata.modelFileName = QFileInfo(fileInputPanel_->filePath(FileInputPanel::Row::MidasModel)).fileName().toStdString();
@@ -799,6 +809,7 @@ void MainWindow::onExport() {
   reportData.metadata.displacementsFileName = lastDisplacementsFile_.toStdString();
   reportData.metadata.reactionsFileName = lastReactionsFile_.toStdString();
   reportData.metadata.beamForceFileName = lastBeamForceFile_.toStdString();
+  reportData.metadata.trussForceFileName = lastTrussForceFile_.toStdString();
   reportData.metadata.elasticLinkFileName = lastElasticLinkFile_.toStdString();
   reportData.metadata.absoluteToleranceScale = lastTolerance_.absoluteToleranceScale;
   reportData.metadata.relativeTol = lastTolerance_.relativeTol;

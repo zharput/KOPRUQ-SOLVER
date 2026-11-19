@@ -13,6 +13,7 @@ const char* referenceFileKindName(ReferenceFileKind kind) {
     case ReferenceFileKind::Displacements: return "Displacements(Global)";
     case ReferenceFileKind::Reaction: return "Reaction(Global)";
     case ReferenceFileKind::ElasticLink: return "Elastic Link";
+    case ReferenceFileKind::TrussForce: return "Truss Force";
   }
   return "?";
 }

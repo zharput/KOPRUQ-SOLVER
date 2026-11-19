@@ -238,6 +238,60 @@ CategoryComparison matchBeamForces(const Json& results, const ReferenceTable& re
   return out;
 }
 
+CategoryComparison matchTrussForces(const Json& results, const ReferenceTable& ref, const ToleranceSettings& tol) {
+  CategoryComparison out;
+  const int elemCol = ref.columnIndex("Elem");
+  const int loadCol = ref.columnIndex("Load");
+  const int forceICol = ref.columnIndex("Force-I");
+  const int forceJCol = ref.columnIndex("Force-J");
+  if (elemCol < 0 || loadCol < 0 || forceICol < 0 || forceJCol < 0) {
+    out.diagnostics.push_back("Beklenen sütunlar bulunamadı (Elem/Load/Force-I/Force-J).");
+    return out;
+  }
+
+  std::map<std::string, std::map<long, const Json*>> elemCache;
+  for (const auto& row : ref.rows) {
+    const std::string loadCase = row[loadCol].text;
+    long elemId = 0;
+    if (!readIdCell(row[elemCol], elemId)) continue;
+
+    auto cacheIt = elemCache.find(loadCase);
+    if (cacheIt == elemCache.end()) {
+      std::map<long, const Json*> m;
+      if (const Json* lc = findLoadCase(results, loadCase); lc && lc->contains("elements"))
+        for (const auto& e : lc->at("elements")) m[toId(e.at("id").get<double>())] = &e;
+      cacheIt = elemCache.emplace(loadCase, std::move(m)).first;
+    }
+    const auto elemIt = cacheIt->second.find(elemId);
+    const bool caseKnown = findLoadCase(results, loadCase) != nullptr;
+    if (elemIt == cacheIt->second.end() && !caseKnown)
+      out.diagnostics.push_back("Yük durumu results.json'da bulunamadı: " + loadCase);
+
+    const struct { int col; bool isIEnd; const char* location; } ends[2] = {
+        {forceICol, true, "I"}, {forceJCol, false, "J"}};
+    for (const auto& end : ends) {
+      const CellValue& cell = row[end.col];
+      if (!cell.isNumber) continue;
+      ComparisonRow out_row;
+      out_row.loadCase = loadCase;
+      out_row.id = std::to_string(elemId);
+      out_row.location = end.location;
+      out_row.component = "Axial";
+      out_row.unit = ref.columns[static_cast<std::size_t>(end.col)].unit;
+      if (elemIt == cacheIt->second.end()) {
+        out_row.result.status = ComparisonStatus::NotApplicable;
+        out_row.result.referenceValue = cell.number;
+      } else {
+        const double solverValueRaw = elemIt->second->at("local_end_forces").at(end.isIEnd ? 0 : 6).get<double>();
+        const double solverValue = toMidasBeamForceConvention(solverValueRaw, end.isIEnd, 0); // Axial = component 0
+        out_row.result = compareValues(solverValue, cell.number, QuantityCategory::Force, tol);
+      }
+      out.rows.push_back(std::move(out_row));
+    }
+  }
+  return out;
+}
+
 CategoryComparison markElasticLinksUnsupported(const ReferenceTable& ref) {
   CategoryComparison out;
   const int linkCol = ref.columnIndex("No.");

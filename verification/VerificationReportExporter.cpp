@@ -35,6 +35,7 @@ void writeMetadataBlock(xlnt::worksheet& ws, const ReportMetadata& m, int& row) 
   line("Displacements Dosyasi", m.displacementsFileName.empty() ? "(secilmedi)" : m.displacementsFileName);
   line("Reaction Dosyasi", m.reactionsFileName.empty() ? "(secilmedi)" : m.reactionsFileName);
   line("Beam Force Dosyasi", m.beamForceFileName.empty() ? "(secilmedi)" : m.beamForceFileName);
+  line("Truss Force Dosyasi", m.trussForceFileName.empty() ? "(secilmedi)" : m.trussForceFileName);
   line("Elastic Link Dosyasi", m.elasticLinkFileName.empty() ? "(secilmedi)" : m.elasticLinkFileName);
   setText(ws, 1, row, "Mutlak Tolerans Olcek Faktoru"); setNumber(ws, 2, row, m.absoluteToleranceScale); ++row;
   setText(ws, 1, row, "Bagil Tolerans"); setNumber(ws, 2, row, m.relativeTol); ++row;
@@ -128,6 +129,7 @@ bool exportVerificationReport(const std::string& outputXlsxPath, const ReportDat
     writeCategorySummaryRow(summary, row++, "Displacements", data.displacements);
     writeCategorySummaryRow(summary, row++, "Reactions", data.reactions);
     writeCategorySummaryRow(summary, row++, "Beam Forces", data.beamForces);
+    writeCategorySummaryRow(summary, row++, "Truss Forces", data.trussForces);
     writeCategorySummaryRow(summary, row++, "Elastic Links", data.elasticLinks);
 
     auto displacements = wb.create_sheet();
@@ -141,6 +143,10 @@ bool exportVerificationReport(const std::string& outputXlsxPath, const ReportDat
     auto beamForces = wb.create_sheet();
     beamForces.title("Beam Forces");
     writeBeamOrLinkSheet(beamForces, data.beamForces);
+
+    auto trussForces = wb.create_sheet();
+    trussForces.title("Truss Forces");
+    writeBeamOrLinkSheet(trussForces, data.trussForces);
 
     auto elasticLinks = wb.create_sheet();
     elasticLinks.title("Elastic Links");

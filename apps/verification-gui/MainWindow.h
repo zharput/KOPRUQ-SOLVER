@@ -80,10 +80,10 @@ private:
   ModelInfoPanel::Info modelInfo_; // accumulated across the two "midas-nx-json ..." log lines
 
   // GUI-5's last comparison, cached so GUI-6's export reuses it verbatim instead of recomputing.
-  std::vector<kopruq::verification::ComparisonRow> lastDisplacementRows_, lastReactionRows_, lastBeamForceRows_, lastElasticLinkRows_, lastEigenvalueRows_;
+  std::vector<kopruq::verification::ComparisonRow> lastDisplacementRows_, lastReactionRows_, lastBeamForceRows_, lastTrussForceRows_, lastElasticLinkRows_, lastEigenvalueRows_;
   QStringList lastDiagnostics_;
   kopruq::verification::ToleranceSettings lastTolerance_;
   QString lastSolverVersion_;
   QString lastComparisonTimestamp_;
-  QString lastDisplacementsFile_, lastReactionsFile_, lastBeamForceFile_, lastElasticLinkFile_, lastEigenvalueFile_;
+  QString lastDisplacementsFile_, lastReactionsFile_, lastBeamForceFile_, lastTrussForceFile_, lastElasticLinkFile_, lastEigenvalueFile_;
 };

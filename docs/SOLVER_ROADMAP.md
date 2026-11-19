@@ -909,6 +909,31 @@ approximation (e.g. the open-section/Bredt torsion constant J) -- not investigat
 Verified: Debug CTest **259/259 PASS**, gui-release **289/289 PASS** -- both 100%, no
 regressions.
 
+### Phase 7S addendum — torsion constant investigated; model 17 tested and verified (2026-11-19)
+User instruction: fix the torsion-related parts too, then test and verify model 17. Added
+`detail::torsionConstantFEM()` (`MidasSectionLibrary.hpp`): solves St. Venant's torsion via the
+membrane analogy (exact PDE formulation for an arbitrary section), numerically via a finite-
+difference Laplacian (Eigen sparse Cholesky). Verified correct against two independent references
+(tabulated square coefficient, this file's own closed-form rectangle), both within ~0.03-0.1%.
+
+**Tried wiring it into the T-section's J -- made things WORSE, not better.** Model 17's real
+MIDAS-data match regressed (Beam Force PASS 817/936 -> 757/936, reaction mismatches 5 -> 11) while
+model 18 (same section) was unaffected either way. Strong empirical evidence MIDAS's own DBUSER
+general-section torsion constant uses the same simple thin-strip-sum convention internally, not an
+exact PDE solve -- matching MIDAS's convention, not the more "physically rigorous" answer, is what
+actually helps. **Reverted** `tSection()`'s J to the strip sum; `torsionConstantFEM()` itself is
+kept (correct, tested, may suit a future shape) but not wired into any shape's J this session. A
+disclosed finding, not a quiet revert: more theoretical rigor is not automatically more correct
+when the goal is matching a specific other program's own convention.
+
+**Model 17 tested and verified** (after the revert): FORCE-case **Beam Force 817/936 PASS**,
+**Reaction 43/48 PASS** (5 small, 1-2% residual mismatches), **Displacement 474/474 PASS**.
+Spectrum-case rows not checked this session. Remaining residual not pursued further, per the
+user's explicit instruction to stop here.
+
+Verified: Debug CTest **261/261 PASS**, gui-release **291/291 PASS** -- both 100%, no
+regressions.
+
 ### `xmidas/deneme1.json` tests removed entirely (2026-11-19, explicit user instruction)
 Every CTest count above citing "5 pre-existing/permanent failures" refers to the 5 tests that
 depended on the permanently-deleted `xmidas/deneme1.json` sample (see

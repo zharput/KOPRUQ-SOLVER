@@ -1946,6 +1946,37 @@ now that shear area is no longer the dominant error source.
 Verified: Debug CTest **259/259 PASS**, gui-release **289/289 PASS** -- both 100%, no
 regressions.
 
+## Torsion constant investigated; model 17 tested and verified (2026-11-19)
+User instruction: fix the torsion-related parts too (prioritizing J after shear area), then test
+and verify model 17. Added `detail::torsionConstantFEM()` (`MidasSectionLibrary.hpp`): solves St.
+Venant's torsion via the membrane analogy (Laplacian(phi)=-2, phi=0 on the boundary,
+J=2*integral(phi dA)) -- the exact formulation for an arbitrary section, numerically solved via a
+finite-difference Laplacian (Eigen sparse Cholesky). Verified correct against two independent
+references (tabulated square coefficient, this file's own closed-form rectangle), both within
+~0.03-0.1%.
+
+**Tried wiring it into the T-section's J (replacing the thin-strip-sum approximation) -- made
+things WORSE, not better.** Model 17's real MIDAS-data match regressed (Beam Force PASS 817/936
+-> 757/936, reaction mismatches 5 -> 11) while model 18 (same section) was unaffected either way.
+This is strong empirical evidence MIDAS's own DBUSER general-section torsion constant uses the
+same simple thin-strip-sum convention internally, not an exact PDE solve -- so matching MIDAS's
+convention, not the more "physically rigorous" answer, is what actually helps here. **Reverted**
+`tSection()`'s J to the strip sum; `torsionConstantFEM()` itself is kept (correct, tested, useful
+for a future shape it may genuinely suit) but not wired into any shape's J this session. This is
+an important, disclosed finding, not a quiet revert: "more rigorous" is not automatically "more
+correct" when the goal is reproducing a SPECIFIC other program's own (possibly simplified)
+convention, not the true physical answer.
+
+**Model 17 tested and verified** (after the revert, i.e. with the shear-area fix but the original
+torsion formula): its real MIDAS reference data gives **FORCE-case Beam Force 817/936 PASS**,
+**Reaction 43/48 PASS** (5 small residual mismatches, 1-2%), **Displacement 474/474 PASS**.
+Spectrum-case (`SPECX(RS)`/`SPECY(RS)`) rows were not checked this session (would need the same
+modal+spectrum verification approach already used for model 16). The small remaining FORCE-case
+residual is not pursued further, per the user's explicit instruction to stop here.
+
+Verified: Debug CTest **261/261 PASS**, gui-release **291/291 PASS** -- both 100%, no
+regressions.
+
 ## Next autonomous action
 Phase 3.2, Phase 4, Phase 5 (5.1-5.6), Phase 6 (6.1, 6.1b, 6.2, 6.2b; 6.3 cancelled), Phase 7A,
 7B (including ETMP thermal wiring), 7C, 7D, 7M, 7S(1) and 7T are all complete and verified -- CI

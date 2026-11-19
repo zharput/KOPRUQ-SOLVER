@@ -494,15 +494,52 @@ GUI-only duplicate) remaining failures are the already-documented, unrelated
 `xmidas/deneme1.json`-missing ones.
 
 ### Phase 7G — MIDAS load-combination import (`LCOM-GEN`)
-**Not started.** Phase 4.1 already supports combinations by superposition in the native model
-format; `MidasJsonImporter.hpp` currently reads `LCOM-GEN` entries nowhere — `STLD`/load cases
-import, but `vCOMB` (the combination's constituent load cases + factors) is silently unused.
-Needs: map each `LCOM-GEN` entry onto the existing native combination mechanism (by load-case
-name + factor, matching `STLD.NAME`/Phase 7B's preserved load-case names), solve and report them
-through the existing `results.json` `combinations` array (already present in the schema, just
-always empty on MIDAS import today), and verify against MIDAS's own combination reference rows
-(`Reaction(Global)`/`Beam Force`/`Displacements(Global)` already export `COMBO-*` rows in models
-05/06 — currently compared as `N/A` for exactly this reason).
+**COMPLETE (verified, this session, 2026-11-19).** `MidasJsonImporter.hpp` now parses `LCOM-GEN`
+records (`NAME`, `ACTIVE`, `iTYPE`, `vCOMB` array of `{ANAL: "ST"|"CB", LCNAME, FACTOR}`) into
+`LoadCombination`. Only `ACTIVE=="ACTIVE"` and `iTYPE==0` (linear combination) are accepted;
+other `iTYPE` values (envelope/max-min) are rejected with a clear diagnostic since they cannot be
+expressed as linear superposition. Since static analysis is linear, a combination-of-combinations
+is mathematically exact to flatten at import time: a memoized, cycle-safe recursive expansion
+substitutes nested `ANAL=="CB"` references by their own expansion (scaled by factor), merging
+duplicate load-case references (summed factor) before building the final `LoadCombination` —
+`LinearStaticSolver::LoadCombination::terms` still only ever indexes primitive load cases; this
+is an import-time translation, not a new solver capability. `MidasImportReport::combinations`
+records the imported count.
+
+**Verification evidence:** model 06 (`06 Cerceve-2`, 2 non-nested combinations COMBO-1/COMBO-2)
+now reaches 100% PASS — 1080/1080 beam force, 60/60 reaction, 570/570 displacement — against real
+MIDAS reference data, including the `COMBO-*` rows that previously compared as `N/A` for exactly
+this reason. Model 10 (`10 3d Cerceve`, 1 combination) and model 21 (`21 Combo`, 4 combinations
+including nested `COMBO-3`/`COMBO-4` referencing `COMBO-1`/`COMBO-2`/`COMBO-3` via `ANAL=="CB"` —
+the more rigorous test of the recursive-expansion path) could **not** be end-to-end verified this
+session: both fail to solve for reasons unrelated to combination import — model 10 references an
+unsupported `'H'` `DBUSER` section shape, model 21 references two unsupported shapes (`STRK`,
+`SOCT`) on 16 of its 188 elements. Both are pre-existing, disclosed gaps (see Phase 7G.1 below);
+until a section-shape fix unblocks either model's full solve, the nested-`CB`-expansion path
+remains verified only by code inspection and unit-level reasoning, not by a real-data regression
+row. Full regression: 291/291 Release, 261/261 Debug, unchanged aside from the newly-passing
+model 06 combination rows (which are driven by the diagnostic tool, not CTest).
+
+### Phase 7G.1 — Unsupported MIDAS section shapes blocking models 10/20/21 (new, found 2026-11-19)
+**Not started.** Three distinct gaps, each blocking a different real model's full solve:
+- Model 10 (`10 3d Cerceve`): `SECT.SHAPE=='H'` — not implemented (`resolveDbUserSection` only
+  implements `SB`, `B`, `SR`, `T`).
+- Model 20 (`20 Kafes`, truss): all 25 elements are `TYPE:"BEAM"`/`STYPE:0` with no `FRLS`
+  (MIDAS is not using an explicit pin-jointed truss element type here); `MATL.TYPE:"STEEL"`
+  grade S275 has no resolver (`MidasMaterialLibrary.hpp` only implements
+  `resolveConcreteGradeMaterial`); `SECT.SHAPE:"C"` with `SECT_I.DB_NAME:"UNI"`/
+  `SECT_NAME:"UPN100"` is a catalog/database profile lookup, not raw `vSIZE` dimensions —
+  `resolveDbUserSection` only handles `vSIZE`-based shapes and would reject this entirely.
+- Model 21 (`21 Combo`): 16 of 188 elements use `SECT.SHAPE` values `STRK` (`vSIZE` has 2
+  meaningful values) and `SOCT` (`vSIZE` has 4 meaningful values) — unconfirmed geometric
+  parametrization. Deliberately **not** implemented by guessing, per the project's "never
+  fabricate" rule — their dimension-to-geometry mapping must be confirmed against MIDAS
+  documentation or another authoritative source before implementation, not inferred from the
+  `vSIZE` array alone.
+
+Any one of these, once resolved, would also unblock the corresponding model's full end-to-end
+verification (model 20 for truss behavior; model 21 for the nested-`CB` combination path still
+pending from Phase 7G above; model 10 for an additional non-nested combination data point).
 
 ### Phase 7H — Rigid-link support in `ModalSolver`/`ResponseSpectrumSolver` (unblock MIDAS modal/spectrum import)
 **COMPLETE for the solver-level fix and its CLI dispatch (verified, this session, 2026-11-17);

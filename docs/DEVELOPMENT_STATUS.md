@@ -2001,3 +2001,42 @@ Other candidate next steps (unrelated to the GUI, say which, or propose a differ
 2. Extend rigid-link support to ModalSolver/ResponseSpectrumSolver, or cut a `v0.1.0` release tag.
 3. Confirm MIDAS's GTMP T1/T2 sign convention (e.g. from the user, who may have access to the
    official API manual) to unblock gradient-temperature import, if ever needed.
+
+## Phase 7G complete — LCOM-GEN load-combination import, with nested CB expansion (2026-11-19)
+
+`MidasJsonImporter.hpp` now imports `LCOM-GEN` records into `LoadCombination`, including a
+memoized, cycle-safe recursive expansion of nested `ANAL=="CB"` references (combination-of-
+combinations) into flat primitive-load-case terms — mathematically exact under linear statics,
+so `LinearStaticSolver` itself is unchanged; only `iTYPE==0` (linear) and `ACTIVE=="ACTIVE"`
+entries are accepted, others rejected with a clear diagnostic.
+
+**Verified:** model 06 (`06 Cerceve-2`, 2 non-nested combinations) — 100% PASS, 1080/1080 beam
+force, 60/60 reaction, 570/570 displacement, including the previously-`N/A` `COMBO-*` rows.
+Full regression: 291/291 Release, 261/261 Debug (commit `d01f3f3`).
+
+**Not verified this session (disclosed, not silently skipped):** model 10 (1 combination) and
+model 21 (4 combinations, including the nested `COMBO-3`/`COMBO-4` case that is the more
+rigorous test of the recursive-expansion path) both fail to solve for reasons unrelated to
+combination import — unsupported `DBUSER` section shapes (`'H'` on model 10; `STRK`/`SOCT` on
+16/188 elements of model 21). See Phase 7G.1 in the roadmap.
+
+## Phase 7G.1 — new blockers found this session, not yet addressed (2026-11-19)
+
+Investigating the user's "test models 19, 20, 21" instruction surfaced three distinct,
+previously-undocumented gaps, none implemented yet (deliberately, to avoid fabricating unverified
+section geometry — see roadmap Phase 7G.1 for full detail):
+- **Model 19 (spring):** no new gap — already fully verified earlier this session (552/552 beam
+  force, 84/84 reaction, 293/294 displacement). Nothing further needed.
+- **Model 20 (truss, `20 Kafes`):** needs (a) `MATL.TYPE:"STEEL"` material resolution (only
+  `resolveConcreteGradeMaterial` exists today), and (b) catalog/database section lookup by
+  `SECT_I.DB_NAME`/`SECT_NAME` (e.g. `"UPN100"`), which `resolveDbUserSection` does not support
+  (it only handles raw `vSIZE`-based shapes). Also notable: MIDAS models this truss with ordinary
+  `TYPE:"BEAM"` elements (no `FRLS` releases), not an explicit pin-jointed truss type.
+- **Model 21 (combo, `21 Combo`):** needs two new `SECT.SHAPE` resolvers, `STRK` and `SOCT`,
+  whose `vSIZE`→geometry mapping is not confirmed from the data alone (2 and 4 meaningful `vSIZE`
+  values respectively) — these block the entire model's solve (16/188 elements), including the
+  nested-combination verification row still pending from Phase 7G.
+
+None of these three gaps has been implemented. Resolving any one requires either authoritative
+MIDAS section/material documentation or explicit user confirmation of the parametrization, per
+the project's standing "never fabricate structural properties" rule.

@@ -73,9 +73,11 @@
 #include <array>
 #include <cctype>
 #include <cmath>
+#include <functional>
 #include <map>
 #include <stdexcept>
 #include <string>
+#include <tuple>
 #include <vector>
 
 namespace kopruq::io::midas {
@@ -86,6 +88,7 @@ struct MidasImportReport {
   std::size_t springs{}; // ELNK (LINK:"GEN") records imported as SpringConnection
   std::size_t joint_springs{}; // NSPR records imported as JointSpringConnection
   std::size_t elastic_links_rejected{}; // ELNK records present but NOT imported (unsupported LINK type, unconfirmed R_S release, missing node, or bad SDR) -- not a count of `springs`
+  std::size_t combinations{}; // LCOM-GEN records imported as LoadCombination (nested CB references expanded to pure load-case terms)
   std::vector<std::string> assumptions; // disclosed substitutions, e.g. "material 1: poisson_ratio=0.2 (...)"
   std::vector<std::string> rejected;    // records explicitly not imported, with the reason
   std::map<Id, Id> originalToInternalNodeId;    // identity mapping in this importer (MIDAS IDs preserved), kept
@@ -444,6 +447,95 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
       out.report.rejected.push_back(std::string(key) + ": gradient/beam-section temperature records are present but not mapped (MIDAS's T1/T2 top-fiber sign convention could not be confirmed); only uniform ETMP temperature is imported");
 
   out.report.load_cases = out.input.load_cases.size();
+
+  // --- LCOM-GEN: load combinations (Phase 7G, 2026-11-19) ---
+  // Each entry's vCOMB lists terms as either ANAL="ST" (a primitive load case, by its STLD name)
+  // or ANAL="CB" (another LCOM-GEN combination, by its own name) with a FACTOR. Since static
+  // analysis is linear, a combination-of-combinations is mathematically EXACT to expand into an
+  // equivalent flat linear combination of primitive load cases alone (substitute each CB term's
+  // own expansion, scaled by its factor, repeated recursively) -- this is done here at import
+  // time, not a new solver capability; LinearStaticSolver's own LoadCombination::terms always
+  // indexes primitive load cases, unchanged (confirmed against a real nested-combination sample,
+  // verification/models/21, which references a combination from within another combination).
+  // Only ACTIVE=="ACTIVE" and iTYPE==0 (the only values seen in any real sample) are accepted;
+  // any other iTYPE (e.g. an envelope/max-min combination, which cannot be expressed as a single
+  // linear superposition at all) is rejected explicitly, not silently approximated as linear.
+  if (dbg.contains("LCOM-GEN")) {
+    std::map<std::string, std::vector<std::tuple<std::string, std::string, Real>>> rawCombos; // name -> (ANAL, ref, factor) terms
+    std::map<std::string, std::string> comboKey; // name -> original JSON key, for diagnostics only
+    for (auto it = dbg.at("LCOM-GEN").begin(); it != dbg.at("LCOM-GEN").end(); ++it) {
+      const auto& v = it.value();
+      const std::string name = v.value("NAME", std::string());
+      comboKey[name] = it.key();
+      const std::string active = v.value("ACTIVE", std::string());
+      const int iType = v.value("iTYPE", 0);
+      if (active != "ACTIVE") { out.report.rejected.push_back("LCOM-GEN " + it.key() + " ('" + name + "'): ACTIVE='" + active + "' (only ACTIVE combinations are imported)"); continue; }
+      if (iType != 0) { out.report.rejected.push_back("LCOM-GEN " + it.key() + " ('" + name + "'): iTYPE=" + std::to_string(iType) + " is not supported (only the simple linear-superposition type, iTYPE=0, is implemented)"); continue; }
+      std::vector<std::tuple<std::string, std::string, Real>> terms;
+      bool ok = true;
+      if (v.contains("vCOMB"))
+        for (const auto& term : v.at("vCOMB")) {
+          const std::string anal = term.value("ANAL", std::string());
+          const std::string ref = term.value("LCNAME", std::string());
+          const Real factor = term.value("FACTOR", Real(1));
+          if (anal != "ST" && anal != "CB") { out.report.rejected.push_back("LCOM-GEN " + it.key() + " ('" + name + "'): vCOMB term has unsupported ANAL='" + anal + "' (only ST/CB are implemented)"); ok = false; break; }
+          terms.emplace_back(anal, ref, factor);
+        }
+      if (!ok) continue;
+      rawCombos[name] = std::move(terms);
+    }
+
+    // Recursively expands `name` into pure (load case name, net factor) terms, substituting any
+    // CB reference by its own expansion; cycle-safe via an explicit recursion stack (a genuine
+    // cycle is invalid input, not something to silently break out of arbitrarily).
+    std::map<std::string, std::vector<std::pair<std::string, Real>>> expanded;
+    std::function<bool(const std::string&, std::vector<std::string>&, std::vector<std::pair<std::string, Real>>&)> expand =
+      [&](const std::string& name, std::vector<std::string>& stack, std::vector<std::pair<std::string, Real>>& result) -> bool {
+        if (auto cached = expanded.find(name); cached != expanded.end()) { for (const auto& t : cached->second) result.push_back(t); return true; }
+        if (std::find(stack.begin(), stack.end(), name) != stack.end()) return false; // cycle
+        auto found = rawCombos.find(name);
+        if (found == rawCombos.end()) return false; // references a combo that was rejected above or never defined
+        stack.push_back(name);
+        std::vector<std::pair<std::string, Real>> acc;
+        for (const auto& [anal, ref, factor] : found->second) {
+          if (anal == "ST") {
+            acc.emplace_back(ref, factor);
+          } else {
+            std::vector<std::pair<std::string, Real>> sub;
+            if (!expand(ref, stack, sub)) { stack.pop_back(); return false; }
+            for (const auto& [n, f] : sub) acc.emplace_back(n, f * factor);
+          }
+        }
+        stack.pop_back();
+        expanded[name] = acc;
+        for (const auto& t : acc) result.push_back(t);
+        return true;
+      };
+
+    for (const auto& [name, terms] : rawCombos) {
+      (void)terms;
+      std::vector<std::string> stack;
+      std::vector<std::pair<std::string, Real>> flat;
+      if (!expand(name, stack, flat)) {
+        out.report.rejected.push_back("LCOM-GEN " + comboKey[name] + " ('" + name + "'): could not be expanded (a referenced load case/combination is missing, unsupported, or forms a cycle)");
+        continue;
+      }
+      // Merge duplicate load-case references (a case reachable more than once across nested
+      // combination branches) into a single summed factor, exactly as linear superposition requires.
+      std::map<std::string, Real> merged;
+      for (const auto& [n, f] : flat) merged[n] += f;
+      LoadCombination lcomb; lcomb.name = name;
+      bool allFound = true;
+      for (const auto& [caseName, factor] : merged) {
+        auto caseIt = caseIndex.find(caseName);
+        if (caseIt == caseIndex.end()) { allFound = false; break; }
+        lcomb.terms.emplace_back(caseIt->second, factor);
+      }
+      if (!allFound) { out.report.rejected.push_back("LCOM-GEN " + comboKey[name] + " ('" + name + "'): references a load case not present in this model"); continue; }
+      out.input.combinations.push_back(lcomb);
+    }
+  }
+  out.report.combinations = out.input.combinations.size();
 
   // --- EIGV: modal analysis request (number of modes only) ---
   // Real field shape confirmed from an actual MIDAS NX JSON export (verification/models/13

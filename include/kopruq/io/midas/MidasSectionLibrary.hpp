@@ -457,7 +457,22 @@ inline ResolvedSectionProperties resolveCatalogSection(const std::string& shape,
   if (dbName != "UNI") throw std::invalid_argument("unsupported catalog DB_NAME '" + dbName + "' (only 'UNI' is implemented)");
   if (shape == "H" && sectName == "HEB160") return iSection(0.160, 0.160, 0.008, 0.013);
   if (shape == "C" && sectName == "UPN100") return channelSection(0.100, 0.050, 0.006, 0.0085);
-  if (shape == "L" && sectName == "L50x5") return equalAngleSection(0.050, 0.005); // EN 10056-1
+  if (shape == "L" && sectName == "L50x5") {
+    // area: overridden to the published EN 10056-1 tabulated value (4.80 cm^2, root fillets
+    // included) rather than equalAngleSection's own idealized no-fillet geometric decomposition
+    // (4.75 cm^2) -- unlike a raw DBUSER vSIZE input, a catalog/database section name IS a
+    // reference to a specific published profile, so the exact published number is available and
+    // unambiguous here, and using it materially improved real-data agreement: verified against
+    // model 20 (verification/models/20 Kafes, 2026-11-19) -- Displacements(Global) went from
+    // 240/252 to 252/252 PASS once applied (the L50x5 members are this model's truss diagonals,
+    // whose axial stiffness EA/L is directly proportional to area). IH/IB/J/AsH/AsB are left at
+    // equalAngleSection's own idealized-geometry values (no comparably precise published
+    // principal-moment numbers were available to cross-check, and this model's own L50x5
+    // elements are TRUSS-type, for which only area affects the result at all).
+    auto p = equalAngleSection(0.050, 0.005);
+    p.area = 0.00048;
+    return p;
+  }
   throw std::invalid_argument("unsupported catalog section '" + sectName + "' (shape '" + shape + "', DB_NAME '" + dbName +
                                "'): only HEB160 (shape H), UPN100 (shape C) and L50x5 (shape L) are implemented");
 }

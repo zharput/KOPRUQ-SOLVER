@@ -427,6 +427,40 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
       out.report.assumptions.push_back("node " + std::to_string(node) + ": connected only by TRUSS elements, which carry no rotational stiffness (Truss3D.hpp); RX/RY/RZ auto-restrained, matching MIDAS's own implicit pin-jointed-truss convention (not present as an explicit CONS restraint in the export)");
   }
 
+  // Planar-model out-of-plane DOF auto-restraint: when every node's coordinate along one global
+  // axis N is identical (the model's own bounding box has zero extent there), MIDAS's "2D"
+  // analysis setting implicitly suppresses the 3 out-of-plane DOFs everywhere (translation along
+  // N, plus rotation about the two IN-plane axes -- rotation about N itself stays a normal
+  // in-plane bending DOF, e.g. for a model flat in the X-Z plane: UY/RX/RZ suppressed, UX/UZ/RY
+  // retained) WITHOUT exporting them as explicit CONS records (confirmed, 2026-11-19: the user
+  // re-solved model 20 -- verification/models/20 Kafes, a Y=0 planar truss -- as an explicit
+  // MIDAS "2D" model and re-exported; its CONS records are byte-identical to the original 3D-
+  // solved export, i.e. MIDAS's own 2D restraint truly has no CONS footprint at all). Applied
+  // only when the model is genuinely planar (bounding box exactly 0 along one axis); a 3D model
+  // that merely happens to have some unrestrained out-of-plane DOFs at a few nodes is NOT
+  // affected (exact-zero-extent is deliberately strict, not a near-planar heuristic, to avoid
+  // silently restraining a genuinely 3D structure that is merely thin in one direction).
+  if (out.report.hasBoundingBox) {
+    int flatAxis = -1;
+    if (out.report.maxX == out.report.minX) flatAxis = 0;
+    else if (out.report.maxY == out.report.minY) flatAxis = 1;
+    else if (out.report.maxZ == out.report.minZ) flatAxis = 2;
+    if (flatAxis >= 0) {
+      const int suppressed[3] = {flatAxis, 3 + (flatAxis + 1) % 3, 3 + (flatAxis + 2) % 3};
+      bool any = false;
+      for (const auto& n : out.input.model.nodes) {
+        auto& flags = out.input.restraints[n.id];
+        for (int i : suppressed) { if (!flags[(std::size_t)i]) any = true; flags[(std::size_t)i] = true; }
+      }
+      if (any)
+        out.report.assumptions.push_back("model has zero extent along global axis " + std::string(1, "XYZ"[flatAxis]) +
+                                          ": this is a MIDAS '2D' analysis (confirmed empirically, see MidasJsonImporter.hpp); "
+                                          "the 3 out-of-plane DOFs (translation along " + std::string(1, "XYZ"[flatAxis]) +
+                                          " and rotation about the other two axes) are auto-restrained at every node, since "
+                                          "MIDAS's own 2D restraint is not present as an explicit CONS record in the export");
+    }
+  }
+
   std::map<std::string, std::size_t> caseIndex;
   auto caseFor = [&](const std::string& name) -> LoadCase& {
     auto found = caseIndex.find(name);

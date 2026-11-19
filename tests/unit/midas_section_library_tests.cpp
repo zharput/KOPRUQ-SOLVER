@@ -71,7 +71,12 @@ TEST(MidasSectionLibrary, TSectionMatchesHandComputation_Baslik) {
   rel(p.area, 3.0, "area = 2*1 + 1*1");
   rel(p.IH, 0.9166666666666666, "IH (composite, parallel axis)", 1e-9);
   rel(p.IB, 0.75, "IB = 1*8/12 + 1*1/12", 1e-9);
-  rel(p.J, 1.0, "J = (2*1 + 1*1)/3", 1e-9);
+  // J (2026-11-19): deliberately the thin-strip-sum approximation, NOT torsionConstantFEM's more
+  // exact membrane-analogy solve -- tried the FEM solve first, but it made model 17's real-data
+  // match WORSE (see MidasSectionLibrary.hpp's own comment on tSection() for the evidence),
+  // strong evidence MIDAS's own DBUSER section uses this simpler convention internally. Matching
+  // MIDAS's own convention, not the more "physically rigorous" answer, is what this import needs.
+  rel(p.J, 1.0, "J = (2*1 + 1*1)/3 (strip sum, matches MIDAS's own convention empirically)", 1e-9);
   // AsH/AsB (2026-11-19): now the rigorous Zhuravskii/Timoshenko quadrature
   // (detail::timoshenkoShearArea), not the coarser "web alone"/"flange alone" approximation
   // this replaced. Reference values are an INDEPENDENT computation (scipy.integrate.quad, a
@@ -94,6 +99,27 @@ TEST(MidasSectionLibrary, TimoshenkoShearAreaMatchesClosedFormRectangle) {
   const double I = B * H * H * H / 12;
   const double As = detail::timoshenkoShearArea({{0, H, B}}, I);
   rel(As, (5.0 / 6.0) * B * H, "As == (5/6)*A for a solid rectangle, exact closed form", 1e-6);
+}
+
+TEST(MidasSectionLibrary, TorsionConstantFEMMatchesTabulatedSquareCoefficient) {
+  // detail::torsionConstantFEM applied to a plain square must reproduce the classical TABULATED
+  // (not merely approximate) coefficient J=0.1406*a^4 (same target as
+  // SolidRectangleSquareTorsionIsNearTabulatedCoefficient above, which checks the OTHER,
+  // closed-form approximate formula against this same tabulated value).
+  const double a = 2.0;
+  const double J = detail::torsionConstantFEM({{0, a, 0, a}});
+  const double tabulated = 0.1406 * a * a * a * a;
+  EXPECT_NEAR(J, tabulated, 0.005 * tabulated); // 0.5% band -- FDM discretization vs. the exact series solution
+}
+
+TEST(MidasSectionLibrary, TorsionConstantFEMMatchesClosedFormRectangle) {
+  // For a plain (non-square) rectangle, detail::torsionConstantFEM must agree closely with this
+  // file's own existing closed-form solidRectangleTorsion() approximation -- both are independent
+  // approximations to the same exact answer, so close agreement cross-validates both.
+  const double H = 2.0, B = 3.0;
+  const double J = detail::torsionConstantFEM({{0, B, 0, H}});
+  const double closedForm = detail::solidRectangleTorsion(B, H);
+  rel(J, closedForm, "FEM vs. closed-form rectangle torsion constant", 2e-3);
 }
 
 TEST(MidasSectionLibrary, RejectsUnsupportedShapeAndInvalidDimensions) {

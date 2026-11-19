@@ -28,6 +28,7 @@
 #include <Eigen/SparseCholesky>
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include <limits>
 #include <stdexcept>
 #include <string>
@@ -166,23 +167,17 @@ struct TorsionRect { Real x0, x1, y0, y1; };
 // see MidasSectionLibrary.TorsionConstantFEMMatchesTabulatedSquareCoefficient) and this file's
 // own existing closed-form solidRectangleTorsion() approximation for a non-square rectangle
 // (MidasSectionLibrary.TorsionConstantFEMMatchesClosedFormRectangle).
-inline Real torsionConstantFEM(const std::vector<TorsionRect>& solidRects, const std::vector<TorsionRect>& voidRects = {}) {
-  if (solidRects.empty()) throw std::invalid_argument("torsionConstantFEM: no solid rectangles given");
-  Real xmin = solidRects.front().x0, xmax = solidRects.front().x1, ymin = solidRects.front().y0, ymax = solidRects.front().y1;
-  Real minDim = std::numeric_limits<Real>::max();
-  for (const auto& r : solidRects) {
-    if (!(r.x1 > r.x0) || !(r.y1 > r.y0)) throw std::invalid_argument("torsionConstantFEM: each solid rectangle needs x1>x0 and y1>y0");
-    xmin = std::min(xmin, r.x0); xmax = std::max(xmax, r.x1);
-    ymin = std::min(ymin, r.y0); ymax = std::max(ymax, r.y1);
-    minDim = std::min({minDim, r.x1 - r.x0, r.y1 - r.y0});
-  }
-  auto inside = [&](Real x, Real y) {
-    bool solid = false;
-    for (const auto& r : solidRects) if (x > r.x0 && x < r.x1 && y > r.y0 && y < r.y1) { solid = true; break; }
-    if (!solid) return false;
-    for (const auto& r : voidRects) if (x > r.x0 && x < r.x1 && y > r.y0 && y < r.y1) return false;
-    return true;
-  };
+// Core FDM solve shared by every torsionConstantFEM overload below: given the domain's bounding
+// box, an `inside(x,y)` membership predicate, and a resolution hint (the smallest solid feature
+// dimension present, so a thin web/flange/chamfer is never grid-aliased to zero thickness), runs
+// the same verified 5-point-Laplacian solve as the original rectangle-only version. Splitting
+// this out does not change the method -- it only lets a curved or polygonal domain (an ellipse/
+// stadium, a chamfered rectangle, ...) reuse it via its own `inside` predicate instead of only a
+// union of axis-aligned rectangles.
+inline Real torsionConstantFEMCore(Real xmin, Real xmax, Real ymin, Real ymax, Real minDim,
+                                    const std::function<bool(Real, Real)>& inside) {
+  if (!(xmax > xmin) || !(ymax > ymin)) throw std::invalid_argument("torsionConstantFEMCore: bounding box needs xmax>xmin and ymax>ymin");
+  if (!(minDim > 0)) throw std::invalid_argument("torsionConstantFEMCore: minDim must be positive");
   // ~80 cells across the thinnest solid feature (confirmed by convergence testing -- an
   // independent Python/scipy finite-difference implementation of this same method reaches the
   // tabulated square-section coefficient within 0.05% and the thin-strip closed-form rectangle
@@ -227,11 +222,66 @@ inline Real torsionConstantFEM(const std::vector<TorsionRect>& solidRects, const
   Eigen::SparseMatrix<Real> A(numUnknowns, numUnknowns);
   A.setFromTriplets(triplets.begin(), triplets.end());
   Eigen::SimplicialLDLT<Eigen::SparseMatrix<Real>> solver(A);
-  if (solver.info() != Eigen::Success) throw std::runtime_error("torsionConstantFEM: Laplacian factorization failed");
+  if (solver.info() != Eigen::Success) throw std::runtime_error("torsionConstantFEMCore: Laplacian factorization failed");
   const Eigen::VectorXd phi = solver.solve(rhs);
-  if (solver.info() != Eigen::Success) throw std::runtime_error("torsionConstantFEM: Laplacian solve failed");
+  if (solver.info() != Eigen::Success) throw std::runtime_error("torsionConstantFEMCore: Laplacian solve failed");
 
   return 2 * phi.sum() * h * h;
+}
+
+// Original rectangle-union interface, now a thin wrapper over torsionConstantFEMCore -- same
+// behavior as before this file's refactor (2026-11-19), verified by the same existing tests.
+inline Real torsionConstantFEM(const std::vector<TorsionRect>& solidRects, const std::vector<TorsionRect>& voidRects = {}) {
+  if (solidRects.empty()) throw std::invalid_argument("torsionConstantFEM: no solid rectangles given");
+  Real xmin = solidRects.front().x0, xmax = solidRects.front().x1, ymin = solidRects.front().y0, ymax = solidRects.front().y1;
+  Real minDim = std::numeric_limits<Real>::max();
+  for (const auto& r : solidRects) {
+    if (!(r.x1 > r.x0) || !(r.y1 > r.y0)) throw std::invalid_argument("torsionConstantFEM: each solid rectangle needs x1>x0 and y1>y0");
+    xmin = std::min(xmin, r.x0); xmax = std::max(xmax, r.x1);
+    ymin = std::min(ymin, r.y0); ymax = std::max(ymax, r.y1);
+    minDim = std::min({minDim, r.x1 - r.x0, r.y1 - r.y0});
+  }
+  auto inside = [&](Real x, Real y) {
+    bool solid = false;
+    for (const auto& r : solidRects) if (x > r.x0 && x < r.x1 && y > r.y0 && y < r.y1) { solid = true; break; }
+    if (!solid) return false;
+    for (const auto& r : voidRects) if (x > r.x0 && x < r.x1 && y > r.y0 && y < r.y1) return false;
+    return true;
+  };
+  return torsionConstantFEMCore(xmin, xmax, ymin, ymax, minDim, inside);
+}
+
+// Stadium/"track" domain (a rectangle Ls x H capped by two semicircles of radius R=H/2 on its
+// left/right ends -- see solidTrack() below): the thinnest feature for grid-resolution purposes
+// is simply H (there is no thin web/flange the way an open I/channel/angle has one).
+inline Real torsionConstantFEMStadium(Real Ls, Real H) {
+  const Real R = H / 2;
+  auto inside = [&](Real x, Real y) {
+    if (std::abs(x) <= Ls / 2) return std::abs(y) < R; // straight (rectangular) midsection
+    const Real cx = x > 0 ? Ls / 2 : -Ls / 2;           // nearest circular cap's own center
+    return (x - cx) * (x - cx) + y * y < R * R;
+  };
+  // A curved boundary suffers more staircase-aliasing error at a given grid resolution than an
+  // already-axis-aligned one (e.g. solidRectangleTorsion's own rectangle), so a finer hint (H/4,
+  // not H) is passed here to compensate -- confirmed, 2026-11-19: at the plain H hint, the
+  // degenerate Ls=0 (pure circle) case disagreed with solidCircle's own exact pi*D^4/32 by
+  // ~3.5%; at H/4 the same check is within ~0.8% (MidasSectionLibrary tests).
+  return torsionConstantFEMCore(-(Ls / 2 + R), Ls / 2 + R, -R, R, H / 4, inside);
+}
+
+// Chamfered-rectangle ("octagon") domain H x B with each of its 4 corners cut by a right
+// triangle of legs a (horizontal) and b (vertical) -- see solidOctagon() below. The thinnest
+// feature for grid-resolution purposes is the smaller of the two chamfer legs (so a small cut
+// is never aliased away), capped by H/B themselves for a tiny chamfer.
+inline Real torsionConstantFEMChamferedRect(Real H, Real B, Real a, Real b) {
+  auto inside = [&](Real x, Real y) {
+    if (std::abs(x) >= B / 2 || std::abs(y) >= H / 2) return false;
+    const Real u = B / 2 - std::abs(x), v = H / 2 - std::abs(y); // distance in from the nearest vertical/horizontal edge
+    if (u >= a || v >= b) return true; // outside every corner's chamfer triangle
+    return u / a + v / b >= 1;         // inside the rectangle but ALSO inside a corner triangle -> cut away
+  };
+  const Real minDim = std::min({H, B, a, b});
+  return torsionConstantFEMCore(-B / 2, B / 2, -H / 2, H / 2, minDim, inside);
 }
 } // namespace detail
 
@@ -254,6 +304,114 @@ inline ResolvedSectionProperties solidCircle(Real D) {
   p.IH = p.IB = Real(kPi) * D * D * D * D / 64;   // Iyy = Izz for a circle, exact
   p.J = Real(kPi) * D * D * D * D / 32;            // polar moment == torsion constant, exact for a circle
   p.AsH = p.AsB = detail::kCircularShearFactor * p.area;
+  return p;
+}
+
+// "STRK"/Solid Track (a stadium shape: a rectangle capped by a semicircle on each end) and
+// "SOCT"/Solid Octagon (a rectangle with its 4 corners cut off, not a REGULAR octagon -- the two
+// chamfer legs a, b are independent, confirmed, 2026-11-19, from the user's own MIDAS NX
+// "Section Data" dialog screenshots for model 21's sections 4/5: STRK's dialog shows H, B only,
+// with a diagram of a horizontal oval/stadium and a radius "R" label at one rounded end; SOCT's
+// shows H, B, a, b, with a, b labeled as the horizontal/vertical corner-chamfer dimensions on a
+// chamfered-rectangle diagram -- this is a DIRECT read of the authoritative MIDAS UI, not web
+// documentation (support.midasuser.com returns HTTP 403 to every automated fetch attempted this
+// project has made, and the two other sources the user provided either required an
+// authenticated session or embedded the dimension diagrams as images a text-fetch cannot read --
+// see docs/DEVELOPMENT_STATUS.md, 2026-11-19, for the full trail). Per the user's explicit
+// instruction (2026-11-19, "bunlarla ilgili tum ozellikleri genel mukavemet bilgilerinden
+// turet... MIDAS NX'e bagli kalmak zorunda degiliz"), every section property below is derived
+// from first-principles classical mechanics of materials (composite-shape decomposition,
+// parallel-axis theorem), not copied from or fitted to any MIDAS-reported number -- independent
+// derivation, consistent with this project's "never validate against the production
+// implementation" rule, just applied to the INPUT geometry rather than to an existing solver
+// result. See each function's own header comment for its specific derivation and the arithmetic
+// sanity checks performed (limiting cases with a known closed form, e.g. a degenerate circle or
+// plain rectangle).
+
+// Stadium/"track" shape: height H (= the semicircular ends' diameter, i.e. radius R=H/2), overall
+// length B (>= H). Composite decomposition: a central Ls x H rectangle (Ls = B - H, the straight
+// midsection) plus two semicircular end caps (together, one full circle of radius R). All
+// properties derived from scratch via the parallel-axis theorem (not any published "track
+// section" formula): see MidasSectionLibrary tests for the full derivation written out, and the
+// two limiting-case checks it verifies (Ls=0 reduces exactly to solidCircle's own IH=IB=pi*R^4/4,
+// and R->0 reduces to a thin BxH... Ls x H rectangle).
+inline ResolvedSectionProperties solidTrack(Real H, Real B) {
+  if (!(H > 0) || !(B >= H)) throw std::invalid_argument("STRK section requires positive H and B >= H");
+  const Real R = H / 2, Ls = B - H;
+  ResolvedSectionProperties p;
+  p.area = Ls * H + Real(kPi) * R * R;
+  p.IH = Real(kPi) * R * R * R * R / 4 + (2 * Ls * R * R * R) / 3;
+  p.IB = Real(kPi) * R * R * R * R / 4 + (4 * Ls * R * R * R) / 3 + (Real(kPi) * Ls * Ls * R * R) / 4 + (R * Ls * Ls * Ls) / 6;
+  p.J = detail::torsionConstantFEMStadium(Ls, H);
+  // Shear areas via the same Zhuravskii/Timoshenko quadrature as every other shape in this file
+  // (detail::timoshenkoShearArea), applied to a finely-discretized approximation of this shape's
+  // CONTINUOUSLY varying width/height profile (the function itself only takes piecewise-constant
+  // strips; 400 slices keeps the discretization error well below the quadrature's own, same
+  // convergence argument as TimoshenkoShearAreaMatchesClosedFormRectangle).
+  constexpr int kSlices = 400;
+  {
+    std::vector<detail::ShearStrip> strips; strips.reserve(kSlices); // along H: width(y) = Ls + 2*sqrt(R^2-y^2)
+    for (int i = 0; i < kSlices; ++i) {
+      const Real y0 = -R + i * (2 * R) / kSlices, y1 = -R + (i + 1) * (2 * R) / kSlices, ym = (y0 + y1) / 2;
+      strips.push_back({y0, y1, Ls + 2 * std::sqrt(std::max(Real(0), R * R - ym * ym))});
+    }
+    p.AsH = detail::timoshenkoShearArea(strips, p.IH);
+  }
+  {
+    const Real halfB = Ls / 2 + R;
+    std::vector<detail::ShearStrip> strips; strips.reserve(kSlices); // along B: height(x) profile
+    for (int i = 0; i < kSlices; ++i) {
+      const Real x0 = -halfB + i * (2 * halfB) / kSlices, x1 = -halfB + (i + 1) * (2 * halfB) / kSlices, xm = (x0 + x1) / 2;
+      const Real height = (std::abs(xm) <= Ls / 2) ? H : 2 * std::sqrt(std::max(Real(0), R * R - (std::abs(xm) - Ls / 2) * (std::abs(xm) - Ls / 2)));
+      strips.push_back({x0, x1, height});
+    }
+    p.AsB = detail::timoshenkoShearArea(strips, p.IB);
+  }
+  return p;
+}
+
+// Chamfered rectangle ("Solid Octagon"): overall H x B, each of the 4 corners cut by a right
+// triangle of legs a (horizontal) and b (vertical). Area/IH/IB via full-rectangle-minus-4-
+// triangles (standard right-triangle centroid/inertia results, a^3*b/12 and a*b^3/12 about the
+// leg axes, plus parallel-axis theorem -- symmetric about both H and B axes, so no centroid
+// shift needed; see MidasSectionLibrary tests for the full written-out derivation and its
+// a=b=0 -> plain rectangle sanity check).
+inline ResolvedSectionProperties solidOctagon(Real H, Real B, Real a, Real b) {
+  if (!(H > 0) || !(B > 0) || !(a >= 0) || !(b >= 0) || !(2 * a <= B) || !(2 * b <= H))
+    throw std::invalid_argument("SOCT section requires positive H, B and chamfers with 2a<=B, 2b<=H");
+  ResolvedSectionProperties p;
+  p.area = H * B - 2 * a * b;
+  p.IB = H * B * B * B / 12 - (B * B * a * b / 2 - (2 * B * a * a * b) / 3 + a * a * a * b / 3);
+  p.IH = B * H * H * H / 12 - (H * H * a * b / 2 - (2 * H * a * b * b) / 3 + a * b * b * b / 3);
+  p.J = (a > 0 && b > 0) ? detail::torsionConstantFEMChamferedRect(H, B, a, b)
+                         : detail::solidRectangleTorsion(std::max(H, B), std::min(H, B)); // a=b=0: exact rectangle
+  constexpr int kSlices = 400;
+  auto chamferedWidthAt = [&](Real pos, Real halfSpan, Real otherHalfSpan, Real leg, Real otherLeg) {
+    // Material extent perpendicular to `pos`'s axis at coordinate pos (|pos|<=halfSpan), for a
+    // rectangle of half-extent (halfSpan, otherHalfSpan) chamfered by (leg along pos-axis,
+    // otherLeg along the perpendicular axis) at each of its 4 corners.
+    const Real full = 2 * otherHalfSpan;
+    const Real edgeDist = halfSpan - std::abs(pos); // distance in from the nearest edge along pos-axis
+    if (leg <= 0 || edgeDist >= leg) return full;
+    const Real cut = otherLeg * (1 - edgeDist / leg);
+    return full - 2 * cut;
+  };
+  {
+    std::vector<detail::ShearStrip> strips; strips.reserve(kSlices);
+    for (int i = 0; i < kSlices; ++i) {
+      const Real y0 = -H / 2 + i * H / kSlices, y1 = -H / 2 + (i + 1) * H / kSlices, ym = (y0 + y1) / 2;
+      strips.push_back({y0, y1, chamferedWidthAt(ym, H / 2, B / 2, b, a)});
+    }
+    p.AsH = detail::timoshenkoShearArea(strips, p.IH);
+  }
+  {
+    std::vector<detail::ShearStrip> strips; strips.reserve(kSlices);
+    for (int i = 0; i < kSlices; ++i) {
+      const Real x0 = -B / 2 + i * B / kSlices, x1 = -B / 2 + (i + 1) * B / kSlices, xm = (x0 + x1) / 2;
+      strips.push_back({x0, x1, chamferedWidthAt(xm, B / 2, H / 2, a, b)});
+    }
+    p.AsB = detail::timoshenkoShearArea(strips, p.IB);
+  }
   return p;
 }
 
@@ -495,7 +653,15 @@ inline ResolvedSectionProperties resolveDbUserSection(const std::string& shape, 
     if (vSize.size() < 4) throw std::invalid_argument("T section requires at least 4 vSIZE values (H,B,tw,tf)");
     return tSection(vSize[0], vSize[1], vSize[2], vSize[3]);
   }
-  throw std::invalid_argument("unsupported DBUSER section shape '" + shape + "' (only SB, B, SR, T are implemented)");
+  if (shape == "STRK") {
+    if (vSize.size() < 2) throw std::invalid_argument("STRK section requires at least 2 vSIZE values (H,B)");
+    return solidTrack(vSize[0], vSize[1]);
+  }
+  if (shape == "SOCT") {
+    if (vSize.size() < 4) throw std::invalid_argument("SOCT section requires at least 4 vSIZE values (H,B,a,b)");
+    return solidOctagon(vSize[0], vSize[1], vSize[2], vSize[3]);
+  }
+  throw std::invalid_argument("unsupported DBUSER section shape '" + shape + "' (only SB, B, SR, T, STRK, SOCT are implemented)");
 }
 
 } // namespace kopruq::io::midas

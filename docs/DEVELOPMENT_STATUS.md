@@ -2231,3 +2231,52 @@ data: Beam Force 14505/18048 PASS (80.4%), Reaction 489/576 PASS (84.9%), Displa
 Full regression: 297/297 Release (291 + 6 new), 267/267 Debug (261 + 6 new). Model 21 is closed
 per the user's instruction, with STRK/SOCT implemented and the model's full numerical behavior
 tested and honestly reported -- not claimed as a clean PASS.
+
+## Model 21 deep debug: two root causes separated -- one KOPRUQ defect fixed, one MIDAS reference inconsistency proven (2026-11-19)
+
+Supersedes the "COMBO-3 DX anomaly ... COMBO-4 shows no such anomaly" paragraph above. That
+COMBO-4 statement was WRONG: it came from a diagnostic that capped printed FAIL rows at 200 per
+category. Exact, untruncated per-case counts show COMBO-4 has the same anomaly (819/1080 FAIL).
+
+**1. KOPRUQ defect (FIXED, this session): thermal loads were dropped from load combinations.**
+`LinearStaticSolver::solveCases` (and the separate rigid-link path `solveCasesWithRigidLinks`)
+build each combination's combined load case by copying the factored nodal, member, point and
+self-weight loads of its terms -- but NOT `thermal`. Combination displacements were correct
+(superposition of case solutions), but recovered element end forces (f = k*u - f_eq) and support
+reactions lacked the thermal fixed-end forces. Proof on model 21: KOPRUQ's own combination axial
+forces violated superposition by 8160-39712 kN, and for all 1504 combination axial rows that
+residual equalled the independently hand-computed missing force E*A*alpha*dT*sum(f) to within
+6.4e-5 kN (CSV round-off); every other component/category superposed exactly. Fix: one shared
+helper `appendFactoredLoads` (LinearStaticSolver.hpp) used by both paths, scaling
+uniform/gradient delta_t by the factor (thermalLoadEffect is linear in each; depths unscaled).
+New dedicated test file `tests/unit/thermal_combination_tests.cpp` (4 tests, hand-derived
+expected values: fixed-fixed uniform N = E*A*alpha*f*dT incl. support reactions; fixed-fixed
+gradient M = E*Iy*alpha*f*dT/h; series bars with mixed thermal + mechanical combination by hand
+compatibility; rigid-link path), plus combination == sum(f * case) for every end force and
+reaction. Built against the pre-fix HEAD header, all 4 tests FAIL (combination forces/reactions
+exactly 0 instead of e.g. 3600 kN); with the fix all PASS.
+
+Model 21 after the fix (new MIDAS run, `verification/models/21 Combo/`, analysis 16:20,
+Displacements re-exported 16:28): Beam Force 14505 -> **15553/18048 (86.18%)**; combination
+axial max |diff| 3.98e4 -> 127 kN. Displacements 6998/8640 (81.00%) and Reaction 489/576
+(84.90%) unchanged (expected: displacements were never affected; no thermally loaded element
+touches a support in this model). Tolerance criterion unchanged (|d| <= absTol + 1%*|ref|).
+
+**2. MIDAS reference inconsistency (NOT a KOPRUQ defect, unresolved on the MIDAS side).**
+Self-consistency check, MIDAS data only (each combination row rebuilt from the same file's own
+primitive rows with the JSON's factors): Reaction and Beam Force are exactly consistent for all
+4 combinations (residual <= 1e-9). Displacements(Global) is consistent for COMBO-1/2 but NOT for
+COMBO-3/4 (168/180 nodes, max residual DX 4.2e-3 / 1.7e-2 m); least squares on the file itself
+gives COMBO-3 = 2.0F1+1.0F2+1.0TU and COMBO-4 = 4.2F1+3.6F2+6.0F3+2.1TU instead of the
+JSON/Reaction/BeamForce 1.5F1+1.0F2+1.5TU and 3.9F1+5.6F2+6.0F3+3.4TU. The user re-ran MIDAS
+and re-exported: the new file is cell-for-cell identical to the old one, so this is a
+reproducible MIDAS displacement-combination behavior for this nested-combination model, not a
+stale export. Its cause is not known and is not guessed. These 1607 displacement FAILs (COMBO-3
+788, COMBO-4 819) are reference-side; the 6 primitive/COMBO-1/2 cases are at 97.7-100%.
+
+**3. Remaining Beam Force/Reaction residual (open).** Spread over all sections and load cases
+(incl. primitives), no sign flips (0 of 8351 rows), per section/component median KOPRUQ/MIDAS
+ratio 0.993-1.006 except SOCT torsion (median 1.028, p90 1.070). Consistent with section-
+stiffness idealization differences (shear areas, J); root cause not proven, no change made.
+
+Regression: Debug 271/271, Release 271/271, gui-release 301/301 (each previous count + 4 new).

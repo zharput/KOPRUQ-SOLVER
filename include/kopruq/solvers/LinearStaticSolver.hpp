@@ -34,6 +34,20 @@ static Eigen::SparseMatrix<Real> reduceKff(const Eigen::SparseMatrix<Real>&K,con
 
 static Eigen::VectorXd assembleLoads(const DofManager&d,const std::vector<NodalLoad>&ls){Eigen::VectorXd f=Eigen::VectorXd::Zero((Eigen::Index)d.dof_count());for(const auto&l:ls){if(!l.values.allFinite())throw AssemblyError(AssemblyErrorCode::MissingNode,"nodal load is non-finite");auto a=d.node_dofs(l.node);for(int i=0;i<6;++i)f((Eigen::Index)a[i])+=l.values(i);}return f;}
 
+// Appends f * (every load of `src`) to the combination load case `dst`. Shared by both combination code
+// paths (solveCases / solveCasesWithRigidLinks) so a load kind can never again be omitted from one of them:
+// before 2026-11-19 thermal loads were not copied, so a combination's recovered element end forces lacked
+// the thermal fixed-end forces (f = k*u - f_eq with f_eq missing the thermal part) while its displacements,
+// taken by superposition of the case solutions, were correct. Every load effect is linear in the scaled
+// quantity (thermalLoadEffect is linear in each delta_t; the gradient depths are geometry, not scaled).
+static void appendFactoredLoads(LoadCase&dst,const LoadCase&src,Real f){
+  for(auto l:src.nodal){l.values*=f;dst.nodal.push_back(l);}
+  for(auto l:src.member){l.w1*=f;l.w2*=f;dst.member.push_back(l);}
+  for(auto l:src.point){l.value*=f;dst.point.push_back(l);}
+  for(auto l:src.thermal){l.uniform_delta_t*=f;l.gradient_y_delta_t*=f;l.gradient_z_delta_t*=f;dst.thermal.push_back(l);}
+  dst.self_weight+=f*src.self_weight;
+}
+
 // Nodal loads, member loads and self-weight of one load case: global load vector (including consistent
 // equivalent nodal loads), per-element member-load effects, and the resultant of everything applied.
 static AppliedLoads assembleLoadCase(const Model&m,const DofManager&dm,const LoadCase&lc){
@@ -275,10 +289,7 @@ static MultiCaseSolution solveCases(const Model&m,const Restraints&rs,const std:
       for(const auto&[idx,f]:combos[k].terms){
         if(!out.cases[idx].status.success){failed=&out.cases[idx].status;break;}
         uf+=f*out.cases[idx].free;
-        for(auto l:cases[idx].nodal){l.values*=f;lc.nodal.push_back(l);}
-        for(auto l:cases[idx].member){l.w1*=f;l.w2*=f;lc.member.push_back(l);}
-        for(auto l:cases[idx].point){l.value*=f;lc.point.push_back(l);}
-        lc.self_weight+=f*cases[idx].self_weight;
+        appendFactoredLoads(lc,cases[idx],f);
       }
       if(failed){o.status=*failed;continue;}
       auto ap=assembleLoadCase(m,dm,lc);auto Ff=freeLoads(ap);o.free=uf;finish(o,ap,Ff);
@@ -341,10 +352,7 @@ static MultiCaseSolution solveCasesWithRigidLinks(const Model&m,const Restraints
       for(const auto&[idx,f]:combos[k].terms){
         if(!out.cases[idx].status.success){failed=&out.cases[idx].status;break;}
         uf+=f*out.cases[idx].free;
-        for(auto l:cases[idx].nodal){l.values*=f;lc.nodal.push_back(l);}
-        for(auto l:cases[idx].member){l.w1*=f;l.w2*=f;lc.member.push_back(l);}
-        for(auto l:cases[idx].point){l.value*=f;lc.point.push_back(l);}
-        lc.self_weight+=f*cases[idx].self_weight;
+        appendFactoredLoads(lc,cases[idx],f);
       }
       if(failed){o.status=*failed;continue;}
       auto ap=assembleLoadCase(m,dm,lc);auto Ff=freeLoads(ap);o.free=uf;finish(o,ap,Ff);

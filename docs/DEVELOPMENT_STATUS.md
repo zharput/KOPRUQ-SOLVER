@@ -1969,13 +1969,22 @@ convention, not the true physical answer.
 
 **Model 17 tested and verified** (after the revert, i.e. with the shear-area fix but the original
 torsion formula): its real MIDAS reference data gives **FORCE-case Beam Force 817/936 PASS**,
-**Reaction 43/48 PASS** (5 small residual mismatches, 1-2%), **Displacement 474/474 PASS**.
-Spectrum-case (`SPECX(RS)`/`SPECY(RS)`) rows were not checked this session (would need the same
-modal+spectrum verification approach already used for model 16). The small remaining FORCE-case
-residual is not pursued further, per the user's explicit instruction to stop here.
+**Reaction 43/48 PASS** (5 small residual mismatches, 1-2%), **Displacement 474/474 PASS**. The
+small remaining FORCE-case residual is not pursued further, per the user's explicit instruction
+to stop at this checkpoint.
 
 Verified: Debug CTest **261/261 PASS**, gui-release **291/291 PASS** -- both 100%, no
 regressions.
+
+**Modal + spectrum results also verified** (user approved continuing to this check): `ModalSolver`
+(lumped mass) against model 17's real `Eigenvalue Mode.xlsx` gives **76/80 PASS** (40 modes'
+frequency+period, 2 modes off by ~1.1-1.3%, same pattern of isolated small mode divergence as
+models 13-15's already-accepted residual). `ResponseSpectrumSolver` (CQC, lumped mass) combined
+reactions for both `SPECX`/`SPECY` cases, checked by hand against model 17's real
+`Reaction(Global).xlsx` `SPECX(RS)`/`SPECY(RS)` rows at nodes 54 and 58 (8 values): **all within
+0.03-1.1% of MIDAS's own reference** (most under 0.1%), confirming the SPLC `ANGLE`-based
+direction resolution, CQC combination and lumped-mass pipeline are all correct for this model too,
+matching the quality of model 16's prior verification.
 
 ## Next autonomous action
 Phase 3.2, Phase 4, Phase 5 (5.1-5.6), Phase 6 (6.1, 6.1b, 6.2, 6.2b; 6.3 cancelled), Phase 7A,

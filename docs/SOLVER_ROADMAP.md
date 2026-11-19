@@ -928,11 +928,21 @@ when the goal is matching a specific other program's own convention.
 
 **Model 17 tested and verified** (after the revert): FORCE-case **Beam Force 817/936 PASS**,
 **Reaction 43/48 PASS** (5 small, 1-2% residual mismatches), **Displacement 474/474 PASS**.
-Spectrum-case rows not checked this session. Remaining residual not pursued further, per the
-user's explicit instruction to stop here.
+Remaining residual not pursued further (all failing elements use section `SB`, the exact
+closed-form shape -- not an approximate-property issue, but a small stiffness-distribution
+sensitivity further down the load path in this fully continuous, more indeterminate structure).
 
 Verified: Debug CTest **261/261 PASS**, gui-release **291/291 PASS** -- both 100%, no
 regressions.
+
+**Modal + spectrum also verified** (same session, user approved continuing): `ModalSolver`
+(lumped mass) vs. model 17's real `Eigenvalue Mode.xlsx`: **76/80 PASS** (2 of 40 modes off by
+~1.1-1.3%, the same isolated-mode-divergence pattern already accepted for models 13-15).
+`ResponseSpectrumSolver` (CQC, lumped mass) combined `SPECX`/`SPECY` reactions, checked by hand
+against the real `Reaction(Global).xlsx` `SPECX(RS)`/`SPECY(RS)` rows (nodes 54, 58, 8 values):
+**all within 0.03-1.1%** of MIDAS's own numbers, matching model 16's prior verification quality --
+confirms the `SPLC` `ANGLE` direction resolution, CQC combination and lumped-mass pipeline are all
+correct here too.
 
 ### `xmidas/deneme1.json` tests removed entirely (2026-11-19, explicit user instruction)
 Every CTest count above citing "5 pre-existing/permanent failures" refers to the 5 tests that

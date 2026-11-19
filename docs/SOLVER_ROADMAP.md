@@ -848,6 +848,20 @@ reference data at all.
 Verified: Debug CTest **257/262 PASS**, gui-release **287/292 PASS**, same 5 permanent failures,
 no regressions.
 
+### `xmidas/deneme1.json` tests removed entirely (2026-11-19, explicit user instruction)
+Every CTest count above citing "5 pre-existing/permanent failures" refers to the 5 tests that
+depended on the permanently-deleted `xmidas/deneme1.json` sample (see
+`docs/DEVELOPMENT_STATUS.md`'s 2026-11-17 entry for the history). By explicit user instruction,
+these 5 tests were deleted outright (not just left failing):
+`Cli.MidasNxJsonFormatOption`'s `deneme1.json` sub-case, and
+`MidasJsonImporter.{ImportCountsMatchIndependentlyComputedTotals,
+ReportsElasticLinkRejectionCountAndNodeBoundingBox, ImportedModelPassesValidation,
+StaticSolveOfImportedModelDoesNotThrowAndReportsAStatus}` in full (along with their shared
+file-loading helper). Every other test in both files (self-contained synthetic fixtures) is
+unaffected. **Verified: Debug CTest 258/258 PASS, gui-release 288/288 PASS -- 100%, no permanent
+failures remain.** Future CTest/report baselines in this document should read "all tests
+passing," not carry forward the old "same 5 pre-existing failures" framing.
+
 ### Phase 7F — Final standalone release
 Not started; depends on 7A-7I.
 

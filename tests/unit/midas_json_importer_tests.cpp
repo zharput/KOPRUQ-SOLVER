@@ -1,109 +1,24 @@
-// Phase 7B — end-to-end MIDAS JSON importer test against the real sample
-// (xmidas/deneme1.json). Counts below were computed independently via
-// PowerShell ConvertFrom-Json directly on the source file (not derived
-// from the importer), per docs/MIDAS_JSON_DATA_AUDIT.md:
-//   106 nodes, 94 BEAM elements, 2 materials, 5 sections, 9 supports,
-//   7 individual rigid links (5 RIGD records, master 1 and 5 each with
-//   2 slaves), 70 BMLD member-load records, 40 ETMP thermal-load records
-//   (all TEMP=40.0, case "TU"), 5 load cases (SW, SDL-1, SDL-2, SDL-3,
-//   TU -- now that Phase 7T exists, ETMP maps directly onto
-//   MemberThermalLoad::uniform_delta_t, so "TU" is imported, not
-//   rejected), 4 rejected ELNK records + 1 "EIGV/SPLC not executed" note
-//   = 5 rejected entries (GTMP/BTMP are not present in this sample, so
-//   their own rejection path is not exercised here).
+// Phase 7B — MIDAS JSON importer tests.
+//
+// This file previously also end-to-end tested the importer against a real sample,
+// xmidas/deneme1.json. That file was deleted from the user's own machine and, by explicit user
+// decision, removed from git history going forward (see docs/DEVELOPMENT_STATUS.md); it is
+// permanently and irrecoverably gone. The four tests that depended on it
+// (ImportCountsMatchIndependentlyComputedTotals, ReportsElasticLinkRejectionCountAndNodeBoundingBox,
+// ImportedModelPassesValidation, StaticSolveOfImportedModelDoesNotThrowAndReportsAStatus) were
+// removed on 2026-11-19 by explicit user instruction, rather than left permanently failing --
+// there is nothing left in the repository to restore them against. The remaining tests below use
+// self-contained synthetic fixtures and are unaffected.
 #include <gtest/gtest.h>
-#include <algorithm>
-#include <fstream>
-#include <iostream>
-#include <sstream>
 #include "kopruq/io/midas/MidasJsonImporter.hpp"
-#include "kopruq/core/Validate.hpp"
 
 using namespace kopruq::io::midas;
-
-namespace {
-nlohmann::json loadSample() {
-  std::ifstream in(std::string(KOPRUQ_SOURCE_DIR) + "/xmidas/deneme1.json", std::ios::binary);
-  if (!in) throw std::runtime_error("xmidas/deneme1.json not found relative to KOPRUQ_SOURCE_DIR");
-  std::stringstream ss; ss << in.rdbuf();
-  return nlohmann::json::parse(ss.str());
-}
-}
-
-TEST(MidasJsonImporter, ImportCountsMatchIndependentlyComputedTotals) {
-  auto result = importMidasJson(loadSample());
-  const auto& r = result.report;
-  EXPECT_EQ(r.nodes, 106u);
-  EXPECT_EQ(r.beams, 94u);
-  EXPECT_EQ(r.materials, 2u);
-  EXPECT_EQ(r.sections, 5u);
-  EXPECT_EQ(r.supports, 9u);
-  EXPECT_EQ(r.rigid_links, 7u);
-  EXPECT_EQ(r.load_cases, 5u);
-  EXPECT_EQ(r.member_loads, 70u);
-  EXPECT_EQ(r.thermal_loads, 40u);
-
-  int elnkRejections = 0, dynamicsNote = 0;
-  for (const auto& msg : r.rejected) {
-    if (msg.find("elastic link") != std::string::npos) ++elnkRejections;
-    if (msg.find("EIGV/SPLC") != std::string::npos) ++dynamicsNote;
-  }
-  EXPECT_EQ(elnkRejections, 4);
-  EXPECT_EQ(dynamicsNote, 1);
-  EXPECT_EQ(r.rejected.size(), 5u);
-
-  // "TU" is now imported (ETMP -> MemberThermalLoad), with all 40 uniform_delta_t == 40.0.
-  bool foundTu = false;
-  for (const auto& lc : result.input.load_cases) {
-    if (lc.name != "TU") continue;
-    foundTu = true;
-    ASSERT_EQ(lc.thermal.size(), 40u);
-    for (const auto& t : lc.thermal) EXPECT_DOUBLE_EQ(t.uniform_delta_t, 40.0);
-  }
-  EXPECT_TRUE(foundTu);
-}
-
-// GUI-5.1 (ModelInfoPanel): elastic_links_rejected and the node bounding box are purely
-// informational report fields (not used by the solve itself), added for the GUI's "Model
-// Bilgileri (JSON)" panel to show real, independently-derivable numbers rather than fabricating
-// anything it cannot find in the import report.
-TEST(MidasJsonImporter, ReportsElasticLinkRejectionCountAndNodeBoundingBox) {
-  auto result = importMidasJson(loadSample());
-  const auto& r = result.report;
-
-  int elnkRejections = 0;
-  for (const auto& msg : r.rejected)
-    if (msg.find("elastic link") != std::string::npos) ++elnkRejections;
-  EXPECT_EQ(r.elastic_links_rejected, static_cast<std::size_t>(elnkRejections));
-  EXPECT_EQ(r.elastic_links_rejected, 4u);
-
-  ASSERT_TRUE(r.hasBoundingBox);
-  // Independently recomputed from the same real sample, not read back from the importer itself.
-  double minX = 0, maxX = 0, minY = 0, maxY = 0, minZ = 0, maxZ = 0;
-  bool first = true;
-  for (const auto& n : result.input.model.nodes) {
-    if (first) { minX = maxX = n.x; minY = maxY = n.y; minZ = maxZ = n.z; first = false; continue; }
-    minX = std::min(minX, n.x); maxX = std::max(maxX, n.x);
-    minY = std::min(minY, n.y); maxY = std::max(maxY, n.y);
-    minZ = std::min(minZ, n.z); maxZ = std::max(maxZ, n.z);
-  }
-  EXPECT_DOUBLE_EQ(r.minX, minX); EXPECT_DOUBLE_EQ(r.maxX, maxX);
-  EXPECT_DOUBLE_EQ(r.minY, minY); EXPECT_DOUBLE_EQ(r.maxY, maxY);
-  EXPECT_DOUBLE_EQ(r.minZ, minZ); EXPECT_DOUBLE_EQ(r.maxZ, maxZ);
-}
 
 TEST(MidasJsonImporter, EmptyNodeSetHasNoBoundingBox) {
   auto doc = nlohmann::json::parse(R"json({"DBG":{"UNIT":{"1":{"FORCE":"KN","DIST":"M"}},"NODE":{}}})json");
   auto empty = importMidasJson(doc);
   EXPECT_FALSE(empty.report.hasBoundingBox);
   EXPECT_EQ(empty.report.nodes, 0u);
-}
-
-TEST(MidasJsonImporter, ImportedModelPassesValidation) {
-  auto result = importMidasJson(loadSample());
-  auto issues = kopruq::validateModel(result.input.model, result.input.restraints, result.input.load_cases, result.input.combinations);
-  for (const auto& i : issues) ADD_FAILURE() << i.path << ": " << i.message;
-  EXPECT_TRUE(issues.empty());
 }
 
 namespace {
@@ -158,15 +73,4 @@ TEST(MidasJsonImporter, NoGtmpBtmpMeansNoSuchRejection) {
     EXPECT_EQ(msg.rfind("GTMP", 0), std::string::npos);
     EXPECT_EQ(msg.rfind("BTMP", 0), std::string::npos);
   }
-}
-
-TEST(MidasJsonImporter, StaticSolveOfImportedModelDoesNotThrowAndReportsAStatus) {
-  auto result = importMidasJson(loadSample());
-  auto sol = kopruq::LinearStaticSolver::solveCases(result.input.model, result.input.restraints, result.input.load_cases, result.input.combinations);
-  // Deliberately not asserting success here: whether this real bridge model's subset of
-  // restraints (9 fixed supports plus 7 rigid links) leaves every DOF non-singular is a
-  // genuine structural question about THIS model, not yet independently confirmed by hand
-  // -- the status message is what matters for diagnosing it, not a hard pass/fail guess.
-  if (!sol.status.success) std::cerr << "[info] static solve status: " << sol.status.message << '\n';
-  SUCCEED();
 }

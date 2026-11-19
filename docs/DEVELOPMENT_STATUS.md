@@ -1597,11 +1597,25 @@ Every CTest run reported elsewhere in this document and in `docs/SOLVER_ROADMAP.
 2026-11-16 onward that cites "5 pre-existing, unrelated `xmidas/deneme1.json`-missing failures" is
 describing exactly these same 5 tests -- the count has been stable and unrelated to every other
 change made in that period, consistent with this being a single, isolated, now-permanent fixture
-loss rather than a drifting set of regressions. If `xmidas/deneme1.json`-equivalent real MIDAS
-data (ideally the same bridge model, or any similarly-sized real export) is ever supplied again,
-these 5 tests' fixture path can be repointed at it without otherwise changing their logic -- they
-were never testing anything specific to that one file's exact numbers beyond "a real, complex
-MIDAS export imports, validates and solves end to end."
+loss rather than a drifting set of regressions.
+
+**UPDATE (2026-11-19): these 5 tests removed entirely, by explicit user instruction** ("xmidas\
+deneme1.json testini tamamen iptal et, bununla ilgili raporlarda FAIL diye sonuç verme" --
+cancel the deneme1.json test entirely, stop reporting FAIL for it). Rather than continuing to
+carry 5 permanently-failing tests in every report, the four `MidasJsonImporter.*` tests that
+depended on `loadSample()`/`xmidas/deneme1.json` were deleted outright from
+`tests/unit/midas_json_importer_tests.cpp` (their file-dependent fixture helper removed with
+them; the file's other tests, which use self-contained synthetic JSON, are untouched), and
+`Cli.MidasNxJsonFormatOption`'s `xmidas/deneme1.json` sub-case was removed from
+`tests/unit/io_tests.cpp`, keeping that test's other (still-valid, fixture-independent)
+assertions about `--format` usage errors and invalid-JSON rejection. `CMakeLists.txt`'s now-unused
+`KOPRUQ_SOURCE_DIR` compile definition on the importer-tests target was removed too.
+**Verified: Debug CTest 258/258 PASS, gui-release 288/288 PASS -- 100% passing, no permanent
+failures left.** Every CTest/report baseline from this point forward should read "all tests
+passing," not "N/M, same 5 pre-existing failures" -- that baseline no longer applies. If
+`xmidas/deneme1.json`-equivalent real MIDAS data is ever supplied again, new tests can be written
+against it from scratch (the current `verification/models/01`-`19` set already covers this need
+going forward).
 
 ## GUI V2.2 — 3D Model Viewer, Stages A/B/C — COMPLETE (2026-11-17)
 Added a read-only OpenGL "Model Görünümü" tab beside the existing "4. Sonuç Karşılaştırma

@@ -330,7 +330,7 @@ TEST(Cli, MidasNxJsonFormatOption) {
     if (errText) *errText = err.str();
     return code;
   };
-  std::string out, err;
+  std::string err;
 
   // Unknown --format value is a usage error (exit 2), not silently accepted.
   EXPECT_EQ(run({"solve", "a.json", "--format", "bogus"}, nullptr, &err), 2);
@@ -338,17 +338,6 @@ TEST(Cli, MidasNxJsonFormatOption) {
 
   // --format needs a following value.
   EXPECT_EQ(run({"solve", "a.json", "--format"}, nullptr, &err), 2);
-
-  // Real MIDAS NX JSON sample (same file used by Phase 7B's importer tests) solves end to end
-  // through the CLI, and the import report (counts/assumptions/rejections) is surfaced on
-  // stderr rather than silently dropped.
-  const auto midasModel = source("xmidas/deneme1.json");
-  ASSERT_EQ(run({"solve", midasModel.string(), "--format", "midas-nx-json"}, &out, &err), 0) << err;
-  json results = json::parse(out);
-  EXPECT_EQ(results["status"]["success"], true);
-  EXPECT_NE(err.find("midas-nx-json import:"), std::string::npos) << err;
-  EXPECT_NE(err.find("106 nodes"), std::string::npos) << err;
-  EXPECT_NE(err.find("[rejected]"), std::string::npos) << err;
 
   // A MIDAS-format file that is not valid JSON at all is reported as an invalid-model error
   // (exit 3), the same contract as the native format's parse-error path.

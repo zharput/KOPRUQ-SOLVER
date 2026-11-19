@@ -2040,3 +2040,33 @@ section geometry — see roadmap Phase 7G.1 for full detail):
 None of these three gaps has been implemented. Resolving any one requires either authoritative
 MIDAS section/material documentation or explicit user confirmation of the parametrization, per
 the project's standing "never fabricate structural properties" rule.
+
+## Model 20 (truss) mostly unblocked — STEEL material, TRUSS element, catalog sections, CONLOAD (2026-11-19, commit `b0f8d3a`)
+
+Resolved 3 of the 4 Phase 7G.1 gaps above for model 20 specifically:
+- `resolveSteelGradeMaterial` (`MidasMaterialLibrary.hpp`): EN1993-1-1 S3.2.6 fixed E=210000 MPa,
+  Poisson=0.3, unit weight=78.5 kN/m^3, thermal expansion=1.2e-5/K for any `EN..(S)` steel grade
+  (grade only changes fy/fu, unused by this linear-elastic solver). STEEL's design code/grade
+  live on `MATL.PARAM[0]` directly, not a separate MATD record like CONC — confirmed empirically
+  (model 20's own `MATD` is present in the export but empty).
+- `MidasJsonImporter`'s `ELEM` loop now accepts `TYPE=="TRUSS"` (all 25 of model 20's elements,
+  not `TYPE:"BEAM"` as an earlier investigation pass of this session mis-stated), building a
+  `Beam3DConnection` with `Truss3D.hpp`'s existing, already-verified pin-ended release pattern —
+  no new element formulation, reuses Phase 5.2.
+- `resolveCatalogSection`/`iSection`/`channelSection` (`MidasSectionLibrary.hpp`): resolves a
+  MIDAS catalog/database section reference (`SECT_I.DB_NAME`+`SECT_NAME`, not a raw `vSIZE`
+  array) for `HEB160` (EN 10034) and `UPN100` (DIN 1026-1), idealized rectangular-flange
+  geometry (no root fillets, same precision level as this file's other shapes).
+- `BMLD`'s `CONLOAD` (concentrated member point load) now maps onto the solver's pre-existing,
+  already-verified `MemberPointLoad`/`pointLoadEffect` pipeline — not a new solver capability,
+  just a previously-missing importer mapping (only `UNILOAD`/distributed was wired before).
+
+**Deliberately NOT implemented:** model 20's 3rd section (`L50x5`, shape `'L'`, 13 of 25
+elements) is an unsymmetric equal-leg angle whose principal bending axes are rotated relative to
+H/B — correctly representing it needs a product-of-inertia (Iyz) term `kopruq::Section` does not
+have. This is a `Section`/`Beam3D` formulation change, not an importer mapping, and is out of
+this checkpoint's scope — rejected with a clear diagnostic rather than approximated.
+
+**Verified:** model 20 now imports and solves its 12/25 HEB160/UPN100 elements, both load cases
+(`FORCE`, `POINT`) and their `COM1` combination. Full regression: 291/291 Release, 261/261 Debug,
+unchanged.

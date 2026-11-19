@@ -524,12 +524,19 @@ model 06 combination rows (which are driven by the diagnostic tool, not CTest).
 **Not started.** Three distinct gaps, each blocking a different real model's full solve:
 - Model 10 (`10 3d Cerceve`): `SECT.SHAPE=='H'` — not implemented (`resolveDbUserSection` only
   implements `SB`, `B`, `SR`, `T`).
-- Model 20 (`20 Kafes`, truss): all 25 elements are `TYPE:"BEAM"`/`STYPE:0` with no `FRLS`
-  (MIDAS is not using an explicit pin-jointed truss element type here); `MATL.TYPE:"STEEL"`
-  grade S275 has no resolver (`MidasMaterialLibrary.hpp` only implements
-  `resolveConcreteGradeMaterial`); `SECT.SHAPE:"C"` with `SECT_I.DB_NAME:"UNI"`/
-  `SECT_NAME:"UPN100"` is a catalog/database profile lookup, not raw `vSIZE` dimensions —
-  `resolveDbUserSection` only handles `vSIZE`-based shapes and would reject this entirely.
+- Model 20 (`20 Kafes`, truss): **mostly resolved, 2026-11-19 (commit `b0f8d3a`)** — all 25
+  elements are actually `TYPE:"TRUSS"` (not `TYPE:"BEAM"` as an earlier pass of this
+  investigation mis-stated); the importer now accepts `TYPE=="TRUSS"`, builds the already-
+  verified Truss3D (Phase 5.2) pin-ended release pattern, resolves `MATL.TYPE:"STEEL"` (grade
+  lives on `MATL.PARAM[0]`, not a separate MATD record — `resolveSteelGradeMaterial`), resolves
+  the `SECT_I.DB_NAME=="UNI"` catalog lookup for `HEB160`/`UPN100` (`resolveCatalogSection`), and
+  maps `BMLD`'s `CONLOAD` (concentrated member point load) onto the solver's pre-existing
+  `MemberPointLoad` pipeline (previously only `UNILOAD` was wired). 12/25 elements (sections 5/6,
+  HEB160/UPN100) now import and solve; the remaining 13/25 (section 7, angle `L50x5`, shape `L`)
+  are blocked by a genuinely new, deliberately unaddressed gap: an unsymmetric angle's principal
+  bending axes are rotated relative to H/B, needing a product-of-inertia term `kopruq::Section`
+  does not have — out of this checkpoint's scope (a `Section`/`Beam3D` formulation change, not
+  an importer mapping), rejected with a clear diagnostic rather than approximated.
 - Model 21 (`21 Combo`): 16 of 188 elements use `SECT.SHAPE` values `STRK` (`vSIZE` has 2
   meaningful values) and `SOCT` (`vSIZE` has 4 meaningful values) — unconfirmed geometric
   parametrization. Deliberately **not** implemented by guessing, per the project's "never

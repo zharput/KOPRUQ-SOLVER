@@ -1902,8 +1902,23 @@ checks but not precise enough to reproduce MIDAS's exact internal redistribution
 indeterminate structure. Not investigated further this session -- improving shear-area precision
 for these shapes would need either MIDAS's own effective-shear-area formula (not accessible) or a
 more sophisticated thin-walled-section shear-flow derivation, a real engineering task requiring
-its own scoping. **Model 17 still has not been numerically verified against its own real
-reference data at all** (only confirmed to solve without error).
+its own scoping.
+
+**Model 17 now numerically checked (2026-11-19)**: its `NODE`/`ELEM`/`SECT`/`MATL`/`CONS`/`BMLD`
+are byte-identical to model 18's (confirmed by direct JSON comparison) -- the two are the same
+bridge, model 18 adding `FRLS` hinges ("mafsal") and a `CNLD` point-load case, model 17 adding
+modal/spectrum requests instead. Model 17's static "FORCE" case: elements 1-2 (nearest the
+roller support) match exactly; from element 3 onward, **beam force shows 373/936 FAIL**
+(reactions and the first elements still correct, errors modest -- a few % to ~10% -- and growing
+away from the support, no sign flips). This is the SAME underlying issue family as model 18's
+remaining discrepancy (likely shear-area approximation precision for `T`/`B`/`SR`), but far more
+visible here: model 18's `FRLS` hinges release some of the structure's redundancy (closer to
+statically determinate, so less sensitive to a small stiffness error); model 17, fully continuous
+with no hinges, is the MORE indeterminate case and amplifies the same small imprecision across
+many more elements. Spectrum-case (`SPECX(RS)`/`SPECY(RS)`) rows were not checked this session
+(would need the same modal+spectrum verification approach already used for model 16).
+Not investigated further -- same root cause and same remediation path as model 18's open item
+above.
 
 ## Next autonomous action
 Phase 3.2, Phase 4, Phase 5 (5.1-5.6), Phase 6 (6.1, 6.1b, 6.2, 6.2b; 6.3 cancelled), Phase 7A,

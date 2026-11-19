@@ -874,8 +874,18 @@ already-disclosed approximate shear-area formulas for `T`/`B` aren't precise eno
 MIDAS's internal force/displacement redistribution exactly, even though they're fine for the
 force values themselves elsewhere. Improving this needs either MIDAS's own effective-shear-area
 formula (inaccessible) or a more rigorous thin-walled shear-flow derivation -- a real task
-requiring its own scoping, not attempted this session. Model 17 is still entirely unverified
-numerically.
+requiring its own scoping, not attempted this session.
+
+**Model 17 numerically checked (2026-11-19)**: its `NODE`/`ELEM`/`SECT`/`MATL`/`CONS`/`BMLD` are
+byte-identical to model 18's (direct JSON comparison) -- same bridge; 18 adds `FRLS` hinges and a
+`CNLD` case, 17 adds modal/spectrum requests instead. Static "FORCE" case: elements 1-2 (nearest
+the roller) match exactly; from element 3 on, **373/936 beam-force rows FAIL** (modest, growing
+errors away from the support, no sign flips -- same family as model 18's remaining item, not a
+new bug). Explanation: model 18's hinges release some redundancy (closer to determinate, less
+sensitive to a small stiffness error); model 17, fully continuous, is MORE indeterminate and
+amplifies the same small shear-area imprecision across far more elements. Spectrum-case
+(`SPECX(RS)`/`SPECY(RS)`) rows not checked this session. Same root cause and remediation path as
+model 18's open item -- not pursued further.
 
 ### `xmidas/deneme1.json` tests removed entirely (2026-11-19, explicit user instruction)
 Every CTest count above citing "5 pre-existing/permanent failures" refers to the 5 tests that

@@ -2280,3 +2280,45 @@ ratio 0.993-1.006 except SOCT torsion (median 1.028, p90 1.070). Consistent with
 stiffness idealization differences (shear areas, J); root cause not proven, no change made.
 
 Regression: Debug 271/271, Release 271/271, gui-release 301/301 (each previous count + 4 new).
+
+## Model 21 full verification: nested-combo displacement proven MIDAS-side; every other residual traced to 4 material/section-property conventions (2026-11-19, research only, no production change)
+
+**Nested vs flat combinations (user added COMBO-3F/COMBO-4F = explicit flat forms of COMBO-3/4).**
+In MIDAS's own exports: Reaction and Beam Force give COMBO-3 == COMBO-3F and COMBO-4 == COMBO-4F
+(max |diff| 3e-11); Displacements(Global) gives COMBO-3 != COMBO-3F (168/180 nodes, max 4.2e-3 m)
+and COMBO-4 != COMBO-4F (max 1.7e-2 m), while COMBO-3F/4F are exactly consistent with the file's
+own primitive rows. MIDAS's nested-combination displacement output is therefore inconsistent with
+its own flat equivalent; KOPRUQ (which expands nested combinations exactly) matches the flat
+forms: COMBO-3F 1073/1080, COMBO-4F 1037/1080 with current properties, 1080/1080 each in the
+diagnostic experiment below.
+
+**Property back-calculation from MIDAS's own data** (scratchpad tools `backcalc_stiff.py`,
+`diag_bend21.cpp`; load cases without member loads, so end forces depend only on end
+displacements): axial EA and torsional GJ from N = EA/L*du, T = GJ/L*dtheta; bending EI and
+Timoshenko Phi by least squares on the 2-node Timoshenko relations (linear in a = EI/(L(1+Phi)),
+c = Phi*a). Self-check: applied to KOPRUQ's own solution it recovers KOPRUQ's EI/As exactly
+(residual ~1e-15). Findings (MIDAS value / KOPRUQ value):
+- E (all sections, models 21 AND 18): 34077 MPa = EN1992-1-1:2004 Ecm = 22*(fcm/10)^0.3 for
+  C35/45 (34077.15) rounded to 1 MPa. KOPRUQ uses the Table 3.1 rounded 34000 MPa. NOTE: the
+  MidasMaterialLibrary.hpp header calls 22*(fcm/10)^0.3 and 9.5*(fck+8)^(1/3) "the same curve" --
+  false (34.08 vs 33.28 GPa); the old model-04 evidence (2.13% deflection gap) is ambiguous
+  between them because of shear deformation.
+- A, Iy, Iz: exact for SB, SR, B, STRK, SOCT. J exact for SB, SR, B.
+- J: STRK(H=0.9,B=2) 0.301992 vs 0.315001; SOCT(H=1,B=2,a=0.3,b=0.2) 0.379947 vs 0.433536.
+  MIDAS's formula NOT identified (several closed forms tried, none match); not guessed.
+- Shear areas: SB 5/6*A, SR 0.9*A exact. Box: Asy = 2*tf*B, Asz = 2*tw*H (exact on model 21
+  B[1.5,1.0,0.1,0.2]: 0.400000/0.300000 AND model 18 B[3,5,0.5,0.5]: Asz 3.00000 -- KOPRUQ's
+  Zhuravskii values are 0.37669/0.29205 and 2.98475; model 18 passed only within tolerance).
+  T (model 18): Asy = 5/6*B*tf = 1.66667 (KOPRUQ 2.74809). STRK: Asy = Ls*H + 0.9*pi*R^2 =
+  1.562555, Asz = (5/6)*Ls*H + 0.9*pi*R^2 = 1.397555 (single geometry). SOCT: Asy = Asz = 5/6*A
+  = 1.566667 (single geometry).
+
+**Diagnostic experiment** (scratchpad `diag_exp21.cpp`, properties overridden after import, never
+production): with E=34077 MPa, the MIDAS-implied J for STRK/SOCT and the shear areas above, model
+21 gives Beam Force 22560/22560, Reaction 720/720 (max rel diff ~6e-4, typically 1e-5), and
+Displacements 1080/1080 for every case except the MIDAS-inconsistent nested COMBO-3/COMBO-4.
+This proves KOPRUQ's stiffness assembly, thermal/member/nodal load vectors, combination logic and
+force recovery reproduce MIDAS essentially exactly; all remaining model-21 residual is the 4
+property conventions. Current production (unchanged): Beam Force 19351/22560 (85.78%), Reaction
+606/720 (84.17%), Displacements 9108/10800 (84.33%). Changing E/shear-area/J conventions is a
+formulation change awaiting user approval; STRK/SOCT J needs MIDAS's own section values.

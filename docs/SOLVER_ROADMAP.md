@@ -887,6 +887,28 @@ amplifies the same small shear-area imprecision across far more elements. Spectr
 (`SPECX(RS)`/`SPECY(RS)`) rows not checked this session. Same root cause and remediation path as
 model 18's open item -- not pursued further.
 
+### Phase 7S addendum — rigorous Zhuravskii shear-area formulas; model 18 reaches 100% (2026-11-19)
+User instruction: prioritize replacing the T/box sections' approximate shear-area formulas with
+classical theory, since MIDAS's own effective shear area cannot be obtained. Added
+`detail::timoshenkoShearArea()` (`MidasSectionLibrary.hpp`): the standard Zhuravskii shear-stress
+distribution gives As = I^2 / integral(Q(y)^2/b(y) dy) for any section built from rectangular
+strips, replacing the earlier "web/flange alone" (T) and "parallel walls only" (box)
+approximations for AsH and AsB. An initial version accumulated Q(y) via discrete increments
+(O(1/N) bias); caught by its own self-test against the exact k=5/6 rectangle result and fixed by
+evaluating Q(y) via its exact closed-form antiderivative per strip, leaving only the smooth
+quartic Q(y)^2/b(y) integral numerical (O(1/N^2)).
+
+**Verified against real MIDAS data, confirming the shear-area approximation was the actual root
+cause of the "new unresolved discrepancy" above**: model 18's Beam Force/Reaction/Displacement
+comparison (previously 1834/1872, 96/96, 919/948) is now **1872/1872, 96/96, 948/948 -- 100%
+PASS.** Model 17 (same geometry, no `FRLS` hinges, more indeterminate) improves substantially:
+FORCE-case beam force 563/936 -> 817/936, reactions 17 -> 5 mismatches, displacements 441/474 ->
+**474/474**. Model 17's remaining residual is likely a different, smaller, already-disclosed
+approximation (e.g. the open-section/Bredt torsion constant J) -- not investigated further.
+
+Verified: Debug CTest **259/259 PASS**, gui-release **289/289 PASS** -- both 100%, no
+regressions.
+
 ### `xmidas/deneme1.json` tests removed entirely (2026-11-19, explicit user instruction)
 Every CTest count above citing "5 pre-existing/permanent failures" refers to the 5 tests that
 depended on the permanently-deleted `xmidas/deneme1.json` sample (see

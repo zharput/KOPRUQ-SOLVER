@@ -1920,6 +1920,32 @@ many more elements. Spectrum-case (`SPECX(RS)`/`SPECY(RS)`) rows were not checke
 Not investigated further -- same root cause and same remediation path as model 18's open item
 above.
 
+## Rigorous shear-area formulas confirm the hypothesis: model 18 reaches 100% (2026-11-19)
+User instruction: prioritize replacing the approximate T/box shear-area formulas with classical
+theory (MIDAS's own effective shear area data is inaccessible). Added
+`detail::timoshenkoShearArea()` (`MidasSectionLibrary.hpp`): the standard Zhuravskii shear-stress
+distribution gives a closed-form energy-consistent shear area As = I^2 / integral(Q(y)^2/b(y) dy)
+for any section built from rectangular strips -- replaces the earlier coarser "web/flange alone"
+(T) and "parallel walls only" (box) approximations for both AsH and AsB. An initial draft
+accumulated Q(y) via many small discrete increments and had an O(1/N) bias; caught during the
+function's own self-test (`TimoshenkoShearAreaMatchesClosedFormRectangle`, which must reproduce
+the EXACT k=5/6 rectangle result) and fixed by evaluating Q(y) via its exact closed-form
+antiderivative within each constant-width strip instead, leaving only the final (smooth quartic)
+integration numerical.
+
+**Verified against real MIDAS data -- confirms the shear-area approximation was the actual root
+cause**: model 18's Beam Force/Reaction/Displacement comparison, previously 1834/1872, 96/96,
+919/948, is now **1872/1872, 96/96, 948/948 -- 100% PASS across the board.** Model 17 (same
+geometry, no `FRLS` hinges, more statically indeterminate so more sensitive to every approximate
+property) improves substantially too: FORCE-case beam force from 563/936 to 817/936 PASS,
+reactions from 17 to 5 mismatches, displacements from 441/474 to **474/474 PASS**. Model 17's
+remaining residual is not investigated further this session -- likely a different, smaller,
+already-disclosed approximation (e.g. the open-section/Bredt torsion constant J), newly visible
+now that shear area is no longer the dominant error source.
+
+Verified: Debug CTest **259/259 PASS**, gui-release **289/289 PASS** -- both 100%, no
+regressions.
+
 ## Next autonomous action
 Phase 3.2, Phase 4, Phase 5 (5.1-5.6), Phase 6 (6.1, 6.1b, 6.2, 6.2b; 6.3 cancelled), Phase 7A,
 7B (including ETMP thermal wiring), 7C, 7D, 7M, 7S(1) and 7T are all complete and verified -- CI

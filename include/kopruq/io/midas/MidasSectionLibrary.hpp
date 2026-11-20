@@ -373,13 +373,27 @@ inline ResolvedSectionProperties solidOctagon(Real H, Real B, Real a, Real b) {
   p.area = H * B - 2 * a * b;
   p.IB = H * B * B * B / 12 - (B * B * a * b / 2 - (2 * B * a * a * b) / 3 + a * a * a * b / 3);
   p.IH = B * H * H * H / 12 - (H * H * a * b / 2 - (2 * H * a * b * b) / 3 + a * b * b * b / 3);
-  p.J = (a > 0 && b > 0) ? detail::torsionConstantFEMChamferedRect(H, B, a, b)
-                         : detail::solidRectangleTorsion(std::max(H, B), std::min(H, B)); // a=b=0: exact rectangle
+  // J follows MIDAS NX's own DBUSER SOCT convention (user decision 2026-11-20: match MIDAS):
+  //   J = Roark solid-rectangle formula (detail::solidRectangleTorsion) on the reduced rectangle
+  //       (B - a/4) x (H - b/4)
+  // Identified 2026-11-20 from a controlled series of MIDAS sections the user built for this
+  // purpose (model 21 SEC5, SEC7..SEC10: chamfered, a=b~0, a only, b only) and confirmed EXACTLY
+  // to 6 significant digits on six geometries, each back-calculated per element (J = T*L/(G*dth))
+  // from MIDAS's own displacement/beam-force results and matching its Section_prop export:
+  //   [H,B,a,b]=[1.0,2.0,0.3,0.2] 0.379948 | [1.3,2.5,1.0,0.5] 0.818870 | [1.3,2.5,0.4,0.25]
+  //   1.026500 (earlier revision) | [1.3,2.5,~0,~0] 1.234699 | [1.3,2.5,0.45,~0] 1.153053 |
+  //   [1.3,2.5,~0,0.5] 0.953202.
+  // This is MIDAS's engineering convention, NOT exact elasticity: it depends on a and b separately
+  // (a chamfer of zero area, e.g. a=0.45, b->0, still lowers J by ~7%), and against the exact St.
+  // Venant value (independent Python FDM, h=H/300) it is ~13% LOW for moderate chamfers ([1.0,2.0,
+  // 0.3,0.2]: 0.379948 vs 0.437099) but ~28% HIGH for a large one ([1.3,2.5,1.0,0.5]: 0.818870 vs
+  // 0.637362). The exact value stays available as
+  // detail::torsionConstantFEMChamferedRect (kept and directly tested). a=b=0 reduces exactly to
+  // solidRectangle's own J.
+  p.J = detail::solidRectangleTorsion(B - a / 4, H - b / 4);
   // Shear areas: MIDAS NX's own DBUSER SOCT convention, AsH = AsB = (5/6)*A -- confirmed exactly
   // on two geometries (model 21 SEC5 and SEC7, MIDAS Section_prop export and back-calculation
   // from MIDAS's own results, 2026-11-20). a=b=0 reduces to solidRectangle's own 5/6*A.
-  // J stays the exact St. Venant (Prandtl membrane FDM) value: MIDAS's SOCT J (about 12% lower
-  // on both model-21 geometries) matched no closed form tried, so it is not guessed.
   p.AsH = detail::kRectangularShearFactor * p.area;
   p.AsB = detail::kRectangularShearFactor * p.area;
   return p;

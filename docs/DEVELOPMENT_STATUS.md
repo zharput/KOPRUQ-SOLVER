@@ -2362,3 +2362,39 @@ diagnostic) and 10/22 (do not solve: 'element property reference missing') are u
 were not investigated in this milestone.
 
 Regression: Debug 278/278, Release 278/278, gui-release 308/308.
+
+## SOCT torsion-constant convention identified and implemented -- model 21 fully verified (2026-11-20)
+
+The user added a controlled series of SOCT sections to model 21 for this purpose (SEC7 changed to
+[H,B,a,b]=[1.3,2.5,1.0,0.5]; new SEC8 [1.3,2.5,~0,~0], SEC9 [1.3,2.5,0.45,~0], SEC10
+[1.3,2.5,~0,0.5]; MIDAS was given 1e-5 for a "zero" leg) and re-exported JSON, results and
+Section_prop. Key observation: SEC9/SEC10 have the rectangle's area and inertias in MIDAS, yet a
+lower J -- MIDAS's J depends on a and b directly, not on the cut geometry. Effective-rectangle
+inversion gave B' = B - a/4 (SEC9) and H' = H - b/4 (SEC10), leading to
+
+    J_SOCT = Roark solid-rectangle formula on (B - a/4) x (H - b/4)
+
+confirmed to 6 significant digits on SIX geometries, each J back-calculated per element
+(J = T*L/(G*dtheta), G from E=34077 MPa, nu=0.2) from MIDAS's own displacement and beam-force
+exports, and consistent with Section_prop (4 digits): SEC5 0.379948, SEC7 0.818870, previous-
+revision SEC7 [1.3,2.5,0.4,0.25] 1.026500, SEC8 1.234699, SEC9 1.153053, SEC10 0.953202.
+This is MIDAS's convention, not exact elasticity: vs the exact St. Venant value (independent
+Python FDM, h=H/300) it is ~13% low for moderate chamfers (SEC5 0.379948 vs 0.437099) and ~28%
+high for the large one (SEC7 0.818870 vs 0.637362). The exact FDM function
+(detail::torsionConstantFEMChamferedRect) is kept and tested.
+
+Production change: MidasSectionLibrary.hpp solidOctagon() J only (shear areas, A, I unchanged).
+Tests: new tests/unit/midas_section_soct_torsion_tests.cpp (9 tests: six MIDAS geometries,
+formula literals at 1e-9 and MIDAS 6-digit values at 5e-6 relative; a=b=0 rectangle; exact
+function still available; dispatch). Existing test MidasSectionConventions.
+SoctTorsionIsExactStVenantNotMidas (written in the previous milestone, encoding "SOCT J = exact")
+renamed SoctExactStVenantTorsionFunctionStillVerified and now calls the exact function directly
+(same values, same 1.5% tolerance) -- requirement change, not a forced pass.
+
+Model 21 (new data, untruncated, |d| <= absTol + 1% |ref|), before -> after:
+Displacements 8573 -> 8640/8640 (100%), Beam Force 16562 -> 18048/18048 (100%), Reaction
+539 -> 576/576 (100%); max relative deviations 6.3e-3 / 7.6e-3 / 4.3e-3. Model 21 is fully
+verified against MIDAS for all static categories. All other models (01-20, 22): counts identical
+to the previous milestone (no regression; 10 and 22 still do not solve -- next task).
+
+Regression: Debug 287/287, Release 287/287, gui-release 317/317.

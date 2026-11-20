@@ -9,7 +9,7 @@
 // the evidence these conventions are MIDAS's own (see docs/DEVELOPMENT_STATUS.md, 2026-11-20).
 //   STRK (H, B; R=H/2, Ls=B-H): J   = Roark rectangle on the equal-area rectangle (A/H x H)
 //                               AsH = (5/6)*Ls*H + 0.9*pi*R^2,  AsB = Ls*H + 0.9*pi*R^2
-//   SOCT:                        AsH = AsB = (5/6)*A  (J: exact St. Venant, not MIDAS's)
+//   SOCT:                        AsH = AsB = (5/6)*A  (J: see midas_section_soct_torsion_tests.cpp)
 //   Box  (H, B, tw, tf):         AsH = 2*tw*H,        AsB = 2*tf*B
 #include <gtest/gtest.h>
 #include <cmath>
@@ -63,12 +63,14 @@ TEST(MidasSectionConventions, SoctShearAreasAreFiveSixthsOfArea) {
   rel(p7.AsB, 3.05 * 5.0 / 6.0, "SEC7 AsB");
 }
 
-// SOCT J stays the exact St. Venant value (MIDAS's own SOCT J, 0.379948 / 1.026500, matched no
-// closed form and is deliberately not reproduced). Independent Python FDM (h=H/300): 0.437099 and
-// 1.176001; the library's coarser grid is within ~1%.
-TEST(MidasSectionConventions, SoctTorsionIsExactStVenantNotMidas) {
-  rel(solidOctagon(1.0, 2.0, 0.3, 0.2).J, 0.437099, "SEC5 exact J (independent FDM)", 1.5e-2);
-  rel(solidOctagon(1.3, 2.5, 0.4, 0.25).J, 1.176001, "SEC7 exact J (independent FDM)", 1.5e-2);
+// The exact St. Venant SOCT J function stays verified. (Until 2026-11-20 solidOctagon() itself
+// returned this exact value; after the user supplied a controlled MIDAS SOCT series, solidOctagon()
+// follows MIDAS's identified convention instead -- see midas_section_soct_torsion_tests.cpp -- so
+// this test now checks the exact function directly, same values, same tolerance.)
+// Independent Python FDM (h=H/300): 0.437099 and 1.176001; the library's coarser grid is within ~1%.
+TEST(MidasSectionConventions, SoctExactStVenantTorsionFunctionStillVerified) {
+  rel(detail::torsionConstantFEMChamferedRect(1.0, 2.0, 0.3, 0.2), 0.437099, "SEC5 exact J (independent FDM)", 1.5e-2);
+  rel(detail::torsionConstantFEMChamferedRect(1.3, 2.5, 0.4, 0.25), 1.176001, "SEC7 exact J (independent FDM)", 1.5e-2);
 }
 
 // Model 21 SEC3 box B[1.5,1.0,0.1,0.2]: MIDAS Section_prop Asy 0.4, Asz 0.3.

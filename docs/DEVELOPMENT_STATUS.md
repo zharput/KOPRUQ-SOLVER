@@ -2690,3 +2690,27 @@ real AISC shape now in the catalog, so it was changed to W14X91 (documented in t
 New tests: tests/unit/midas_aisc_catalog_tests.cpp (4). Models 10, 17, 21: unchanged; model 20
 unchanged (awaits the EN HEB160 data).
 Regression: Debug 325/325, Release 325/325, gui-release 358/358.
+
+## Decision change: catalog (AISC / EN) profiles removed -- user-defined I/H and T only (2026-11-20)
+
+User decision: the solver is developed first for precast concrete bridges; steel members are entered
+as user-defined (DB/User "User") I/H and T sections, computed by the program. All AISC and EN catalog
+profiles are removed:
+- MidasSectionLibrary.hpp: resolveCatalogSection, aiscTabulatedISection, iSection (UNI HEB160),
+  channelSection (UNI UPN100), equalAngleSection (UNI L50x5) and ResolvedSectionProperties::
+  principalAngleRad removed; include/kopruq/io/midas/AiscIShapes.hpp and
+  scripts/generate_aisc_ishapes.py deleted (commit 6924a01's AISC catalog withdrawn).
+- MidasJsonImporter.hpp: any section with SECT_I.DB_NAME is rejected explicitly ("catalog/database
+  section ... is not supported; define it as a user (DB/User 'User') section"); the principal-axis
+  reference_y rotation used only by the catalog angle is removed.
+- Kept: user-defined H (unequalFlangeISection, model 10 verified) and T (tSection, models 17/18/22),
+  and every other DBUSER/PSC shape.
+Tests removed with the feature (explicitly, not to hide failures): tests/unit/midas_aisc_catalog_tests.cpp
+(4 tests, added earlier today) and, in midas_section_model10_r2_tests.cpp, AiscW36x247, AiscHp14x89,
+UnknownAiscShapeIsRejectedNotGuessed (3). New: tests/unit/midas_catalog_rejected_tests.cpp (2:
+AISC and UNI catalog records from models 10/20 are rejected; user H and T still import).
+Consequence: verification models 10 (revision 2: W36X247, HP14X89) and 20 (HEB160, UPN100, L50x5)
+no longer solve until their profiles are redefined as user sections. All other models unchanged
+(01-09, 11-19, 21, 22). Found while re-checking (pre-existing, not addressed): model 19 has 1
+displacement FAIL (FORCE, node 41 RY: 0.000540 vs MIDAS 0.000556).
+Regression: Debug 320/320, Release 320/320, gui-release 353/353 (325 - 7 removed + 2 new).

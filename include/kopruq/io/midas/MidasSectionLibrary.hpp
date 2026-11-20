@@ -25,7 +25,6 @@
 // an unverified axis-convention guess into the section-property math.
 #include "../../core/Types.hpp"
 #include "../../sections/SectionFE.hpp"
-#include "AiscIShapes.hpp"
 #include <Eigen/Sparse>
 #include <Eigen/SparseCholesky>
 #include <algorithm>
@@ -47,23 +46,16 @@ namespace kopruq::io::midas {
 // to IB). Computed via each shape's classical shear correction factor k (As = k*A), per
 // Timoshenko & Goodier, "Theory of Elasticity" -- NOT MIDAS-specific, same sourcing standard
 // as the J formulas above. See MidasJsonImporter.hpp for how AsH/AsB map onto Beam3D's Asy/Asz.
-// principalAngleRad: additional rotation (radians) of the member's local y/z axes about its
-// local x-axis, needed ONLY for an unsymmetric shape (e.g. an equal-leg angle) whose principal
-// bending axes are not aligned with the H/B directions -- 0 for every symmetric shape in this
-// file. IH/IB below are already expressed in the ROTATED (principal) frame when this is nonzero,
-// i.e. they are directly usable as Iy/Iz once the importer applies this same rotation to
-// reference_y (same rotation mechanic as MidasOrientation.hpp's own Beta angle) -- see
-// equalAngleSection's header comment for the derivation.
 // extentH / extentB: the section's overall outer dimensions along H (local z at Beta=0) and B
 // (local y) -- what MIDAS's temperature gradient "Use Section Hz / Hy" takes as the distance
 // between the two outermost faces (confirmed on model 22's PSC box, 2026-11-20). Set by the
-// dispatchers (resolveDbUserSection / resolveCatalogSection / resolvePsc1CellSection); 0 means
-// "not defined" (e.g. a principal-axis-rotated angle), and a gradient needing it is rejected.
+// dispatchers (resolveDbUserSection / psc1CellSection); 0 means "not defined", and a gradient
+// needing it is rejected.
 // topFiber: distance from the centroid up to the +z (top, H-direction) extreme fiber -- where a MIDAS
 // "Center-Top" (OFFSET_PT "CT") section offset puts the node (MidasJsonImporter.hpp). Set by the
 // shape functions whose centroid is not at mid-depth (T, unequal-flange H, PSC); withExtents()
 // fills H/2 for every other (vertically symmetric) shape. 0 = not defined.
-struct ResolvedSectionProperties { Real area{}, IH{}, IB{}, J{}, AsH{}, AsB{}; Real principalAngleRad{0}; Real extentH{0}, extentB{0}; Real topFiber{0}; };
+struct ResolvedSectionProperties { Real area{}, IH{}, IB{}, J{}, AsH{}, AsB{}; Real extentH{0}, extentB{0}; Real topFiber{0}; };
 
 namespace detail {
 inline ResolvedSectionProperties withExtents(ResolvedSectionProperties p, Real H, Real B) { p.extentH = H; p.extentB = B; if (p.topFiber == 0) p.topFiber = H / 2; return p; }
@@ -516,33 +508,6 @@ inline ResolvedSectionProperties tSection(Real H, Real B, Real tw, Real tf) {
   return p;
 }
 
-// Symmetric I/H wide-flange (web vertical, flanges top+bottom, both symmetric about H and B):
-// overall depth H, flange width B, web thickness tw, flange thickness tf (each flange). Area/IH
-// via the standard composite decomposition (outer B x H rectangle minus the two side cutouts of
-// width (B-tw)/2 and height (H-2*tf) each) -- classical mechanics of materials, not MIDAS-specific
-// (same sourcing standard as hollowBox/tSection above). IB is the two flanges' own I (parallel-axis
-// offset is zero since both flanges already share the vertical centroidal axis) plus the web's own
-// I. J uses the same thin-strip-sum approximation as tSection (J=(1/3)*sum(b_i*t_i^3)), for
-// consistency with that section's empirically-preferred (over the more "rigorous" FEM solve, see
-// tSection's header comment) convention for open thin-walled sections built from this library.
-inline ResolvedSectionProperties iSection(Real H, Real B, Real tw, Real tf) {
-  if (!(H > 0) || !(B > 0) || !(tw > 0) || !(tf > 0)) throw std::invalid_argument("I section requires positive H, B, tw and tf");
-  const Real Hi = H - 2*tf;
-  if (!(Hi > 0)) throw std::invalid_argument("I section flange thickness tf must be less than H/2");
-  if (!(tw <= B)) throw std::invalid_argument("I section web thickness tw must not exceed flange width B");
-  ResolvedSectionProperties p;
-  p.area = 2*B*tf + Hi*tw;
-  p.IH = (B*H*H*H - (B - tw)*Hi*Hi*Hi) / 12;
-  p.IB = 2*(tf*B*B*B/12) + Hi*tw*tw*tw/12;
-  p.J = (2*B*tf*tf*tf + Hi*tw*tw*tw) / 3;
-  // AsH: horizontal strips along H -- flange (full width B) / web (width tw) / flange.
-  // AsB: rotated -- outside the web's width only the two flanges are present (combined depth
-  // 2*tf), within it both flanges and the web are present (full depth H).
-  p.AsH = detail::timoshenkoShearArea({{0, tf, B}, {tf, H - tf, tw}, {H - tf, H, B}}, p.IH);
-  p.AsB = detail::timoshenkoShearArea({{0, (B - tw) / 2, 2*tf}, {(B - tw) / 2, (B + tw) / 2, H}, {(B + tw) / 2, B, 2*tf}}, p.IB);
-  return p;
-}
-
 // MIDAS NX DBUSER "H" (I/H section with possibly unequal flanges), vSIZE [H, B1, tw, tf1, B2, tf2,
 // r1, r2]: overall depth H, top flange B1 x tf1, web thickness tw, bottom flange B2 x tf2 (r1, r2
 // fillet radii -- not supported, the caller rejects nonzero values). Web clear height
@@ -562,7 +527,7 @@ inline ResolvedSectionProperties iSection(Real H, Real B, Real tw, Real tf) {
 // one geometry (the only DBUSER H available); a second geometry would be a useful confirmation.
 // The section is used about its centroid (OFFSET_PT "CC"); for unequal flanges the shear centre
 // is off the centroid, which MIDAS's beam does not model either (the 2-node Timoshenko fit of its
-// results has residual ~1e-7). The catalog path (resolveCatalogSection, HEB160) keeps iSection.
+// results has residual ~1e-7).
 inline ResolvedSectionProperties unequalFlangeISection(Real H, Real B1, Real tw, Real tf1, Real B2, Real tf2) {
   if (!(H > 0) || !(B1 > 0) || !(tw > 0) || !(tf1 > 0) || !(B2 > 0) || !(tf2 > 0))
     throw std::invalid_argument("H section requires positive H, B1, tw, tf1, B2 and tf2");
@@ -585,162 +550,9 @@ inline ResolvedSectionProperties unequalFlangeISection(Real H, Real B1, Real tw,
   return p;
 }
 
-// Channel (web on one side, two flanges projecting the same way, e.g. a MIDAS "C"-shape/European
-// UPN profile): overall depth H, overall flange width B (web face to flange tip), web thickness
-// tw, flange thickness tf. Symmetric about the horizontal (H) centroidal axis -- so IH uses the
-// SAME formula as iSection's (the flange/web decomposition's H-direction centroid is unaffected
-// by the channel's left/right asymmetry) -- but NOT about the vertical (B) axis, so IB needs its
-// own centroid (standard composite-section parallel-axis decomposition: web + two flange legs,
-// each of length (B-tw), offset from the web's outer face). J uses the same thin-strip-sum
-// convention as iSection/tSection, for consistency (see tSection's header comment).
-inline ResolvedSectionProperties channelSection(Real H, Real B, Real tw, Real tf) {
-  if (!(H > 0) || !(B > 0) || !(tw > 0) || !(tf > 0)) throw std::invalid_argument("C section requires positive H, B, tw and tf");
-  const Real Hi = H - 2*tf;
-  if (!(Hi > 0)) throw std::invalid_argument("C section flange thickness tf must be less than H/2");
-  if (!(tw < B)) throw std::invalid_argument("C section web thickness tw must be less than flange width B");
-  ResolvedSectionProperties p;
-  const Real Aweb = H*tw, Aflange = (B - tw)*tf; // each of the two flange legs (beyond the web)
-  p.area = Aweb + 2*Aflange;
-  p.IH = (B*H*H*H - (B - tw)*Hi*Hi*Hi) / 12; // same decomposition as iSection; H-symmetric
-  const Real xWeb = tw / 2, xFlange = tw + (B - tw) / 2; // from the web's outer (left) face
-  const Real xbar = (Aweb*xWeb + 2*Aflange*xFlange) / p.area;
-  const Real IwebOwn = H*tw*tw*tw / 12, IflangeOwn = tf*(B - tw)*(B - tw)*(B - tw) / 12;
-  const Real dWeb = xbar - xWeb, dFlange = xFlange - xbar;
-  p.IB = (IwebOwn + Aweb*dWeb*dWeb) + 2*(IflangeOwn + Aflange*dFlange*dFlange);
-  p.J = (2*B*tf*tf*tf + Hi*tw*tw*tw) / 3;
-  p.AsH = detail::timoshenkoShearArea({{0, tf, B}, {tf, H - tf, tw}, {H - tf, H, B}}, p.IH);
-  // AsB strips along the B direction (web outer face at 0): the web region (0..tw, full depth H)
-  // then the flange-only region (tw..B, depth 2*tf) -- timoshenkoShearArea computes its own
-  // centroid/Q from this profile directly, consistent with xbar above.
-  p.AsB = detail::timoshenkoShearArea({{0, tw, H}, {tw, B, 2*tf}}, p.IB);
-  return p;
-}
-
-// Equal-leg angle (MIDAS shape "L", e.g. a European equal angle like "L50x5"): overall leg
-// length a, uniform thickness t. UNLIKE every other shape in this file, this section is
-// unsymmetric about any horizontal/vertical axis pair through its centroid -- its principal
-// bending axes are rotated (45 degrees, by the diagonal symmetry of an EQUAL-leg angle) relative
-// to the raw H/B directions. Raw second moments/product of inertia (IH_raw, IB_raw, Ixy_raw) are
-// computed via the classical composite-rectangle decomposition (two legs, corner-overlap
-// avoided: leg1 = a x t along H's zero edge, leg2 = t x (a-t) stacked on it, standard parallel-
-// axis theorem -- e.g. Hibbeler, "Mechanics of Materials", principal moments of inertia; same
-// sourcing standard as every other shape here), then diagonalized by finding the rotation angle
-// phi that drives the rotated product of inertia IY'Z' to zero:
-//   IY'Z'(phi) = (1/2)*sin(2*phi)*(IB_raw - IH_raw) + cos(2*phi)*Ixy_raw = 0
-//   => phi = 0.5 * atan2(-2*Ixy_raw, IB_raw - IH_raw)
-// (derived from Z' = sin(phi)*Y + cos(phi)*Z, Y' = cos(phi)*Y - sin(phi)*Z -- the SAME rotation
-// sense as MidasOrientation.hpp's Beta-angle formula, so the importer can apply this phi to
-// reference_y with that identical formula and get a self-consistent result) -- then IH_new/IB_new
-// are computed directly from that same rotation (not by eigenvalue max/min assignment, which
-// would need a separate, error-prone sign convention to pair correctly with phi's rotation
-// sense). Sanity-checked arithmetically for a=50mm,t=5mm (no fillets, same precision level as
-// this file's other shapes): IH_raw=IB_raw=11.25 cm^4 (vs. tabulated L50x5 ~11.0 cm^4), principal
-// moments 17.91/4.59 cm^4 at phi=45 degrees (vs. tabulated ~17.5/4.45 cm^4) -- NOT independently
-// verified against real MIDAS beam-bending data for an angle member (no such sample available
-// this session; model 20's own L50x5 elements are all TRUSS, whose fully-released stiffness
-// does not depend on Iy/Iz/J/Asy/Asz at all -- see Truss3D.hpp -- so this shape's bending-axis
-// correctness has no real-data check available yet for THIS shape specifically, unlike every
-// other shape in this file). J uses the same thin-strip-sum convention as the other open
-// sections here. AsH/AsB use the same constant Timoshenko rectangular factor as solidRectangle
-// (a coarser approximation than the Zhuravskii quadrature used for the symmetric shapes above --
-// no straightforward per-principal-axis strip decomposition exists for a rotated unsymmetric
-// section -- functionally irrelevant for a TRUSS-released member in any case).
-inline ResolvedSectionProperties equalAngleSection(Real a, Real t) {
-  if (!(a > 0) || !(t > 0) || !(t < a)) throw std::invalid_argument("L section requires positive a and 0 < t < a");
-  const Real A1 = a * t, A2 = t * (a - t);
-  const Real area = A1 + A2;
-  const Real xB1 = a / 2, yH1 = t / 2;           // leg1 (a x t): centroid, (B-offset, H-offset)
-  const Real xB2 = t / 2, yH2 = t + (a - t) / 2; // leg2 (t x (a-t)), stacked above leg1
-  const Real xbar = (A1 * xB1 + A2 * xB2) / area, ybar = (A1 * yH1 + A2 * yH2) / area;
-  const Real dB1 = xB1 - xbar, dH1 = yH1 - ybar, dB2 = xB2 - xbar, dH2 = yH2 - ybar;
-  const Real IH_raw = a*t*t*t/12 + A1*dH1*dH1 + t*(a-t)*(a-t)*(a-t)/12 + A2*dH2*dH2; // integral H^2 dA
-  const Real IB_raw = t*a*a*a/12 + A1*dB1*dB1 + (a-t)*t*t*t/12 + A2*dB2*dB2;         // integral B^2 dA
-  const Real Ixy_raw = A1*dB1*dH1 + A2*dB2*dH2;                                     // integral B*H dA
-  const Real phi = Real(0.5) * std::atan2(Real(-2) * Ixy_raw, IB_raw - IH_raw);
-  ResolvedSectionProperties p;
-  p.area = area;
-  p.IH = std::sin(phi)*std::sin(phi)*IB_raw + std::sin(2*phi)*Ixy_raw + std::cos(phi)*std::cos(phi)*IH_raw;
-  p.IB = std::cos(phi)*std::cos(phi)*IB_raw - std::sin(2*phi)*Ixy_raw + std::sin(phi)*std::sin(phi)*IH_raw;
-  p.J = (t*t*t/3) * (2*a - t);
-  p.AsH = p.AsB = detail::kRectangularShearFactor * area;
-  p.principalAngleRad = phi;
-  return p;
-}
-
-// Catalog/database section lookup (MIDAS SECT_I.DB_NAME + SECT_I.SECT_NAME, instead of a raw
-// vSIZE array) -- resolves a small set of standard European profile designations to their
-// nominal H/B/tw/tf dimensions (idealized rectangular-flange geometry, root fillets NOT modeled,
-// same precision level as this file's other shapes), then dispatches to iSection/channelSection
-// above. Nominal dimensions per the relevant standard (not derived from the MIDAS export, which
-// never gives them for a catalog section -- same "clear diagnostic, not guessed" policy as
-// resolveDbUserSection for an unrecognized vSIZE shape):
-//   HEB160 (HE160B): EN 10034, h=160mm b=160mm tw=8mm tf=13mm
-//   UPN100: DIN 1026-1, h=100mm b=50mm tw=6mm tf=8.5mm
-// Any other DB_NAME/SECT_NAME combination, or a shape this catalog does not cover (e.g. an
-// unsymmetric angle "L", whose principal bending axes are rotated relative to H/B and would need
-// a product-of-inertia term kopruq::Section does not have -- see MidasJsonImporter.hpp), is
-// rejected with a clear diagnostic rather than approximated.
-// AISC rolled I-shape (W, HP, ...) from its PUBLISHED tabulated properties, US customary units
-// (in, in^2, in^4), converted exactly (1 in = 0.0254 m). A, Ix, Iy and J are the tabulated values
-// (they include the root fillets, so they are not recomputed from the plate dimensions). Shear
-// areas follow MIDAS NX's convention, the same one identified for its DBUSER "H" section (see
-// unequalFlangeISection): AsH = d*tw (web, shear along the depth), AsB = (5/6)*2*bf*tf (flanges).
-inline ResolvedSectionProperties aiscTabulatedISection(Real A_in2, Real d_in, Real bf_in, Real tw_in, Real tf_in,
-                                                       Real Ix_in4, Real Iy_in4, Real J_in4) {
-  constexpr Real in = Real(0.0254), in2 = in * in, in4 = in2 * in2;
-  ResolvedSectionProperties p;
-  p.area = A_in2 * in2;
-  p.IH = Ix_in4 * in4; // strong axis (bending from a load along the depth d)
-  p.IB = Iy_in4 * in4; // weak axis
-  p.J = J_in4 * in4;
-  p.AsH = d_in * tw_in * in2;
-  p.AsB = detail::kRectangularShearFactor * 2 * bf_in * tf_in * in2;
-  return p;
-}
-
-inline ResolvedSectionProperties resolveCatalogSection(const std::string& shape, const std::string& dbName, const std::string& sectName) {
-  // MIDAS NX "AISC10(US)" database, I-section shape "H": every AISC rolled I-shape (W, HP, M, S;
-  // 355 shapes) from the generated table AiscIShapes.hpp -- AISC Shapes Database v16.0 (16th ed.
-  // Steel Construction Manual) as packaged in steelpy 1.1.1 (Apache-2.0), regenerated by
-  // scripts/generate_aisc_ishapes.py. Tabulated A, Ix, Iy, J; shear areas by MIDAS's I-shape
-  // convention (aiscTabulatedISection). Cross-check (independent of that source): for W36X247
-  // and HP14X89 every one of A, Ix, Iy, J, AsH, AsB matches the property MIDAS itself used,
-  // back-calculated per element from MIDAS's own results of verification model 10 (2026-11-20).
-  // Channels, angles and tees of this database are not yet implemented (their MIDAS shear-area /
-  // torsion conventions are unverified) and are rejected.
-  if (dbName == "AISC10(US)") {
-    if (shape == "H") {
-      const auto& t = aisc::kIShapes;
-      const auto it = std::lower_bound(t.begin(), t.end(), sectName, [](const aisc::IShapeRow& r, const std::string& n) { return r.name < std::string_view(n); });
-      if (it != t.end() && it->name == sectName)
-        return detail::withExtents(aiscTabulatedISection(it->A, it->d, it->bf, it->tw, it->tf, it->Ix, it->Iy, it->J), it->d * 0.0254, it->bf * 0.0254);
-      throw std::invalid_argument("unknown AISC I-shape '" + sectName + "' in DB_NAME '" + dbName + "' (W, HP, M, S shapes of the AISC Shapes Database v16.0 are available)");
-    }
-    throw std::invalid_argument("unsupported catalog section '" + sectName + "' (shape '" + shape + "', DB_NAME '" + dbName +
-                                "'): only I-shapes (shape H) are implemented for this database");
-  }
-  if (dbName != "UNI") throw std::invalid_argument("unsupported catalog DB_NAME '" + dbName + "' (only 'UNI' and 'AISC10(US)' are implemented)");
-  if (shape == "H" && sectName == "HEB160") return detail::withExtents(iSection(0.160, 0.160, 0.008, 0.013), 0.160, 0.160);
-  if (shape == "C" && sectName == "UPN100") return detail::withExtents(channelSection(0.100, 0.050, 0.006, 0.0085), 0.100, 0.050);
-  if (shape == "L" && sectName == "L50x5") {
-    // area: overridden to the published EN 10056-1 tabulated value (4.80 cm^2, root fillets
-    // included) rather than equalAngleSection's own idealized no-fillet geometric decomposition
-    // (4.75 cm^2) -- unlike a raw DBUSER vSIZE input, a catalog/database section name IS a
-    // reference to a specific published profile, so the exact published number is available and
-    // unambiguous here, and using it materially improved real-data agreement: verified against
-    // model 20 (verification/models/20 Kafes, 2026-11-19) -- Displacements(Global) went from
-    // 240/252 to 252/252 PASS once applied (the L50x5 members are this model's truss diagonals,
-    // whose axial stiffness EA/L is directly proportional to area). IH/IB/J/AsH/AsB are left at
-    // equalAngleSection's own idealized-geometry values (no comparably precise published
-    // principal-moment numbers were available to cross-check, and this model's own L50x5
-    // elements are TRUSS-type, for which only area affects the result at all).
-    auto p = equalAngleSection(0.050, 0.005);
-    p.area = 0.00048;
-    return p;
-  }
-  throw std::invalid_argument("unsupported catalog section '" + sectName + "' (shape '" + shape + "', DB_NAME '" + dbName +
-                               "'): only HEB160 (shape H), UPN100 (shape C) and L50x5 (shape L) are implemented");
-}
+// Catalog / database profiles (MIDAS SECT_I.DB_NAME: AISC, EN/UNI, ...) are NOT supported -- removed
+// 2026-11-20 by user decision (the solver targets precast concrete bridges first; steel profiles are
+// entered as user-defined I/H or T sections). MidasJsonImporter.hpp rejects any DB_NAME section.
 
 // Dispatches on MIDAS's SHAPE code and vSIZE length; rejects anything not implemented.
 inline ResolvedSectionProperties resolveDbUserSection(const std::string& shape, const std::vector<Real>& vSize) {

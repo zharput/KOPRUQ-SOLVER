@@ -1,5 +1,5 @@
 // 2026-11-20 -- verification model 10, second revision (user added H sections and an S355 steel
-// material): a second DBUSER "H" geometry and two MIDAS "AISC10(US)" catalog I-shapes.
+// material): a second DBUSER "H" geometry (the AISC10(US) catalog part was removed 2026-11-20).
 // Dedicated new file (CLAUDE.md: never overwrite or truncate an existing test file to add tests).
 //
 // Expected literals are computed independently (Python, outside this code base): the DBUSER H
@@ -36,46 +36,7 @@ TEST(MidasModel10Revision2, DbUserHSecondGeometry) {
   rel(p.J, 0.000025830, "J vs MIDAS", 5e-5);
 }
 
-// Model 10 "PROFIL-2": AISC10(US) W36X247. MIDAS back-calc: A 0.04677409..11, IH 0.006951065,
-// IB 0.000420394, J 0.000014443, AsH 0.018942, AsB 0.023952.
-TEST(MidasModel10Revision2, AiscW36x247) {
-  const auto p = resolveCatalogSection("H", "AISC10(US)", "W36X247");
-  rel(p.area, 0.0467741, "A = 72.5 in^2");
-  rel(p.IH, 0.0069510648075199995, "IH = Ix 16700 in^4");
-  rel(p.IB, 0.00042039373985599995, "IB = Iy 1010 in^4");
-  rel(p.J, 1.444323046832e-05, "J = 34.7 in^4");
-  rel(p.AsH, 0.0189418976, "AsH = d*tw");
-  rel(p.AsB, 0.023951565, "AsB = 5/6*2*bf*tf");
-  rel(p.area, 0.0467741, "A vs MIDAS", 1e-6);
-  rel(p.IH, 0.006951065, "IH vs MIDAS", 1e-6);
-  rel(p.IB, 0.000420394, "IB vs MIDAS", 2e-6);
-  rel(p.J, 0.000014443, "J vs MIDAS", 5e-5);
-  rel(p.AsH, 0.018942, "AsH vs MIDAS", 5e-5);
-  rel(p.AsB, 0.023952, "AsB vs MIDAS", 5e-5);
-}
-
-// Model 10 "PROFIL-4": AISC10(US) HP14X89. MIDAS back-calc: A 0.01683868, IH 0.000376273,
-// IB 0.000135691, J 0.000001494, AsH 0.005475, AsB 0.009721 (the latter two vary in the 4th digit
-// between elements -- the J and shear checks use the back-calculation's printed precision).
-TEST(MidasModel10Revision2, AiscHp14x89) {
-  const auto p = resolveCatalogSection("H", "AISC10(US)", "HP14X89");
-  rel(p.area, 0.016838676, "A = 26.1 in^2");
-  rel(p.IH, 0.0003762732087424, "IH = Ix 904 in^4");
-  rel(p.IB, 0.00013569144474559998, "IB = Iy 326 in^4");
-  rel(p.J, 1.4942708179039999e-06, "J = 3.59 in^4");
-  rel(p.AsH, 0.00547547292, "AsH = d*tw");
-  rel(p.AsB, 0.009720948299999999, "AsB = 5/6*2*bf*tf");
-  rel(p.area, 0.01683868, "A vs MIDAS", 1e-6);
-  rel(p.IH, 0.000376273, "IH vs MIDAS", 2e-6);
-  rel(p.IB, 0.000135691, "IB vs MIDAS", 5e-6);
-  rel(p.J, 0.000001494, "J vs MIDAS", 5e-4);
-  rel(p.AsH, 0.005475, "AsH vs MIDAS", 2e-4);
-  rel(p.AsB, 0.009721, "AsB vs MIDAS", 1e-4);
-}
-
-TEST(MidasModel10Revision2, UnknownAiscShapeIsRejectedNotGuessed) {
-  // 2026-11-20 (user request: full AISC catalog): W14X90 is a real AISC shape and is now in the
-  // catalog (AiscIShapes.hpp), so the "unknown shape" case uses a designation that does not exist.
-  EXPECT_THROW(resolveCatalogSection("H", "AISC10(US)", "W14X91"), std::invalid_argument);
-  EXPECT_THROW(resolveCatalogSection("H", "AISC05(US)", "W36X247"), std::invalid_argument);
-}
+// The two AISC10(US) catalog tests (AiscW36x247, AiscHp14x89) and UnknownAiscShapeIsRejectedNotGuessed
+// that followed here were removed on 2026-11-20 together with the catalog itself (user decision:
+// precast concrete bridges first; steel profiles only as user-defined I/H or T sections). Catalog
+// sections are now rejected by the importer -- see midas_catalog_rejected_tests.cpp.

@@ -178,12 +178,6 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
     }
   out.report.materials = out.input.model.materials.size();
 
-  // sectionPrincipalRotation: section id -> extra rotation (radians) of reference_y about the
-  // member's local x-axis, needed only for an unsymmetric catalog section (e.g. an equal-leg
-  // angle) whose principal bending axes are not aligned with the raw H/B directions -- see
-  // MidasSectionLibrary.hpp's ResolvedSectionProperties::principalAngleRad and
-  // equalAngleSection's header comment. 0 (absent from the map) for every symmetric shape.
-  std::map<Id, Real> sectionPrincipalRotation;
   // sectionExtent: section id -> (overall H, overall B), for temperature gradients with MIDAS's
   // "Use Section Hz / Hy" (see the GTMP handling below). Absent or 0 = not defined.
   std::map<Id, std::pair<Real, Real>> sectionExtent;
@@ -220,9 +214,13 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
           p = psc1CellSection(Psc1CellDims{A[0], A[1], A[4], B[0], B[3], B[5], C[0], C[1], C[4], C[6], C[9], D[0], D[4]});
           out.report.assumptions.push_back("section " + it.key() + ": PSC 1CEL J and shear areas from KOPRUQ's converged 2D FE section analysis (SectionFE.hpp); MIDAS evaluates them on its own coarser section mesh, so they can differ from MIDAS's by a fraction of a percent");
         } else {
-          p = sectI.contains("DB_NAME")
-              ? resolveCatalogSection(shape, sectI.at("DB_NAME").get<std::string>(), sectI.at("SECT_NAME").get<std::string>())
-              : resolveDbUserSection(shape, detail::toRealVector(sectI.at("vSIZE")));
+          // Catalog / database profiles (DB_NAME: AISC, EN/UNI, ...) are not supported -- removed
+          // 2026-11-20 by user decision (precast concrete bridges first; steel members are entered
+          // as user-defined I/H or T sections). Rejected explicitly, never approximated.
+          if (sectI.contains("DB_NAME"))
+            throw std::invalid_argument("catalog/database section (DB_NAME '" + sectI.at("DB_NAME").get<std::string>() + "', SECT_NAME '" +
+                                        sectI.value("SECT_NAME", std::string()) + "') is not supported; define it as a user (DB/User 'User') section");
+          p = resolveDbUserSection(shape, detail::toRealVector(sectI.at("vSIZE")));
         }
         // Section offset (OFFSET_PT; 2026-11-20). MIDAS places the node at the named point of the
         // section ("CC" centre-centre = centroid, "CT" centre-top = top fiber above the centroid)
@@ -238,13 +236,13 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
                                  before.value("USERDEF_OFFSET_YI", Real(0)) != 0 || before.value("USERDEF_OFFSET_ZI", Real(0)) != 0;
           if (userParts) throw std::invalid_argument("user-defined section offset (OFFSET_CENTER/USER_OFFSET_REF/HORZ_OFFSET_OPT/VERT_OFFSET_OPT/USERDEF_OFFSET_*) is not supported");
           if (offPt == "CT") {
-            if (!(p.topFiber > 0) || p.principalAngleRad != 0) throw std::invalid_argument("section offset 'CT' needs a defined top-fiber distance (not available for this shape)");
+            if (!(p.topFiber > 0)) throw std::invalid_argument("section offset 'CT' needs a defined top-fiber distance (not available for this shape)");
             sectionOffsetDown[id] = p.topFiber;
           } else if (offPt != "CC") {
             throw std::invalid_argument("section offset point '" + offPt + "' is not supported (only CC and CT are verified)");
           }
         }
-        if (p.extentH > 0 && p.extentB > 0 && p.principalAngleRad == 0) sectionExtent[id] = {p.extentH, p.extentB};
+        if (p.extentH > 0 && p.extentB > 0) sectionExtent[id] = {p.extentH, p.extentB};
         // Iy = IH (the H/depth dimension's inertia): at MIDAS Beta=0 the local z axis is
         // "vertical" (MidasOrientation.hpp), and KOPRUQ-SOLVER's Iy resists bending in the
         // local x-z plane -- i.e. exactly the bending H's depth resists. Symmetrically
@@ -257,7 +255,6 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
         const Real Asy = useShear ? p.AsB : Real(0);
         const Real Asz = useShear ? p.AsH : Real(0);
         out.input.model.sections.push_back(Section{id, p.area, /*Iy=*/p.IH, /*Iz=*/p.IB, p.J, Asy, Asz});
-        if (p.principalAngleRad != 0) sectionPrincipalRotation[id] = p.principalAngleRad;
         if (useShear)
           out.report.assumptions.push_back("section " + it.key() + ": USE_SHEAR_DEFORM is set in the source; shear areas computed from the shape's classical Timoshenko shear correction factor (see MidasSectionLibrary.hpp), not read from MIDAS directly (MIDAS does not export an effective shear area for a DBUSER section)");
       } catch (const std::exception& e) {
@@ -430,17 +427,7 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
       try {
         Eigen::Vector3d p1(n1->x, n1->y, n1->z), p2(n2->x, n2->y, n2->z);
         const Real angleDeg = v.value("ANGLE", Real(0));
-        Eigen::Vector3d y0 = midasReferenceY((p2 - p1).normalized(), angleDeg);
-        // Unsymmetric catalog section (e.g. equal-leg angle): apply the section's own extra
-        // principal-axis rotation on top of MIDAS's Beta -- same rotation formula/sense as
-        // MidasOrientation.hpp's own Beta (see MidasSectionLibrary.hpp's equalAngleSection),
-        // so Iy/Iz as already resolved for this section (above) are directly valid.
-        if (auto found = sectionPrincipalRotation.find(e.section); found != sectionPrincipalRotation.end()) {
-          const Eigen::Vector3d x = (p2 - p1).normalized();
-          const Eigen::Vector3d z0 = x.cross(y0);
-          const Real phi = found->second;
-          y0 = std::cos(phi) * y0 - std::sin(phi) * z0;
-        }
+        const Eigen::Vector3d y0 = midasReferenceY((p2 - p1).normalized(), angleDeg);
         e.reference_y = y0;
         if (auto off = sectionOffsetDown.find(e.section); off != sectionOffsetDown.end()) {
           // "CT": member axis (centroid) at topFiber below the node along local -z (same at both ends).

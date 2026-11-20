@@ -2714,3 +2714,28 @@ no longer solve until their profiles are redefined as user sections. All other m
 (01-09, 11-19, 21, 22). Found while re-checking (pre-existing, not addressed): model 19 has 1
 displacement FAIL (FORCE, node 41 RY: 0.000540 vs MIDAS 0.000556).
 Regression: Debug 320/320, Release 320/320, gui-release 353/353 (325 - 7 removed + 2 new).
+
+## Model 20 rebuilt with user-defined profiles -- fillet H, user channel, truss angle; model 20 100% (2026-11-20)
+
+The user redefined model 20's catalog profiles as DB/User sections (files 17:36-17:39; workspace
+build/gui-release/m20r2): H [0.16, 0.16, 0.008, 0.013, 0, 0, r1 = 0.015], C [0.1, 0.05, 0.006,
+0.0085, 0.05, 0.0085], L [0.05, 0.05, 0.005, 0.005] (TRUSS diagonals). The current program rejected
+all three (fillet, C, L). MIDAS's conventions, back-calculated per element from its own results:
+- H with r1: A 0.00542514 = 2 b tf + (h-2tf) tw + (4-pi) r1^2 and IH 2.4920e-5 = the exact filleted
+  geometry (independent strip integration 2.4920010e-5) -- fillets INCLUDED in A, IH (and IB);
+  AsH 0.001280 = H tw (excluded); J excludes fillets per the MIDAS manual (DB/User page). B2 = tf2 = 0
+  means bottom flange = top flange (A and IH match the symmetric section). r2 still rejected.
+- C: A 0.001348 = B1 tf1 + B2 tf2 + hw tw (B includes tw); in-plane (A, IH, AsH = H tw) as the I
+  section -- confirmed by the loaded C chord's beam forces matching; IB (own horizontal centroid), J,
+  AsB are geometric / by analogy, not MIDAS-verified (model 20 is an X-Z plane model).
+- L: A 0.000475 = H tw + (B - tw) tf (from MIDAS truss forces); accepted for TRUSS members only
+  (axialOnly), BEAM members with an L section are rejected (beam orientation unverified).
+Implemented in MidasSectionLibrary.hpp (unequalFlangeISection r1 fillets in closed form: spandrel
+A_f = r^2(1-pi/4), S_f = r^3(5/6-pi/4), I_f = r^4(1-5pi/16); channelUserSection; angleUserSection)
+and MidasJsonImporter.hpp (sectionAxialOnly). Existing test MidasDbUserHSection.
+RejectsFilletsAndInvalidDimensions expected r1 = 0.01 to be rejected; now supported, the line checks
+a fillet that cannot fit instead (documented in the test). New tests:
+tests/unit/midas_user_profiles_tests.cpp (4).
+Model 20 (GUI path, real CLI + GUI matchers): Displacements 252/252, Reaction 36/36, Beam Force
+432/432, Truss Force 78/78; max relative deviation 8.1e-8 (displacements), 7.3e-7 (forces).
+All other models unchanged. Regression: Debug 324/324, Release 324/324, gui-release 357/357.

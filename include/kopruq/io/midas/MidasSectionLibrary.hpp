@@ -55,7 +55,10 @@ namespace kopruq::io::midas {
 // "Center-Top" (OFFSET_PT "CT") section offset puts the node (MidasJsonImporter.hpp). Set by the
 // shape functions whose centroid is not at mid-depth (T, unequal-flange H, PSC); withExtents()
 // fills H/2 for every other (vertically symmetric) shape. 0 = not defined.
-struct ResolvedSectionProperties { Real area{}, IH{}, IB{}, J{}, AsH{}, AsB{}; Real extentH{0}, extentB{0}; Real topFiber{0}; };
+struct ResolvedSectionProperties {
+  Real area{}, IH{}, IB{}, J{}, AsH{}, AsB{}; Real extentH{0}, extentB{0}; Real topFiber{0};
+  bool axialOnly{false}; // only valid for TRUSS members (bending conventions unverified), see angleUserSection
+};
 
 namespace detail {
 inline ResolvedSectionProperties withExtents(ResolvedSectionProperties p, Real H, Real B) { p.extentH = H; p.extentB = B; if (p.topFiber == 0) p.topFiber = H / 2; return p; }
@@ -509,8 +512,8 @@ inline ResolvedSectionProperties tSection(Real H, Real B, Real tw, Real tf) {
 }
 
 // MIDAS NX DBUSER "H" (I/H section with possibly unequal flanges), vSIZE [H, B1, tw, tf1, B2, tf2,
-// r1, r2]: overall depth H, top flange B1 x tf1, web thickness tw, bottom flange B2 x tf2 (r1, r2
-// fillet radii -- not supported, the caller rejects nonzero values). Web clear height
+// r1, r2]: overall depth H, top flange B1 x tf1, web thickness tw, bottom flange B2 x tf2, r1 the
+// web-to-flange fillet radius (see below), r2 the flange-tip radius (rejected). Web clear height
 // hw = H - tf1 - tf2. Every property below follows MIDAS NX's own DBUSER H convention, identified
 // 2026-11-20 by back-calculating each one per element from MIDAS's own displacement/beam-force
 // results of verification model 10 (section "PROFIL" [1.0, 0.5, 0.02, 0.03, 0.6, 0.05], four
@@ -528,25 +531,89 @@ inline ResolvedSectionProperties tSection(Real H, Real B, Real tw, Real tf) {
 // The section is used about its centroid (OFFSET_PT "CC"); for unequal flanges the shear centre
 // is off the centroid, which MIDAS's beam does not model either (the 2-node Timoshenko fit of its
 // results has residual ~1e-7).
-inline ResolvedSectionProperties unequalFlangeISection(Real H, Real B1, Real tw, Real tf1, Real B2, Real tf2) {
+// Fillets (2026-11-20, verification model 20 "PROF-I" [0.16, 0.16, 0.008, 0.013, 0, 0, r1 = 0.015]):
+// r1 is the web-to-flange fillet radius -- four spandrels (one each side of the web, under each
+// flange). MIDAS includes them in A and the bending inertias (back-calculated A 0.00542514 =
+// 2*b*tf + (h-2tf)*tw + (4-pi)*r^2, IH 2.4920e-5 = the strip-integrated 2.491996e-5) but NOT in the
+// torsion constant (MIDAS manual, Section Properties - DB/User: "When the user inputs r1 and r2,
+// the calculation of Ixx does not take into account r1 and r2") nor in AsH (0.001280 = H*tw).
+// One spandrel, measured from its flange-face edge (width w(y) = r - sqrt(r^2 - (r-y)^2), 0<=y<=r):
+//   A_f = r^2 (1 - pi/4),  S_f = int y dA = r^3 (5/6 - pi/4),  I_f = int y^2 dA = r^4 (1 - 5 pi/16)
+// (the same three numbers about the web face, by the spandrel's symmetry). The same model shows that
+// B2 = tf2 = 0 means "bottom flange = top flange" (A and IH match the symmetric section); the
+// dispatcher applies that.
+inline ResolvedSectionProperties unequalFlangeISection(Real H, Real B1, Real tw, Real tf1, Real B2, Real tf2, Real r1 = 0) {
   if (!(H > 0) || !(B1 > 0) || !(tw > 0) || !(tf1 > 0) || !(B2 > 0) || !(tf2 > 0))
     throw std::invalid_argument("H section requires positive H, B1, tw, tf1, B2 and tf2");
+  if (!(r1 >= 0)) throw std::invalid_argument("H section fillet radius r1 must not be negative");
   const Real hw = H - tf1 - tf2;
   if (!(hw > 0)) throw std::invalid_argument("H section flange thicknesses tf1+tf2 must be less than H");
   if (!(tw <= B1) || !(tw <= B2)) throw std::invalid_argument("H section web thickness tw must not exceed either flange width");
+  if (r1 > 0 && (!(2 * r1 <= hw) || !(tw + 2 * r1 <= std::min(B1, B2))))
+    throw std::invalid_argument("H section fillet radius r1 does not fit between the flanges / within the flange width");
   ResolvedSectionProperties p;
   const Real A1 = B1 * tf1, Aw = tw * hw, A2 = B2 * tf2;
-  p.area = A1 + Aw + A2;
+  const Real Af = r1 * r1 * (1 - Real(kPi) / 4), Sf = r1 * r1 * r1 * (Real(5) / 6 - Real(kPi) / 4),
+             If = r1 * r1 * r1 * r1 * (1 - 5 * Real(kPi) / 16);
+  p.area = A1 + Aw + A2 + 4 * Af;
+  // First and second moments about the TOP fiber (zeta measured downward).
   const Real y1 = tf1 / 2, yw = tf1 + hw / 2, y2 = H - tf2 / 2; // piece centroids, down from the top fiber
-  const Real ybar = (A1 * y1 + Aw * yw + A2 * y2) / p.area;
-  p.IH = B1 * tf1 * tf1 * tf1 / 12 + A1 * (ybar - y1) * (ybar - y1)
-       + tw * hw * hw * hw / 12 + Aw * (ybar - yw) * (ybar - yw)
-       + B2 * tf2 * tf2 * tf2 / 12 + A2 * (ybar - y2) * (ybar - y2);
-  p.IB = tf1 * B1 * B1 * B1 / 12 + tf2 * B2 * B2 * B2 / 12 + hw * tw * tw * tw / 12;
+  Real S0 = A1 * y1 + Aw * yw + A2 * y2;
+  Real I0 = B1 * tf1 * tf1 * tf1 / 12 + A1 * y1 * y1 + tw * hw * hw * hw / 12 + Aw * yw * yw + B2 * tf2 * tf2 * tf2 / 12 + A2 * y2 * y2;
+  // two spandrels under the top flange (zeta = tf1 + y), two above the bottom flange (zeta = H - tf2 - y)
+  S0 += 2 * (tf1 * Af + Sf) + 2 * ((H - tf2) * Af - Sf);
+  I0 += 2 * (tf1 * tf1 * Af + 2 * tf1 * Sf + If) + 2 * ((H - tf2) * (H - tf2) * Af - 2 * (H - tf2) * Sf + If);
+  const Real ybar = S0 / p.area;
+  p.IH = I0 - p.area * ybar * ybar;
+  // About the vertical centroidal axis (the web centre line): spandrels at tw/2 + x from it.
+  p.IB = tf1 * B1 * B1 * B1 / 12 + tf2 * B2 * B2 * B2 / 12 + hw * tw * tw * tw / 12
+       + 4 * ((tw / 2) * (tw / 2) * Af + tw * Sf + If);
   p.topFiber = ybar;
-  p.J = (B1 * tf1 * tf1 * tf1 + B2 * tf2 * tf2 * tf2 + (H - (tf1 + tf2) / 2) * tw * tw * tw) / 3;
+  p.J = (B1 * tf1 * tf1 * tf1 + B2 * tf2 * tf2 * tf2 + (H - (tf1 + tf2) / 2) * tw * tw * tw) / 3; // fillets excluded (MIDAS manual)
   p.AsH = tw * H;
   p.AsB = detail::kRectangularShearFactor * (A1 + A2);
+  return p;
+}
+
+// MIDAS NX DBUSER "C" (channel, user dimensions), vSIZE [H, B1, tw, tf1, B2, tf2, r1, r2]: web of
+// thickness tw on one side, flanges B1 x tf1 (top) and B2 x tf2 (bottom) measured from the web's
+// outer face (B includes tw). Verification model 20 "PROF-U" [0.1, 0.05, 0.006, 0.0085, 0.05,
+// 0.0085]: MIDAS's A = 0.001348 = B1*tf1 + B2*tf2 + (H - tf1 - tf2)*tw (back-calculated). About the
+// horizontal axis the channel is the same as the I/H section with the same flange widths, so A, IH,
+// the centroid depth, AsH = tw*H and J are taken from unequalFlangeISection; IB is the channel's own
+// (flanges on one side, own horizontal centroid). IB, J and AsB are geometric / by analogy and NOT
+// verified against MIDAS (model 20 is an X-Z plane model: only A, IH, AsH enter it). Fillets rejected.
+inline ResolvedSectionProperties channelUserSection(Real H, Real B1, Real tw, Real tf1, Real B2, Real tf2) {
+  if (!(tw < B1) || !(tw < B2)) throw std::invalid_argument("C section web thickness tw must be less than both flange widths");
+  ResolvedSectionProperties p = unequalFlangeISection(H, B1, tw, tf1, B2, tf2);
+  const Real hw = H - tf1 - tf2;
+  const Real A1 = B1 * tf1, A2 = B2 * tf2, Aw = hw * tw;
+  const Real xbar = (A1 * B1 / 2 + A2 * B2 / 2 + Aw * tw / 2) / p.area; // from the web's outer face
+  p.IB = tf1 * B1 * B1 * B1 / 12 + A1 * (B1 / 2 - xbar) * (B1 / 2 - xbar)
+       + tf2 * B2 * B2 * B2 / 12 + A2 * (B2 / 2 - xbar) * (B2 / 2 - xbar)
+       + hw * tw * tw * tw / 12 + Aw * (tw / 2 - xbar) * (tw / 2 - xbar);
+  return p;
+}
+
+// MIDAS NX DBUSER "L" (angle, user dimensions), vSIZE [H, B, tw, tf]: vertical leg H x tw, horizontal
+// leg B x tf. Verification model 20 "PROF-L" [0.05, 0.05, 0.005, 0.005] (TRUSS diagonals): MIDAS's
+// A = 0.000475 = H*tw + (B - tw)*tf (back-calculated from its truss forces and displacements). An
+// angle's principal axes are rotated with respect to H/B, and how MIDAS orients a BEAM with an angle
+// section is unverified -- so the section is axialOnly: accepted for TRUSS members (only A enters),
+// rejected for BEAM members by the importer. The geometric centroidal IH/IB/J returned here only
+// keep the (fully released) truss element well-defined; they do not affect a truss result.
+inline ResolvedSectionProperties angleUserSection(Real H, Real B, Real tw, Real tf) {
+  if (!(H > 0) || !(B > 0) || !(tw > 0) || !(tf > 0) || !(tw < B) || !(tf < H)) throw std::invalid_argument("L section requires positive H, B, tw, tf with tw < B and tf < H");
+  ResolvedSectionProperties p;
+  const Real Av = H * tw, Ah = (B - tw) * tf;
+  p.area = Av + Ah;
+  const Real zv = H / 2, zh = tf / 2, xv = tw / 2, xh = tw + (B - tw) / 2; // from the bottom / web outer face
+  const Real zbar = (Av * zv + Ah * zh) / p.area, xbar = (Av * xv + Ah * xh) / p.area;
+  p.IH = tw * H * H * H / 12 + Av * (zv - zbar) * (zv - zbar) + (B - tw) * tf * tf * tf / 12 + Ah * (zh - zbar) * (zh - zbar);
+  p.IB = H * tw * tw * tw / 12 + Av * (xv - xbar) * (xv - xbar) + tf * (B - tw) * (B - tw) * (B - tw) / 12 + Ah * (xh - xbar) * (xh - xbar);
+  p.J = (H * tw * tw * tw + (B - tw) * tf * tf * tf) / 3;
+  p.AsH = p.AsB = detail::kRectangularShearFactor * p.area;
+  p.axialOnly = true;
   return p;
 }
 
@@ -582,11 +649,28 @@ inline ResolvedSectionProperties resolveDbUserSection(const std::string& shape, 
   }
   if (shape == "H") {
     if (vSize.size() < 6) throw std::invalid_argument("H section requires at least 6 vSIZE values (H,B1,tw,tf1,B2,tf2)");
-    if ((vSize.size() > 6 && vSize[6] != 0) || (vSize.size() > 7 && vSize[7] != 0))
-      throw std::invalid_argument("H section with nonzero fillet radii r1/r2 is not supported (MIDAS's treatment of fillets is unverified)");
-    return detail::withExtents(unequalFlangeISection(vSize[0], vSize[1], vSize[2], vSize[3], vSize[4], vSize[5]), vSize[0], std::max(vSize[1], vSize[4]));
+    if (vSize.size() > 7 && vSize[7] != 0)
+      throw std::invalid_argument("H section with a nonzero flange-tip radius r2 is not supported (no MIDAS data)");
+    Real B2 = vSize[4], tf2 = vSize[5];
+    if (B2 == 0 && tf2 == 0) { B2 = vSize[1]; tf2 = vSize[3]; } // MIDAS: empty bottom flange = top flange (model 20)
+    const Real r1 = vSize.size() > 6 ? vSize[6] : Real(0);
+    return detail::withExtents(unequalFlangeISection(vSize[0], vSize[1], vSize[2], vSize[3], B2, tf2, r1), vSize[0], std::max(vSize[1], B2));
   }
-  throw std::invalid_argument("unsupported DBUSER section shape '" + shape + "' (only SB, B, SR, T, H, STRK, SOCT are implemented)");
+  if (shape == "C") {
+    if (vSize.size() < 6) throw std::invalid_argument("C section requires at least 6 vSIZE values (H,B1,tw,tf1,B2,tf2)");
+    if ((vSize.size() > 6 && vSize[6] != 0) || (vSize.size() > 7 && vSize[7] != 0))
+      throw std::invalid_argument("C section with nonzero fillet radii r1/r2 is not supported (no MIDAS data)");
+    Real B2 = vSize[4], tf2 = vSize[5];
+    if (B2 == 0 && tf2 == 0) { B2 = vSize[1]; tf2 = vSize[3]; }
+    return detail::withExtents(channelUserSection(vSize[0], vSize[1], vSize[2], vSize[3], B2, tf2), vSize[0], std::max(vSize[1], B2));
+  }
+  if (shape == "L") {
+    if (vSize.size() < 4) throw std::invalid_argument("L section requires at least 4 vSIZE values (H,B,tw,tf)");
+    if ((vSize.size() > 4 && vSize[4] != 0) || (vSize.size() > 5 && vSize[5] != 0))
+      throw std::invalid_argument("L section with nonzero radii is not supported (no MIDAS data)");
+    return angleUserSection(vSize[0], vSize[1], vSize[2], vSize[3]); // no extents: gradient / CT offset not defined
+  }
+  throw std::invalid_argument("unsupported DBUSER section shape '" + shape + "' (only SB, B, SR, T, H, C, L (truss only), STRK, SOCT are implemented)");
 }
 
 // MIDAS NX PSC "1CEL" (PSC-1CELL single-cell box girder), symmetric, all joints (JO1..JO3,

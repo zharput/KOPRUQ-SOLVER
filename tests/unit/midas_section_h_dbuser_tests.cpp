@@ -67,7 +67,10 @@ TEST(MidasDbUserHSection, DispatchAndZeroFilletsAccepted) {
 }
 
 TEST(MidasDbUserHSection, RejectsFilletsAndInvalidDimensions) {
-  EXPECT_THROW(resolveDbUserSection("H", {1.0, 0.5, 0.02, 0.03, 0.6, 0.05, 0.01, 0.0}), std::invalid_argument);
+  // 2026-11-20: a web-to-flange fillet r1 is now supported (MIDAS convention verified on model 20,
+  // see midas_user_profiles_tests.cpp), so this line now checks a fillet that cannot fit
+  // (tw + 2 r1 > B1); previously it expected r1 = 0.01 itself to be rejected.
+  EXPECT_THROW(resolveDbUserSection("H", {1.0, 0.5, 0.02, 0.03, 0.6, 0.05, 0.3, 0.0}), std::invalid_argument);
   EXPECT_THROW(resolveDbUserSection("H", {1.0, 0.5, 0.02, 0.03, 0.6, 0.05, 0.0, 0.01}), std::invalid_argument);
   EXPECT_THROW(resolveDbUserSection("H", {1.0, 0.5, 0.02, 0.03, 0.6}), std::invalid_argument); // too few values
   EXPECT_THROW(unequalFlangeISection(1.0, 0.5, 0.02, 0.5, 0.6, 0.5), std::invalid_argument);   // tf1+tf2 >= H

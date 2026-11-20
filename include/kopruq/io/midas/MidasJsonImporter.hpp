@@ -184,6 +184,9 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
   // sectionOffsetDown: section id -> distance the member axis (centroid) lies BELOW the node, along
   // the member's local -z, for a MIDAS "Center-Top" section offset (see the SECT handling).
   std::map<Id, Real> sectionOffsetDown;
+  // sectionAxialOnly: sections valid only for TRUSS members (user angle "L": MIDAS's beam-bending
+  // orientation of an angle is unverified, see MidasSectionLibrary.hpp angleUserSection).
+  std::set<Id> sectionAxialOnly;
 
   // --- SECT ---
   if (dbg.contains("SECT"))
@@ -242,6 +245,7 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
             throw std::invalid_argument("section offset point '" + offPt + "' is not supported (only CC and CT are verified)");
           }
         }
+        if (p.axialOnly) sectionAxialOnly.insert(id);
         if (p.extentH > 0 && p.extentB > 0) sectionExtent[id] = {p.extentH, p.extentB};
         // Iy = IH (the H/depth dimension's inertia): at MIDAS Beta=0 the local z axis is
         // "vertical" (MidasOrientation.hpp), and KOPRUQ-SOLVER's Iy resists bending in the
@@ -421,6 +425,10 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
         out.input.model.beams.push_back(e);
         out.report.originalToInternalElementId[id] = id;
         trussNodes.insert(e.node1); trussNodes.insert(e.node2);
+        continue;
+      }
+      if (sectionAxialOnly.count(e.section)) {
+        out.report.rejected.push_back("element " + it.key() + ": BEAM with an angle (L) section is not supported -- only TRUSS members may use it (MIDAS's beam orientation of an angle is unverified)");
         continue;
       }
       beamNodes.insert(e.node1); beamNodes.insert(e.node2);

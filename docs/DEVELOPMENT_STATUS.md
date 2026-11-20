@@ -2671,3 +2671,22 @@ Published source for the tabulated values: Engineering ToolBox "HE-B Steel Beams
 DIN 1025 and Euronorm 53-62): HE 160 B A 54.3 cm2, Iy 2490 cm4, Iz 889 cm4 (no It, no tf column).
 Not yet changed in code (awaiting the user's decision on the source for It / Asy, which model 20,
 an X-Z plane model, cannot verify).
+
+## Profile catalogs: AISC I-shapes added; EN tables and L/C conventions awaiting user input (2026-11-20)
+
+User request: AISC and EN standard values for the catalog profile types (Angle, Channel, I-Section,
+T-Section), program-computed properties for the same shapes entered as "User", then test model 20.
+User decisions (2026-11-20): the user will supply the EN profile tables (only HEA/HEB/HEM/IPE are
+available offline, in eurocodepy, LGPL-3.0; nothing found for UPN/L/T), and will build a MIDAS
+verification model for the User L/C and catalog C/L/T conventions (unverified so far).
+Done now (unblocked part): all AISC rolled I-shapes (W 289, HP 22, M 16, S 28 = 355) for MIDAS
+DB_NAME "AISC10(US)", shape "H": generated table include/kopruq/io/midas/AiscIShapes.hpp from the
+AISC Shapes Database v16.0 as packaged in steelpy 1.1.1 (Apache-2.0), generator
+scripts/generate_aisc_ishapes.py (reproducible). Same tabulated-values + I-shape shear convention as
+the model-10-verified W36X247/HP14X89 (whose values are unchanged). AISC C/MC/L/WT/MT/ST remain
+rejected until their MIDAS conventions are verified. Existing test
+MidasModel10Revision2.UnknownAiscShapeIsRejectedNotGuessed used W14X90 as an "unknown" shape; it is a
+real AISC shape now in the catalog, so it was changed to W14X91 (documented in the test).
+New tests: tests/unit/midas_aisc_catalog_tests.cpp (4). Models 10, 17, 21: unchanged; model 20
+unchanged (awaits the EN HEB160 data).
+Regression: Debug 325/325, Release 325/325, gui-release 358/358.

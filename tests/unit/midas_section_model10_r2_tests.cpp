@@ -74,6 +74,8 @@ TEST(MidasModel10Revision2, AiscHp14x89) {
 }
 
 TEST(MidasModel10Revision2, UnknownAiscShapeIsRejectedNotGuessed) {
-  EXPECT_THROW(resolveCatalogSection("H", "AISC10(US)", "W14X90"), std::invalid_argument);
+  // 2026-11-20 (user request: full AISC catalog): W14X90 is a real AISC shape and is now in the
+  // catalog (AiscIShapes.hpp), so the "unknown shape" case uses a designation that does not exist.
+  EXPECT_THROW(resolveCatalogSection("H", "AISC10(US)", "W14X91"), std::invalid_argument);
   EXPECT_THROW(resolveCatalogSection("H", "AISC05(US)", "W36X247"), std::invalid_argument);
 }

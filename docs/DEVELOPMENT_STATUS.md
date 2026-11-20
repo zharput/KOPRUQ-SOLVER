@@ -2644,3 +2644,12 @@ model 17 FORCE, SPECX(RS), SPECY(RS) all 100%; models 02, 10, 21 100%; model 22 
 beam force 932/936 -- identical to the diagnostic-tool results above.
 
 Regression: gui-release 354/354, Debug 321/321, Release 321/321.
+
+## Model 22 re-exported without the eigenvalue request (2026-11-20)
+
+The user removed EIGV from model 22 (a gradient-temperature model) and re-exported JSON and results
+(16:08-16:11; workspace build/gui-release/m22r2). JSON diff vs the previous export: EIGV only.
+Re-test (diagnostic tool and the GUI path -- real CLI solve + GUI matchers), identical results:
+Displacements 1422/1422, Reaction 216/216, Beam Force 2804/2808 (TG 936/936, UNIFORM 936/936,
+TU 932/936). The 4 TU rows are unchanged: deck Moment-y at zero crossings (el 13 J / 14 I:
+122.14 vs 127.93 kNm; el 22 J / 23 I: 5.92 vs 7.79 kNm), the PSC mesh-dependence documented above.

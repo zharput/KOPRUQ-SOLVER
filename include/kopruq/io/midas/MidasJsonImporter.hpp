@@ -33,6 +33,8 @@
 // convention proven from MIDAS's manual and its own model-22 results, see
 // the GTMP handling below); PSC sections other than a symmetric 1CEL with
 // every joint off; STYP values other than 0 (3D) and 1 (X-Z plane);
+// section offsets other than OFFSET_PT "CC"/"CT" without user-defined parts
+// ("CT" is imported as a rigid node-to-centroid member-end offset);
 // any BODF whose direction is not exactly global -Z; any BMLD
 // whose CMD/TYPE/DIRECTION is not the one combination implemented above.
 //
@@ -185,6 +187,9 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
   // sectionExtent: section id -> (overall H, overall B), for temperature gradients with MIDAS's
   // "Use Section Hz / Hy" (see the GTMP handling below). Absent or 0 = not defined.
   std::map<Id, std::pair<Real, Real>> sectionExtent;
+  // sectionOffsetDown: section id -> distance the member axis (centroid) lies BELOW the node, along
+  // the member's local -z, for a MIDAS "Center-Top" section offset (see the SECT handling).
+  std::map<Id, Real> sectionOffsetDown;
 
   // --- SECT ---
   if (dbg.contains("SECT"))
@@ -218,6 +223,26 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
           p = sectI.contains("DB_NAME")
               ? resolveCatalogSection(shape, sectI.at("DB_NAME").get<std::string>(), sectI.at("SECT_NAME").get<std::string>())
               : resolveDbUserSection(shape, detail::toRealVector(sectI.at("vSIZE")));
+        }
+        // Section offset (OFFSET_PT; 2026-11-20). MIDAS places the node at the named point of the
+        // section ("CC" centre-centre = centroid, "CT" centre-top = top fiber above the centroid)
+        // and the member axis stays at the centroid -- a rigid offset from node to member end.
+        // Confirmed for "CT" from MIDAS's own results of models 02/03/04/08 (axial DX at the
+        // top-fiber nodes, torsion RX under a horizontal load); every other offset point and any
+        // user-defined offset (OFFSET_CENTER, USER_OFFSET_REF, HORZ/VERT_OFFSET_OPT,
+        // USERDEF_OFFSET_YI/ZI) is unverified and rejected rather than guessed.
+        {
+          const std::string offPt = before.value("OFFSET_PT", std::string("CC"));
+          const bool userParts = before.value("OFFSET_CENTER", 0) != 0 || before.value("USER_OFFSET_REF", 0) != 0 ||
+                                 before.value("HORZ_OFFSET_OPT", 0) != 0 || before.value("VERT_OFFSET_OPT", 0) != 0 ||
+                                 before.value("USERDEF_OFFSET_YI", Real(0)) != 0 || before.value("USERDEF_OFFSET_ZI", Real(0)) != 0;
+          if (userParts) throw std::invalid_argument("user-defined section offset (OFFSET_CENTER/USER_OFFSET_REF/HORZ_OFFSET_OPT/VERT_OFFSET_OPT/USERDEF_OFFSET_*) is not supported");
+          if (offPt == "CT") {
+            if (!(p.topFiber > 0) || p.principalAngleRad != 0) throw std::invalid_argument("section offset 'CT' needs a defined top-fiber distance (not available for this shape)");
+            sectionOffsetDown[id] = p.topFiber;
+          } else if (offPt != "CC") {
+            throw std::invalid_argument("section offset point '" + offPt + "' is not supported (only CC and CT are verified)");
+          }
         }
         if (p.extentH > 0 && p.extentB > 0 && p.principalAngleRad == 0) sectionExtent[id] = {p.extentH, p.extentB};
         // Iy = IH (the H/depth dimension's inertia): at MIDAS Beta=0 the local z axis is
@@ -392,6 +417,7 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
       // for a TRUSS element below; reference_y is immaterial once every rotation is released, so
       // Truss3D's own trussReference() is used instead of MIDAS's ANGLE-based orientation.
       if (type == "TRUSS") {
+        if (sectionOffsetDown.count(e.section)) { out.report.rejected.push_back("element " + it.key() + ": TRUSS with a section offset is not supported"); continue; }
         Eigen::Vector3d p1(n1->x, n1->y, n1->z), p2(n2->x, n2->y, n2->z);
         e.reference_y = trussReference(p2 - p1);
         e.releases = trussReleases();
@@ -416,6 +442,11 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
           y0 = std::cos(phi) * y0 - std::sin(phi) * z0;
         }
         e.reference_y = y0;
+        if (auto off = sectionOffsetDown.find(e.section); off != sectionOffsetDown.end()) {
+          // "CT": member axis (centroid) at topFiber below the node along local -z (same at both ends).
+          const Eigen::Vector3d z = (p2 - p1).normalized().cross(y0).normalized();
+          e.offset1 = e.offset2 = -off->second * z;
+        }
       } catch (const std::exception& ex) {
         out.report.rejected.push_back("element " + it.key() + ": " + ex.what());
         continue;
@@ -453,39 +484,13 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
       out.report.assumptions.push_back("node " + std::to_string(node) + ": connected only by TRUSS elements, which carry no rotational stiffness (Truss3D.hpp); RX/RY/RZ auto-restrained, matching MIDAS's own implicit pin-jointed-truss convention (not present as an explicit CONS restraint in the export)");
   }
 
-  // Planar-model out-of-plane DOF auto-restraint: when every node's coordinate along one global
-  // axis N is identical (the model's own bounding box has zero extent there), MIDAS's "2D"
-  // analysis setting implicitly suppresses the 3 out-of-plane DOFs everywhere (translation along
-  // N, plus rotation about the two IN-plane axes -- rotation about N itself stays a normal
-  // in-plane bending DOF, e.g. for a model flat in the X-Z plane: UY/RX/RZ suppressed, UX/UZ/RY
-  // retained) WITHOUT exporting them as explicit CONS records (confirmed, 2026-11-19: the user
-  // re-solved model 20 -- verification/models/20 Kafes, a Y=0 planar truss -- as an explicit
-  // MIDAS "2D" model and re-exported; its CONS records are byte-identical to the original 3D-
-  // solved export, i.e. MIDAS's own 2D restraint truly has no CONS footprint at all). Applied
-  // only when the model is genuinely planar (bounding box exactly 0 along one axis); a 3D model
-  // that merely happens to have some unrestrained out-of-plane DOFs at a few nodes is NOT
-  // affected (exact-zero-extent is deliberately strict, not a near-planar heuristic, to avoid
-  // silently restraining a genuinely 3D structure that is merely thin in one direction).
-  if (out.report.hasBoundingBox) {
-    int flatAxis = -1;
-    if (out.report.maxX == out.report.minX) flatAxis = 0;
-    else if (out.report.maxY == out.report.minY) flatAxis = 1;
-    else if (out.report.maxZ == out.report.minZ) flatAxis = 2;
-    if (flatAxis >= 0) {
-      const int suppressed[3] = {flatAxis, 3 + (flatAxis + 1) % 3, 3 + (flatAxis + 2) % 3};
-      bool any = false;
-      for (const auto& n : out.input.model.nodes) {
-        auto& flags = out.input.restraints[n.id];
-        for (int i : suppressed) { if (!flags[(std::size_t)i]) any = true; flags[(std::size_t)i] = true; }
-      }
-      if (any)
-        out.report.assumptions.push_back("model has zero extent along global axis " + std::string(1, "XYZ"[flatAxis]) +
-                                          ": this is a MIDAS '2D' analysis (confirmed empirically, see MidasJsonImporter.hpp); "
-                                          "the 3 out-of-plane DOFs (translation along " + std::string(1, "XYZ"[flatAxis]) +
-                                          " and rotation about the other two axes) are auto-restrained at every node, since "
-                                          "MIDAS's own 2D restraint is not present as an explicit CONS record in the export");
-    }
-  }
+  // (Removed 2026-11-20) A former planar-model heuristic auto-restrained the 3 out-of-plane DOFs of
+  // every node whenever the model's bounding box had zero extent along one global axis. That was
+  // wrong for MIDAS 3D models (STYP = 0) that merely lie in a plane: e.g. model 02 (a cantilever on
+  // the X axis loaded in Y) came out with all displacements zero, and model 09 (an L-shaped
+  // cantilever in the X-Y plane loaded in Z) likewise -- MIDAS solved both as full 3D. The model
+  // that motivated the heuristic (model 20, re-solved by the user as a MIDAS 2D model) exports
+  // STYP = 1, which is now handled explicitly below; the plane restraint comes from STYP only.
 
   // STYP (MIDAS "Structure Type"), 2026-11-20. STYP = 1 is MIDAS's X-Z plane (2D) structure type:
   // UY, RX and RZ are suppressed at every node, whatever the geometry. Evidence: (a) model 20

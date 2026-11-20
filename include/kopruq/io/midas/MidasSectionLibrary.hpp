@@ -58,10 +58,14 @@ namespace kopruq::io::midas {
 // between the two outermost faces (confirmed on model 22's PSC box, 2026-11-20). Set by the
 // dispatchers (resolveDbUserSection / resolveCatalogSection / resolvePsc1CellSection); 0 means
 // "not defined" (e.g. a principal-axis-rotated angle), and a gradient needing it is rejected.
-struct ResolvedSectionProperties { Real area{}, IH{}, IB{}, J{}, AsH{}, AsB{}; Real principalAngleRad{0}; Real extentH{0}, extentB{0}; };
+// topFiber: distance from the centroid up to the +z (top, H-direction) extreme fiber -- where a MIDAS
+// "Center-Top" (OFFSET_PT "CT") section offset puts the node (MidasJsonImporter.hpp). Set by the
+// shape functions whose centroid is not at mid-depth (T, unequal-flange H, PSC); withExtents()
+// fills H/2 for every other (vertically symmetric) shape. 0 = not defined.
+struct ResolvedSectionProperties { Real area{}, IH{}, IB{}, J{}, AsH{}, AsB{}; Real principalAngleRad{0}; Real extentH{0}, extentB{0}; Real topFiber{0}; };
 
 namespace detail {
-inline ResolvedSectionProperties withExtents(ResolvedSectionProperties p, Real H, Real B) { p.extentH = H; p.extentB = B; return p; }
+inline ResolvedSectionProperties withExtents(ResolvedSectionProperties p, Real H, Real B) { p.extentH = H; p.extentB = B; if (p.topFiber == 0) p.topFiber = H / 2; return p; }
 } // namespace detail
 
 namespace detail {
@@ -505,6 +509,7 @@ inline ResolvedSectionProperties tSection(Real H, Real B, Real tw, Real tf) {
   // The same web / 5/6-flange shear convention as the DBUSER "H" section (unequalFlangeISection).
   // J evidence is one geometry; Roark's formula is stated for tw < 2 tf (D's derivation).
   p.J = detail::roarkTeeTorsion(B, tf, hw, tw);
+  p.topFiber = ybar;
   p.AsH = tw * H;
   p.AsB = detail::kRectangularShearFactor * B * tf;
   return p;
@@ -572,6 +577,7 @@ inline ResolvedSectionProperties unequalFlangeISection(Real H, Real B1, Real tw,
        + tw * hw * hw * hw / 12 + Aw * (ybar - yw) * (ybar - yw)
        + B2 * tf2 * tf2 * tf2 / 12 + A2 * (ybar - y2) * (ybar - y2);
   p.IB = tf1 * B1 * B1 * B1 / 12 + tf2 * B2 * B2 * B2 / 12 + hw * tw * tw * tw / 12;
+  p.topFiber = ybar;
   p.J = (B1 * tf1 * tf1 * tf1 + B2 * tf2 * tf2 * tf2 + (H - (tf1 + tf2) / 2) * tw * tw * tw) / 3;
   p.AsH = tw * H;
   p.AsB = detail::kRectangularShearFactor * (A1 + A2);
@@ -840,6 +846,7 @@ inline ResolvedSectionProperties psc1CellSection(const Psc1CellDims& d) {
   p.AsB = fe.Asy; // shear along B (horizontal)
   p.extentH = H;
   p.extentB = 2 * W;
+  p.topFiber = -geo.Cz; // top fiber at z = 0
   return p;
 }
 

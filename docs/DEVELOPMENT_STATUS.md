@@ -2558,3 +2558,35 @@ Results (untruncated, same tolerance):
 - Model 18: unchanged (already 100%). All other models: unchanged.
 
 Regression: Debug 317/317, Release 317/317, gui-release 347/347.
+
+## Task 3: pre-existing FAILs in models 02/03/04/08/09 -- root causes found and fixed (2026-11-20)
+
+Two pre-existing importer defects, both silent:
+
+A. Planar-model heuristic (removed). Since 2026-11-19 the importer auto-restrained the 3
+   out-of-plane DOFs at every node whenever the node bounding box had zero extent along one global
+   axis. MIDAS solves such STYP = 0 models as full 3D: model 02 (cantilever on the X axis, tip FY)
+   came out with every displacement zero (MIDAS: DY, RX, RZ nonzero); model 09 (L-shaped cantilever
+   in the X-Y plane, FZ) likewise. The model that motivated the heuristic (model 20) exports
+   STYP = 1, now handled explicitly -- the plane restraint comes from STYP only. No model became
+   singular (the 3D supports of models 04/08/12/16 already restrain torsion/lateral DOFs).
+B. Section offset ignored. Models 02/03/04/08 use OFFSET_PT "CT" (node at the top fiber, member
+   axis at the centroid H/2 below): MIDAS shows the resulting axial DX at the nodes under bending
+   and torsion RX under a horizontal load. "CT" is now a rigid member-end offset (existing
+   Beam3DConnection offset1/offset2, Offsets.hpp) of -topFiber along the member's local z;
+   ResolvedSectionProperties carries topFiber (H/2 for vertically symmetric shapes, the computed
+   centroid depth for T, unequal-flange H and PSC). Other offset points (CB, L*/R*) and any
+   user-defined offset part are rejected, not guessed (no MIDAS data to verify them).
+
+Results (untruncated, same tolerance), before -> after:
+- 02: Displacements 18 -> 30/30, Beam Force 25 -> 48/48, Reaction 4 -> 6/6
+- 03: Displacements 26 -> 30/30 (forces/reactions already 100%)
+- 04: Displacements 92 -> 108/108 (forces/reactions already 100%)
+- 08: Displacements 336 -> 396/396 (forces/reactions already 100%)
+- 09: Displacements 33 -> 54/54, Beam Force 48 -> 96/96, Reaction 6 -> 12/12
+Max relative deviation on significant values: displacements 4.3e-6 (= MIDAS rounding E to
+34077 MPa), forces/reactions <= 6e-8. Every other model unchanged (01, 05-07, 10-12, 16-22).
+New tests: tests/unit/midas_offset_planar_tests.cpp (4; DY = PL^3/3EIz on a STYP-0 planar model;
+CT: DX = +P L^2 e / 2EIy, RX = -P e L / GJ, both derived from beam theory; rejections).
+
+Regression: Debug 321/321, Release 321/321, gui-release 351/351.

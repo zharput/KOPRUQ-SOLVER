@@ -356,6 +356,7 @@ void MainWindow::invalidateSolveAndBeyond() {
   invalidateComparison();
   lastResultsPath_.clear();
   lastModalResultsPath_.clear();
+  lastSpectrumResultsPath_.clear();
   if (state_ == WorkflowState::Solved) state_ = WorkflowState::Validated;
   applyWorkflowState();
 }
@@ -377,6 +378,7 @@ void MainWindow::loadViewerModel() {
   loadCaseCombo_->setCurrentIndex(0);
   loadCaseCombo_->setEnabled(false);
   loadCaseCombo_->blockSignals(false);
+  modelHasSpectrum_ = false;
   if (!fileInputPanel_->isUsable(FileInputPanel::Row::MidasModel)) return;
   const std::string path = fileInputPanel_->filePath(FileInputPanel::Row::MidasModel).toStdString();
   std::string text;
@@ -387,6 +389,7 @@ void MainWindow::loadViewerModel() {
     appendLog(tr("Model Görünümü: dosya okunamadı (%1).").arg(QString::fromStdString(err.str())), /*Warning*/ 2);
     return;
   }
+  modelHasSpectrum_ = !model.response_spectra.empty();
   try {
     kopruq::MatrixAssembler::assemble(model.model); // same validation gate as a solve
   } catch (const std::exception& e) {
@@ -469,6 +472,24 @@ void MainWindow::startModalRun() {
   solverRunner_->run(cli, modelPath, "midas-nx-json", outputPath, tr("Eigenvalue (Modal) Analizi"), "modal", extra);
 }
 
+// Chained automatically by onRunFinished right after a successful "solve" when the model requests
+// response-spectrum analysis (MIDAS SPLC): the CLI's `spectrum` command, whose results are merged
+// into the comparison as MIDAS's "<case>(RS)" load cases (verification::appendSpectrumCases).
+// Uses the same mass formulation as the modal run (the "Lumped Mass (MIDAS)" check box).
+void MainWindow::startSpectrumRun() {
+  const QString cli = SolverRunner::locateCli();
+  const QString modelPath = fileInputPanel_->filePath(FileInputPanel::Row::MidasModel);
+  const QString workDir = QStandardPaths::writableLocation(QStandardPaths::TempLocation) + "/kopruq_verification";
+  const QString outputPath = workDir + "/" + QFileInfo(modelPath).completeBaseName() + ".spectrum-results.json";
+
+  activeRunMode_ = RunMode::Spectrum;
+  QStringList extra;
+  const bool lumped = fileInputPanel_->useLumpedMass();
+  if (lumped) extra << "--mass-type" << "lumped";
+  appendLog(lumped ? tr("Spektrum kütle tipi: Lumped (MIDAS NX varsayılanı)") : tr("Spektrum kütle tipi: Consistent (solver varsayılanı)"), /*Info*/ 0);
+  solverRunner_->run(cli, modelPath, "midas-nx-json", outputPath, tr("Davranış Spektrumu Analizi"), "spectrum", extra);
+}
+
 void MainWindow::onRunFinished(int exitCode, QProcess::ExitStatus status, const QString& outputPath) {
   const QString ts = QDateTime::currentDateTime().toString("HH:mm:ss");
   executionLogPanel_->progressBar()->setRange(0, 100);
@@ -507,12 +528,18 @@ void MainWindow::onRunFinished(int exitCode, QProcess::ExitStatus status, const 
       // declaring the step Solved, so a comparison against it is possible right after. Static
       // solve already succeeded regardless of what this second run does, so its own outcome is
       // handled entirely in the RunMode::Modal branch below (never re-fails this step).
+      lastSpectrumResultsPath_.clear();
+      lastModalResultsPath_.clear();
+      if (modelHasSpectrum_) {
+        appendLog(tr("[%1] Modelde davranış spektrumu tanımlı -- spektrum analizi de çalıştırılıyor...").arg(ts), /*Info*/ 0);
+        startSpectrumRun();
+        return; // stays busy; the Spectrum branch below chains the modal run if needed
+      }
       if (fileInputPanel_->isUsable(FileInputPanel::Row::EigenvalueMode)) {
         appendLog(tr("[%1] Eigenvalue Mode (Excel) seçili -- modal analiz de çalıştırılıyor...").arg(ts), /*Info*/ 0);
         startModalRun();
         return; // stays "busy" (buttons disabled, progress indeterminate) until the modal run finishes
       }
-      lastModalResultsPath_.clear();
       state_ = WorkflowState::Solved;
     } else if (exitCode == 1 && QFileInfo::exists(outputPath)) {
       // Per the CLI's documented contract, exit 1 still writes results (a load case that failed
@@ -526,6 +553,25 @@ void MainWindow::onRunFinished(int exitCode, QProcess::ExitStatus status, const 
       appendLog(tr("[%1] Analiz BAŞARISIZ (çıkış kodu %2).").arg(ts).arg(exitCode), /*Error*/ 3);
       state_ = WorkflowState::Validated;
     }
+  } else if (activeRunMode_ == RunMode::Spectrum) {
+    // Like Modal: the static solve already succeeded; a failed spectrum run only leaves the
+    // "(RS)" reference rows as N/A in the comparison.
+    if (exitCode == 0) {
+      lastSpectrumResultsPath_ = outputPath;
+      executionLogPanel_->progressBar()->setValue(100);
+      appendLog(tr("[%1] Spektrum analizi tamamlandı. Sonuçlar: %2").arg(ts, outputPath), /*Success*/ 1);
+    } else {
+      lastSpectrumResultsPath_.clear();
+      executionLogPanel_->progressBar()->setValue(0);
+      appendLog(tr("[%1] Spektrum analizi BAŞARISIZ (çıkış kodu %2) -- (RS) satırları N/A olacak.").arg(ts).arg(exitCode), /*Error*/ 3);
+    }
+    if (fileInputPanel_->isUsable(FileInputPanel::Row::EigenvalueMode)) {
+      appendLog(tr("[%1] Eigenvalue Mode (Excel) seçili -- modal analiz de çalıştırılıyor...").arg(ts), /*Info*/ 0);
+      executionLogPanel_->progressBar()->setRange(0, 0);
+      startModalRun();
+      return;
+    }
+    state_ = WorkflowState::Solved;
   } else { // RunMode::Modal -- always finalizes to Solved, since the static solve it was chained
            // after already succeeded; a failed/missing modal run only means the Eigenvalue
            // comparison category will itself report N/A later, not that the whole step failed.
@@ -611,6 +657,20 @@ void MainWindow::onCompare() {
     } catch (const std::exception& e) {
       appendLog(tr("Sonuç dosyası (results.json) ayrıştırılamadı: %1").arg(QString::fromStdString(e.what())), /*Error*/ 3);
       return;
+    }
+  }
+
+  // Response-spectrum results (chained `spectrum` run), merged as MIDAS's "<case>(RS)" load cases.
+  if (!lastSpectrumResultsPath_.isEmpty()) {
+    std::ifstream specIn(lastSpectrumResultsPath_.toStdString(), std::ios::binary);
+    try {
+      nlohmann::json spectrum;
+      if (!specIn) throw std::runtime_error("dosya açılamadı");
+      specIn >> spectrum;
+      kopruq::verification::appendSpectrumCases(results, spectrum);
+      appendLog(tr("Spektrum sonuçları karşılaştırmaya eklendi (tepe değerler |KOPRUQ| ile |MIDAS| karşılaştırılır)."), /*Info*/ 0);
+    } catch (const std::exception& e) {
+      appendLog(tr("Spektrum sonuç dosyası okunamadı (%1): %2").arg(lastSpectrumResultsPath_, QString::fromStdString(e.what())), /*Warning*/ 2);
     }
   }
 

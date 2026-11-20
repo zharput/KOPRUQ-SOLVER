@@ -40,12 +40,13 @@ private:
   // after a successful solve, only when the Eigenvalue Mode (Excel) row has a usable file -- see
   // its own comment in MainWindow.cpp for why a second CLI invocation is the simplest correct
   // approach rather than teaching the CLI's own "solve" command to also run modal analysis.
-  enum class RunMode { ValidateOnly, Solve, Modal };
+  enum class RunMode { ValidateOnly, Solve, Spectrum, Modal };
   enum class WorkflowState { InputReady = 0, Validated = 1, Solved = 2, Compared = 3 };
 
   void applyWorkflowState();
   void startRun(RunMode mode);
   void startModalRun();
+  void startSpectrumRun();
   void onRunFinished(int exitCode, QProcess::ExitStatus status, const QString& outputPath);
   void onCompare();
   void onExport();
@@ -77,6 +78,8 @@ private:
   RunMode activeRunMode_{RunMode::Solve};
   QString lastResultsPath_; // discovered results.json from the most recent successful solve
   QString lastModalResultsPath_; // discovered kopruq-modal-results.json, empty if no Eigenvalue Mode row or that run failed
+  QString lastSpectrumResultsPath_; // response-spectrum results of the chained `spectrum` run, empty if the model has none or it failed
+  bool modelHasSpectrum_{false};    // the loaded MIDAS model requests response-spectrum analysis (SPLC), set by loadViewerModel()
   ModelInfoPanel::Info modelInfo_; // accumulated across the two "midas-nx-json ..." log lines
 
   // GUI-5's last comparison, cached so GUI-6's export reuses it verbatim instead of recomputing.

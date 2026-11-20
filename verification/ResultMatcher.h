@@ -36,6 +36,14 @@ CategoryComparison matchDisplacements(const nlohmann::json& results, const Refer
 CategoryComparison matchReactions(const nlohmann::json& results, const ReferenceTable& ref, const ToleranceSettings& tol);
 CategoryComparison matchBeamForces(const nlohmann::json& results, const ReferenceTable& ref, const ToleranceSettings& tol);
 
+// Response spectrum (2026-11-20): appends every successful case of a response-spectrum results
+// document (kopruq::io::writeResponseSpectrumResults, the CLI's `spectrum` command) to
+// results["load_cases"] under MIDAS's own load-case name "<name>(RS)", with its combined nodal
+// displacements/reactions and element local_end_forces, flagged "peak_magnitude": true. A CQC/SRSS
+// peak is a magnitude, so for such a case the three matchers above compare |KOPRUQ| with |MIDAS|
+// (and apply no beam-force sign convention). Cases already present by that name are not added twice.
+void appendSpectrumCases(nlohmann::json& results, const nlohmann::json& spectrumResults);
+
 // MIDAS's "Truss Force" export (TYPE=="TRUSS" elements only, see MidasJsonImporter.hpp): a
 // single axial force per element per load case, given as separate "Force-I"/"Force-J" columns
 // in the SAME row (unlike Beam Force's separate-row-per-end "Part" column layout) -- for a

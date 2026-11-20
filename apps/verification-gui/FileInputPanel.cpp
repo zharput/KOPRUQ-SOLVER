@@ -100,7 +100,8 @@ FileInputPanel::FileInputPanel(QWidget* parent) : QGroupBox(parent) {
       lumpedMassCheckBox_ = new QCheckBox(tr("Lumped Mass (MIDAS)"), this);
       lumpedMassCheckBox_->setToolTip(tr("İşaretlenirse modal analiz --mass-type lumped ile çalıştırılır "
                                           "(MIDAS NX'in varsayılan özdeğer analizi kütle formülasyonu); "
-                                          "işaretli değilse solver'ın kendi consistent kütle matrisi kullanılır."));
+                                          "işaretli değilse solver'ın kendi consistent kütle matrisi kullanılır. "
+                                          "Modelde davranış spektrumu varsa spektrum analizi de aynı kütle tipiyle çalıştırılır."));
       grid->addWidget(lumpedMassCheckBox_, gridRow, 5);
       connect(lumpedMassCheckBox_, &QCheckBox::toggled, this, [this](bool) { emit rowChanged(Row::EigenvalueMode); });
     }

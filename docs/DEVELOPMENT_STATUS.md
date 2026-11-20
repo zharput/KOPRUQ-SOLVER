@@ -2623,3 +2623,24 @@ No code change in this step.
 The "isolated small mode divergence" previously noted as an accepted residual (models 13-15 and
 17) no longer exists: model 17's came from the T-section stiffness, models 13/14's (as far as the
 current data shows) from the planar heuristic introduced 2026-11-19.
+
+## GUI: response-spectrum comparison added; GUI rebuilt with all of this session's work (2026-11-20)
+
+All solver/importer work of this session lives in header-only code that the CLI (and therefore the
+GUI, which runs kopruq_solver_cli) is built from; build/gui-release was rebuilt (CLI and
+kopruq_verification_gui.exe). New in the GUI:
+- verification::appendSpectrumCases (ResultMatcher): merges the CLI `spectrum` results into the
+  comparison under MIDAS's "<case>(RS)" names, flagged peak_magnitude; for those cases the
+  Displacement/Reaction/Beam Force matchers compare |KOPRUQ| with |MIDAS| (no beam-force sign
+  convention). Ordinary cases unchanged.
+- MainWindow: after a successful static solve, if the MIDAS model requests response spectra
+  (SPLC), a `spectrum` CLI run is chained (mass type = the existing "Lumped Mass (MIDAS)" check box,
+  whose tooltip now says so), then the modal run if an Eigenvalue Mode file is given. A failed
+  spectrum run only leaves the (RS) rows N/A.
+- New tests: tests/unit/result_matcher_spectrum_tests.cpp (3, GUI build only).
+End-to-end check of the GUI path (real CLI solve + spectrum --mass-type lumped, merged, GUI
+matchers; scratchpad tool gui_pipeline): model 16 SW 100% and SPECX(RS) 234/234, 24/24, 454/456;
+model 17 FORCE, SPECX(RS), SPECY(RS) all 100%; models 02, 10, 21 100%; model 22 100% except TU
+beam force 932/936 -- identical to the diagnostic-tool results above.
+
+Regression: gui-release 354/354, Debug 321/321, Release 321/321.

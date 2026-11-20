@@ -1,5 +1,6 @@
 #include "ResultMatcher.h"
 #include <algorithm>
+#include <cmath>
 #include <array>
 #include <map>
 
@@ -22,6 +23,9 @@ const Json* findLoadCase(const Json& results, const std::string& name) {
 }
 
 long toId(double v) { return static_cast<long>(v + (v >= 0 ? 0.5 : -0.5)); }
+
+// A response-spectrum case appended by appendSpectrumCases: its values are peak magnitudes.
+bool isPeakMagnitudeCase(const Json* lc) { return lc && lc->value("peak_magnitude", false); }
 
 struct ComponentSpec { const char* excelName; int index; QuantityCategory category; };
 
@@ -130,7 +134,9 @@ CategoryComparison matchNodeBasedCategory(const Json& results, const ReferenceTa
       cacheIt = nodeCache.emplace(loadCase, std::move(m)).first;
     }
     const auto nodeIt = cacheIt->second.find(nodeId);
-    const bool caseKnown = findLoadCase(results, loadCase) != nullptr;
+    const Json* lcEntry = findLoadCase(results, loadCase);
+    const bool caseKnown = lcEntry != nullptr;
+    const bool peak = isPeakMagnitudeCase(lcEntry);
     if (nodeIt == cacheIt->second.end() && !caseKnown)
       out.diagnostics.push_back("Yük durumu results.json'da bulunamadı: " + loadCase);
 
@@ -148,7 +154,8 @@ CategoryComparison matchNodeBasedCategory(const Json& results, const ReferenceTa
         out_row.result.referenceValue = cell.number;
       } else {
         const double solverValue = nodeIt->second->at(jsonField).at(static_cast<std::size_t>(components[k].index)).get<double>();
-        out_row.result = compareValues(solverValue, cell.number, components[k].category, tol);
+        out_row.result = peak ? compareValues(std::abs(solverValue), std::abs(cell.number), components[k].category, tol)
+                              : compareValues(solverValue, cell.number, components[k].category, tol);
       }
       out.rows.push_back(std::move(out_row));
     }
@@ -209,7 +216,9 @@ CategoryComparison matchBeamForces(const Json& results, const ReferenceTable& re
       cacheIt = elemCache.emplace(loadCase, std::move(m)).first;
     }
     const auto elemIt = cacheIt->second.find(elemId);
-    const bool caseKnown = findLoadCase(results, loadCase) != nullptr;
+    const Json* lcEntry = findLoadCase(results, loadCase);
+    const bool caseKnown = lcEntry != nullptr;
+    const bool peak = isPeakMagnitudeCase(lcEntry);
     if (elemIt == cacheIt->second.end() && !caseKnown)
       out.diagnostics.push_back("Yük durumu results.json'da bulunamadı: " + loadCase);
 
@@ -229,8 +238,12 @@ CategoryComparison matchBeamForces(const Json& results, const ReferenceTable& re
       } else {
         const double solverValueRaw =
             elemIt->second->at("local_end_forces").at(static_cast<std::size_t>(endOffset + kComponents[k].index)).get<double>();
-        const double solverValue = toMidasBeamForceConvention(solverValueRaw, part[0] == 'I', k);
-        out_row.result = compareValues(solverValue, cell.number, kComponents[k].category, tol);
+        if (peak) {
+          out_row.result = compareValues(std::abs(solverValueRaw), std::abs(cell.number), kComponents[k].category, tol);
+        } else {
+          const double solverValue = toMidasBeamForceConvention(solverValueRaw, part[0] == 'I', k);
+          out_row.result = compareValues(solverValue, cell.number, kComponents[k].category, tol);
+        }
       }
       out.rows.push_back(std::move(out_row));
     }
@@ -347,6 +360,24 @@ CategoryComparison matchEigenvalueFrequencies(const Json& modalResults, const st
     }
   }
   return out;
+}
+
+void appendSpectrumCases(Json& results, const Json& spectrumResults) {
+  if (!spectrumResults.contains("cases")) return;
+  if (!results.contains("load_cases") || !results.at("load_cases").is_array()) results["load_cases"] = Json::array();
+  for (const auto& c : spectrumResults.at("cases")) {
+    if (!c.contains("status") || !c.at("status").value("success", false)) continue;
+    const std::string name = c.value("name", std::string{}) + "(RS)";
+    if (findLoadCase(results, name)) continue;
+    Json lc = {{"name", name}, {"status", c.at("status")}, {"peak_magnitude", true}, {"nodes", Json::array()}, {"elements", Json::array()}};
+    if (c.contains("combined_nodes"))
+      for (const auto& n : c.at("combined_nodes"))
+        lc["nodes"].push_back({{"id", n.at("id")}, {"displacement", n.at("displacement")}, {"reaction", n.at("reaction")}});
+    if (c.contains("combined_elements"))
+      for (const auto& e : c.at("combined_elements"))
+        lc["elements"].push_back({{"id", e.at("id")}, {"local_end_forces", e.at("local_end_forces")}});
+    results["load_cases"].push_back(std::move(lc));
+  }
 }
 
 CategoryStats summarizeCategory(const std::vector<ComparisonRow>& rows) {

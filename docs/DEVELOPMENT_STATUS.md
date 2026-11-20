@@ -2431,3 +2431,40 @@ Model 10 (untruncated, |d| <= absTol + 1% |ref|): before -> did not solve; after
 separate cause, not yet investigated).
 
 Regression: Debug 293/293, Release 293/293, gui-release 323/323.
+
+## Model 10 revision 2: second DBUSER H, AISC10(US) catalog I-shapes, S355 steel -- fully verified (2026-11-20)
+
+The user revised model 10 (files 2026-11-20 11:07-11:09, copied to build/gui-release/m10r2): six
+sections (SB, SR, DBUSER H "PROFIL-1" [1.0,0.5,0.02,0.03,0.6,0.05], DBUSER H "PROFIL-3"
+[0.9,1.0,0.03,0.03,1.0,0.03], catalog "AISC10(US)" W36X247 and HP14X89) and a second material,
+S355 (EN05), used by every H member.
+
+Per-element back-calculation from MIDAS's own results (scratchpad backcalc_all.py, nodal-load
+cases) gives:
+- S355: E = 210000 MPa, nu = 0.3 (the importer's existing EN1993 values) -- confirmed by the
+  DBUSER H members, whose geometry is known, reproducing A and J exactly with these E, G.
+- PROFIL-3 (second DBUSER H geometry): A 0.0852, IH 0.01283976, IB 0.00500189, J 0.000025830,
+  AsH 0.027, AsB 0.050 -- identical to unequalFlangeISection(), so the DBUSER H convention is now
+  confirmed on two geometries (unequal and equal flanges).
+- W36X247 / HP14X89: MIDAS uses the tabulated A, Ix, Iy, J (fillets included; not recomputable from
+  the plate dimensions, e.g. W36X247 strip-sum J 33.1 in^4 vs tabulated 34.7) and shear areas
+  AsH = d*tw, AsB = 5/6*2*bf*tf (the DBUSER H convention).
+Source for the tabulated values: AISC Shapes Database (16th ed.), rows W36X247 / HP14X89 as
+packaged in steelpy 1.1.1 (the official aisc.org download refused automated fetches, HTTP 403).
+All six properties of both shapes agree with MIDAS's back-calculated values to that
+back-calculation's printed precision (largest relative difference 1.8e-4, J of HP14X89 printed
+to 4 digits).
+
+Production change: MidasSectionLibrary.hpp -- aiscTabulatedISection() and an "AISC10(US)" branch in
+resolveCatalogSection() for exactly these two shapes (any other AISC shape or AISC edition is
+rejected with a clear message; nothing is estimated). UNI catalog unchanged.
+Tests: new tests/unit/midas_section_model10_r2_tests.cpp (4 tests).
+
+Model 10 revision 2 (untruncated, |d| <= absTol + 1% |ref|): before -> did not solve (AISC10(US)
+rejected); after Displacements 1104/1104, Beam Force 2304/2304, Reaction 96/96 (100%). Largest
+relative deviation on significant values: displacements (|ref| > 1e-4) 2.6e-5, forces/reactions
+(|ref| > 10 kN) 2.0e-5 -- consistent with tabulated-vs-MIDAS-database rounding of the catalog
+properties; the larger maxRel figures (2.2e-3) are on near-zero entries (absolute 2.7e-8).
+All other models (01-09, 11-21, model 10 revision 1): counts identical.
+
+Regression: Debug 297/297, Release 297/297, gui-release 327/327.

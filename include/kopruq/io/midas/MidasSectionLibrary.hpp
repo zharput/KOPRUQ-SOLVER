@@ -638,8 +638,40 @@ inline ResolvedSectionProperties equalAngleSection(Real a, Real t) {
 // unsymmetric angle "L", whose principal bending axes are rotated relative to H/B and would need
 // a product-of-inertia term kopruq::Section does not have -- see MidasJsonImporter.hpp), is
 // rejected with a clear diagnostic rather than approximated.
+// AISC rolled I-shape (W, HP, ...) from its PUBLISHED tabulated properties, US customary units
+// (in, in^2, in^4), converted exactly (1 in = 0.0254 m). A, Ix, Iy and J are the tabulated values
+// (they include the root fillets, so they are not recomputed from the plate dimensions). Shear
+// areas follow MIDAS NX's convention, the same one identified for its DBUSER "H" section (see
+// unequalFlangeISection): AsH = d*tw (web, shear along the depth), AsB = (5/6)*2*bf*tf (flanges).
+inline ResolvedSectionProperties aiscTabulatedISection(Real A_in2, Real d_in, Real bf_in, Real tw_in, Real tf_in,
+                                                       Real Ix_in4, Real Iy_in4, Real J_in4) {
+  constexpr Real in = Real(0.0254), in2 = in * in, in4 = in2 * in2;
+  ResolvedSectionProperties p;
+  p.area = A_in2 * in2;
+  p.IH = Ix_in4 * in4; // strong axis (bending from a load along the depth d)
+  p.IB = Iy_in4 * in4; // weak axis
+  p.J = J_in4 * in4;
+  p.AsH = d_in * tw_in * in2;
+  p.AsB = detail::kRectangularShearFactor * 2 * bf_in * tf_in * in2;
+  return p;
+}
+
 inline ResolvedSectionProperties resolveCatalogSection(const std::string& shape, const std::string& dbName, const std::string& sectName) {
-  if (dbName != "UNI") throw std::invalid_argument("unsupported catalog DB_NAME '" + dbName + "' (only 'UNI' is implemented)");
+  // MIDAS NX "AISC10(US)" database. Values: AISC Shapes Database (16th ed. Steel Construction
+  // Manual; as packaged in steelpy 1.1.1 "shape files", rows W36X247 / HP14X89 -- the official
+  // aisc.org download refused automated fetches, HTTP 403, 2026-11-20):
+  //   W36X247: A 72.5 in^2, d 36.7, bf 16.5, tw 0.800, tf 1.35 in, Ix 16700, Iy 1010, J 34.7 in^4
+  //   HP14X89: A 26.1 in^2, d 13.8, bf 14.7, tw 0.615, tf 0.615 in, Ix 904, Iy 326, J 3.59 in^4
+  // Cross-check (independent of that source): every one of A, Ix, Iy, J, AsH, AsB matches the
+  // property MIDAS itself used, back-calculated per element from MIDAS's own results of
+  // verification model 10 (2026-11-20 revision), to the back-calculation's precision.
+  if (dbName == "AISC10(US)") {
+    if (shape == "H" && sectName == "W36X247") return aiscTabulatedISection(72.5, 36.7, 16.5, 0.800, 1.35, 16700, 1010, 34.7);
+    if (shape == "H" && sectName == "HP14X89") return aiscTabulatedISection(26.1, 13.8, 14.7, 0.615, 0.615, 904, 326, 3.59);
+    throw std::invalid_argument("unsupported catalog section '" + sectName + "' (shape '" + shape + "', DB_NAME '" + dbName +
+                                "'): only W36X247 and HP14X89 (shape H) are implemented");
+  }
+  if (dbName != "UNI") throw std::invalid_argument("unsupported catalog DB_NAME '" + dbName + "' (only 'UNI' and 'AISC10(US)' are implemented)");
   if (shape == "H" && sectName == "HEB160") return iSection(0.160, 0.160, 0.008, 0.013);
   if (shape == "C" && sectName == "UPN100") return channelSection(0.100, 0.050, 0.006, 0.0085);
   if (shape == "L" && sectName == "L50x5") {

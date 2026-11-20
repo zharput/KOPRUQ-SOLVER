@@ -74,16 +74,14 @@ TEST(MidasSectionLibrary, TSectionMatchesHandComputation_Baslik) {
   // match WORSE (see MidasSectionLibrary.hpp's own comment on tSection() for the evidence),
   // strong evidence MIDAS's own DBUSER section uses this simpler convention internally. Matching
   // MIDAS's own convention, not the more "physically rigorous" answer, is what this import needs.
-  rel(p.J, 1.0, "J = (2*1 + 1*1)/3 (strip sum, matches MIDAS's own convention empirically)", 1e-9);
-  // AsH/AsB (2026-11-19): now the rigorous Zhuravskii/Timoshenko quadrature
-  // (detail::timoshenkoShearArea), not the coarser "web alone"/"flange alone" approximation
-  // this replaced. Reference values are an INDEPENDENT computation (scipy.integrate.quad, a
-  // completely separate implementation/language/numerical method from this project's C++
-  // midpoint-rule quadrature), not read back from the production function. AsH is additionally
-  // cross-checked by hand: AsH = IH^2 / integral(Q(y)^2/b(y) dy) = (11/12)^2 / (43/120) =
-  // 605/258 (exact fraction, matching the numeric value to 6 significant figures).
-  rel(p.AsH, 605.0/258.0, "AsH (Zhuravskii quadrature, hand-derived exact fraction)", 1e-6);
-  rel(p.AsB, 2.7480998869943494, "AsB (Zhuravskii quadrature, independent scipy.integrate.quad)", 1e-5);
+  // J, AsH, AsB (2026-11-20, user decision: match MIDAS NX): MIDAS's own DBUSER T convention,
+  // back-calculated from MIDAS's results for exactly this section (models 18 and 22):
+  // J = Roark's T-section formula = 1.0528515625 (independent Python; MIDAS 1.052851615),
+  // AsH = tw*H = 2.0, AsB = 5/6*B*tf = 5/3. Supersedes the 2026-11-19 expectations (strip-sum
+  // J = 1.0; Zhuravskii AsH = 605/258, AsB = 2.7480998869943494), which MIDAS does not use.
+  rel(p.J, 1.0528515625, "J = Roark T-section formula (MIDAS convention)", 1e-9);
+  rel(p.AsH, 2.0, "AsH = tw*H (MIDAS convention)", 1e-9);
+  rel(p.AsB, 5.0 / 3.0, "AsB = 5/6*B*tf (MIDAS convention)", 1e-9);
 }
 
 TEST(MidasSectionLibrary, TimoshenkoShearAreaMatchesClosedFormRectangle) {

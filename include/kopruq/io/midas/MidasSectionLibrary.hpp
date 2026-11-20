@@ -73,6 +73,17 @@ inline Real solidRectangleTorsion(Real a, Real b) {
   const Real r = b / a;
   return a * b * b * b * (Real(1)/3 - Real(0.21) * r * (Real(1) - r*r*r*r/12));
 }
+// Roark's torsion constant of a T section without fillet (flange B x tf, web hw x tw below it,
+// hw = H - tf): K1 + K2 + alpha D^4 -- see tSection() for the formula, source and the MIDAS
+// evidence that this is MIDAS NX's own DBUSER T convention.
+inline Real roarkTeeTorsion(Real B, Real tf, Real hw, Real tw) {
+  const Real K1 = B * tf * tf * tf * (Real(1) / 3 - Real(0.21) * (tf / B) * (1 - std::pow(tf / B, 4) / 12));
+  const Real K2 = hw * tw * tw * tw * (Real(1) / 3 - Real(0.105) * (tw / hw) * (1 - std::pow(tw / hw, 4) / 192));
+  const Real t = std::min(tf, tw), t1 = std::max(tf, tw);
+  const Real alpha = (t / t1) * Real(0.15);
+  const Real D = (tf * tf + tw * tw / 4) / tf;
+  return K1 + K2 + alpha * D * D * D * D;
+}
 // Timoshenko shear correction factor for a solid rectangular cross-section: k = 5/6,
 // independent of the H/B aspect ratio (Timoshenko & Goodier, "Theory of Elasticity",
 // S3.1 beam shear). Applies identically to shear along either H or B.
@@ -476,12 +487,26 @@ inline ResolvedSectionProperties tSection(Real H, Real B, Real tw, Real tf) {
   const Real df = ybar - yf, dw = ybar - yw;
   p.IH = IfOwn + Af * df * df + IwOwn + Aw * dw * dw;
   p.IB = tf * B * B * B / 12 + hw * tw * tw * tw / 12; // symmetric about the vertical axis, no offset needed
-  p.J = (B * tf * tf * tf + hw * tw * tw * tw) / 3; // thin-strip-sum (see header comment for why this, not the FEM solve)
-  // AsH: horizontal strips along H (top to bottom) -- flange (full width B) then web (width tw).
-  // AsB: the section rotated 90 degrees -- outside the web's width only the flange is present
-  // (depth tf), within it both flange and web are present (depth tf+hw = H).
-  p.AsH = detail::timoshenkoShearArea({{0, tf, B}, {tf, H, tw}}, p.IH);
-  p.AsB = detail::timoshenkoShearArea({{0, (B - tw) / 2, tf}, {(B - tw) / 2, (B + tw) / 2, H}, {(B + tw) / 2, B, tf}}, p.IB);
+  // J and shear areas: MIDAS NX's own DBUSER T convention (user decision 2026-11-20: match MIDAS),
+  // superseding the strip-sum J and the Zhuravskii shear areas described above. Evidence, all
+  // from MIDAS's own results for the T [H,B,tw,tf] = [2,2,1,1] pier cap ("BASLIK") of models
+  // 17/18/22, back-calculated per element:
+  //   J   = Roark's T-section formula (Roark's Formulas for Stress and Strain, torsion of a T
+  //         section; El Darwish & Johnston), no fillet (r = 0):
+  //           K1 = B tf^3 [1/3 - 0.21 (tf/B)(1 - tf^4/(12 B^4))]          (flange)
+  //           K2 = hw tw^3 [1/3 - 0.105 (tw/hw)(1 - tw^4/(192 hw^4))]     (web, hw = H - tf)
+  //           alpha = (t/t1) 0.15, t = min(tf, tw), t1 = max(tf, tw);  D = (tf^2 + tw^2/4) / tf
+  //           J = K1 + K2 + alpha D^4
+  //         -> 1.0528515625; MIDAS (model 22, TU case, torsion of the cap beam) 1.052851615.
+  //         Exact St. Venant (SectionFE.hpp) would be 0.9276, the strip sum 1.0 -- neither is MIDAS's.
+  //   AsH = tw * H                    (shear along H, the web) -> 2.0; MIDAS (model 22) 2.0000
+  //   AsB = (5/6) * B * tf            (shear along B, the flange) -> 1.66667; MIDAS (model 18,
+  //         POINT case) 1.666666-1.666669
+  // The same web / 5/6-flange shear convention as the DBUSER "H" section (unequalFlangeISection).
+  // J evidence is one geometry; Roark's formula is stated for tw < 2 tf (D's derivation).
+  p.J = detail::roarkTeeTorsion(B, tf, hw, tw);
+  p.AsH = tw * H;
+  p.AsB = detail::kRectangularShearFactor * B * tf;
   return p;
 }
 

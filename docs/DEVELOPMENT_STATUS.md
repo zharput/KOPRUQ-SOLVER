@@ -2531,3 +2531,30 @@ Existing tests whose meaning shifted (pass unchanged): MidasJsonImporter.GtmpIsR
 fabricated). New tests: tests/unit/section_fe_tests.cpp (7), tests/unit/midas_psc_gradient_styp_tests.cpp (10).
 
 Regression: Debug 314/314, Release 314/314, gui-release 344/344.
+
+## MIDAS DBUSER T-section convention -- models 17, 18, 22 (2026-11-20)
+
+User-approved next task. tSection() (MidasSectionLibrary.hpp) now uses MIDAS NX's own DBUSER T
+convention (geometry A/IH/IB unchanged):
+- J = Roark's T-section torsion formula without fillet (K1 flange + K2 web + alpha D^4, new
+  detail::roarkTeeTorsion): 1.0528515625 for T [2,2,1,1]; MIDAS back-calculated (model 22, cap-beam
+  torsion in TU) 1.052851615. Superseded: strip sum 1.0 (the exact St. Venant value would be 0.9276).
+- AsH = tw*H = 2.0 (MIDAS model 22: 2.0000); AsB = 5/6*B*tf = 1.66667 (MIDAS model 18 POINT case:
+  1.666666-1.666669). Superseded: Zhuravskii 2.345 / 2.748. Same web / 5/6-flange rule as the DBUSER
+  H section.
+Evidence is the one T geometry used in the verification models (formula also checked on a second
+geometry against an independent Python evaluation). Existing test
+MidasSectionLibrary.TSectionMatchesHandComputation_Baslik had its J/AsH/AsB expectations updated
+explicitly (requirement change, documented in the test); new tests/unit/midas_section_tee_tests.cpp (3).
+
+Results (untruncated, same tolerance):
+- Model 22: Displacements 1419 -> 1422/1422, Beam Force 2617 -> 2804/2808, Reaction 205 -> 216/216.
+  The 4 remaining rows are the TU deck Moment-y values near zero crossings (122 / 6 kNm, abs diff
+  6 kNm) caused by MIDAS's mesh-dependent PSC J/shear areas (with MIDAS's own PSC values all 100%).
+- Model 17 static FORCE: Beam Force 819 -> 936/936, Reaction 43 -> 48/48 (Displacements 474/474).
+  Model 17 dynamic (automated, all rows, new scratchpad tool diag_rs17): spectrum displacements
+  944 -> 948/948, spectrum reactions 94 -> 96/96, eigen frequencies (1%) 38 -> 40/40 -- the two
+  modes previously accepted as a 1.1-1.3% residual were caused by the T-section stiffness.
+- Model 18: unchanged (already 100%). All other models: unchanged.
+
+Regression: Debug 317/317, Release 317/317, gui-release 347/347.

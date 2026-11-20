@@ -2653,3 +2653,21 @@ Re-test (diagnostic tool and the GUI path -- real CLI solve + GUI matchers), ide
 Displacements 1422/1422, Reaction 216/216, Beam Force 2804/2808 (TG 936/936, UNIFORM 936/936,
 TU 932/936). The 4 TU rows are unchanged: deck Moment-y at zero crossings (el 13 J / 14 I:
 122.14 vs 127.93 kNm; el 22 J / 23 I: 5.92 vs 7.79 kNm), the PSC mesh-dependence documented above.
+
+## Model 20: Beam Force / Truss Force FAILs investigated -- root cause HEB160 catalog properties (2026-11-20)
+
+User's manual GUI test of model 20 showed Beam Force 370/432 and Truss Force 54/78 (the earlier
+all-model diagnostic only tracked PASS counts and did not compare truss forces -- missed here).
+All 62 beam-force FAILs are section 5 = UNI "HEB160" (S355) elements 7-12, Shear-z and Moment-y only
+(about 2-2.5%); the 24 truss FAILs are axial forces of diagonals 15/16/21/23 (about 2%; the
+truss + frame structure is statically indeterminate, so the force split depends on the chord
+stiffness). Back-calculation from MIDAS's own results (HEB160 elements are unloaded in FORCE and
+POINT; 6 elements x 2 cases, fit residual 1e-7): MIDAS uses A = 0.00543 m2 (54.3 cm2),
+Iy = 2.49000e-5 m4 (2490 cm4), Asz = 0.001280 = h*tw; KOPRUQ's iSection (idealized plates, no
+fillets) gives A 0.005232 (-3.6%), Iy 2.4136e-5 (-3.1%), Asz 0.0012747 (Zhuravskii).
+Diagnostic override (not production) of only these three values -> model 20 100% in every
+category: displacements 252/252, reactions 36/36, beam forces 432/432, truss forces 78/78.
+Published source for the tabulated values: Engineering ToolBox "HE-B Steel Beams" (according to
+DIN 1025 and Euronorm 53-62): HE 160 B A 54.3 cm2, Iy 2490 cm4, Iz 889 cm4 (no It, no tf column).
+Not yet changed in code (awaiting the user's decision on the source for It / Asy, which model 20,
+an X-Z plane model, cannot verify).

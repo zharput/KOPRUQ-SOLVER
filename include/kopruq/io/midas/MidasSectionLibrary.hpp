@@ -342,31 +342,21 @@ inline ResolvedSectionProperties solidTrack(Real H, Real B) {
   p.area = Ls * H + Real(kPi) * R * R;
   p.IH = Real(kPi) * R * R * R * R / 4 + (2 * Ls * R * R * R) / 3;
   p.IB = Real(kPi) * R * R * R * R / 4 + (4 * Ls * R * R * R) / 3 + (Real(kPi) * Ls * Ls * R * R) / 4 + (R * Ls * Ls * Ls) / 6;
-  p.J = detail::torsionConstantFEMStadium(Ls, H);
-  // Shear areas via the same Zhuravskii/Timoshenko quadrature as every other shape in this file
-  // (detail::timoshenkoShearArea), applied to a finely-discretized approximation of this shape's
-  // CONTINUOUSLY varying width/height profile (the function itself only takes piecewise-constant
-  // strips; 400 slices keeps the discretization error well below the quadrature's own, same
-  // convergence argument as TimoshenkoShearAreaMatchesClosedFormRectangle).
-  constexpr int kSlices = 400;
-  {
-    std::vector<detail::ShearStrip> strips; strips.reserve(kSlices); // along H: width(y) = Ls + 2*sqrt(R^2-y^2)
-    for (int i = 0; i < kSlices; ++i) {
-      const Real y0 = -R + i * (2 * R) / kSlices, y1 = -R + (i + 1) * (2 * R) / kSlices, ym = (y0 + y1) / 2;
-      strips.push_back({y0, y1, Ls + 2 * std::sqrt(std::max(Real(0), R * R - ym * ym))});
-    }
-    p.AsH = detail::timoshenkoShearArea(strips, p.IH);
-  }
-  {
-    const Real halfB = Ls / 2 + R;
-    std::vector<detail::ShearStrip> strips; strips.reserve(kSlices); // along B: height(x) profile
-    for (int i = 0; i < kSlices; ++i) {
-      const Real x0 = -halfB + i * (2 * halfB) / kSlices, x1 = -halfB + (i + 1) * (2 * halfB) / kSlices, xm = (x0 + x1) / 2;
-      const Real height = (std::abs(xm) <= Ls / 2) ? H : 2 * std::sqrt(std::max(Real(0), R * R - (std::abs(xm) - Ls / 2) * (std::abs(xm) - Ls / 2)));
-      strips.push_back({x0, x1, height});
-    }
-    p.AsB = detail::timoshenkoShearArea(strips, p.IB);
-  }
+  // J and shear areas follow MIDAS NX's own DBUSER STRK convention (user decision 2026-11-20:
+  // match MIDAS). Identified from MIDAS's own data -- its Section_prop export and per-element
+  // back-calculation from its displacement/beam-force results -- and confirmed EXACTLY (6
+  // significant digits) on two independent geometries, model 21 SEC4 (H=0.9, B=2.0) and SEC6
+  // (H=1.2, B=3.0):
+  //   J   = Roark solid-rectangle formula (detail::solidRectangleTorsion) applied to the
+  //         EQUAL-AREA rectangle of the same height: width A/H, height H
+  //   AsH = (5/6)*Ls*H + 0.9*pi*R^2   (shear along H: rectangle part k=5/6, circular ends k=0.9)
+  //   AsB =       Ls*H + 0.9*pi*R^2   (shear along B)
+  // These are MIDAS's engineering conventions, not exact elasticity: the exact St. Venant J of a
+  // stadium is ~4-5% higher (detail::torsionConstantFEMStadium, kept and directly tested).
+  p.J = detail::solidRectangleTorsion(p.area / H, H);
+  const Real circularPart = detail::kCircularShearFactor * Real(kPi) * R * R;
+  p.AsH = detail::kRectangularShearFactor * Ls * H + circularPart;
+  p.AsB = Ls * H + circularPart;
   return p;
 }
 
@@ -385,33 +375,13 @@ inline ResolvedSectionProperties solidOctagon(Real H, Real B, Real a, Real b) {
   p.IH = B * H * H * H / 12 - (H * H * a * b / 2 - (2 * H * a * b * b) / 3 + a * b * b * b / 3);
   p.J = (a > 0 && b > 0) ? detail::torsionConstantFEMChamferedRect(H, B, a, b)
                          : detail::solidRectangleTorsion(std::max(H, B), std::min(H, B)); // a=b=0: exact rectangle
-  constexpr int kSlices = 400;
-  auto chamferedWidthAt = [&](Real pos, Real halfSpan, Real otherHalfSpan, Real leg, Real otherLeg) {
-    // Material extent perpendicular to `pos`'s axis at coordinate pos (|pos|<=halfSpan), for a
-    // rectangle of half-extent (halfSpan, otherHalfSpan) chamfered by (leg along pos-axis,
-    // otherLeg along the perpendicular axis) at each of its 4 corners.
-    const Real full = 2 * otherHalfSpan;
-    const Real edgeDist = halfSpan - std::abs(pos); // distance in from the nearest edge along pos-axis
-    if (leg <= 0 || edgeDist >= leg) return full;
-    const Real cut = otherLeg * (1 - edgeDist / leg);
-    return full - 2 * cut;
-  };
-  {
-    std::vector<detail::ShearStrip> strips; strips.reserve(kSlices);
-    for (int i = 0; i < kSlices; ++i) {
-      const Real y0 = -H / 2 + i * H / kSlices, y1 = -H / 2 + (i + 1) * H / kSlices, ym = (y0 + y1) / 2;
-      strips.push_back({y0, y1, chamferedWidthAt(ym, H / 2, B / 2, b, a)});
-    }
-    p.AsH = detail::timoshenkoShearArea(strips, p.IH);
-  }
-  {
-    std::vector<detail::ShearStrip> strips; strips.reserve(kSlices);
-    for (int i = 0; i < kSlices; ++i) {
-      const Real x0 = -B / 2 + i * B / kSlices, x1 = -B / 2 + (i + 1) * B / kSlices, xm = (x0 + x1) / 2;
-      strips.push_back({x0, x1, chamferedWidthAt(xm, B / 2, H / 2, a, b)});
-    }
-    p.AsB = detail::timoshenkoShearArea(strips, p.IB);
-  }
+  // Shear areas: MIDAS NX's own DBUSER SOCT convention, AsH = AsB = (5/6)*A -- confirmed exactly
+  // on two geometries (model 21 SEC5 and SEC7, MIDAS Section_prop export and back-calculation
+  // from MIDAS's own results, 2026-11-20). a=b=0 reduces to solidRectangle's own 5/6*A.
+  // J stays the exact St. Venant (Prandtl membrane FDM) value: MIDAS's SOCT J (about 12% lower
+  // on both model-21 geometries) matched no closed form tried, so it is not guessed.
+  p.AsH = detail::kRectangularShearFactor * p.area;
+  p.AsB = detail::kRectangularShearFactor * p.area;
   return p;
 }
 
@@ -431,14 +401,16 @@ inline ResolvedSectionProperties hollowBox(Real H, Real B, Real tw, Real tf) {
   const Real Am = (B - tw) * (H - tf);                     // midline-enclosed area
   const Real sumSoverT = 2*(H - tf)/tw + 2*(B - tw)/tf;     // midline perimeter / thickness, Bredt's formula
   p.J = 4 * Am * Am / sumSoverT;
-  // Shear areas via the rigorous Zhuravskii/Timoshenko quadrature (detail::timoshenkoShearArea),
-  // not the coarser "shear carried by the parallel walls only" approximation this replaced
-  // (2026-11-19). AsH: horizontal strips along H -- top/bottom flanges (full width B, solid) and
-  // the web region (width 2*tw, the two webs; the hollow middle there carries no material).
-  // AsB: the same section rotated 90 degrees -- the two solid side walls (full height H) and the
-  // hollow middle (only the top+bottom flange thickness present there, 2*tf).
-  p.AsH = detail::timoshenkoShearArea({{0, tf, B}, {tf, H - tf, 2*tw}, {H - tf, H, B}}, p.IH);
-  p.AsB = detail::timoshenkoShearArea({{0, tw, H}, {tw, B - tw, 2*tf}, {B - tw, B, H}}, p.IB);
+  // Shear areas: MIDAS NX's own DBUSER box convention, the gross wall areas parallel to the shear
+  // (user decision 2026-11-20: match MIDAS). Confirmed exactly from MIDAS's own data on two
+  // boxes: model 21 B[1.5,1.0,0.1,0.2] (AsH 0.300000, AsB 0.400000; also its Section_prop
+  // export) and model 18 B[3,5,0.5,0.5] (AsH 3.00000, back-calculated from its results).
+  //   AsH = 2*tw*H  (shear along H carried by the two webs, full height)
+  //   AsB = 2*tf*B  (shear along B carried by the two flanges, full width)
+  // Supersedes the Zhuravskii quadrature used 2026-11-19..20, which was physically finer but
+  // ~0.5-6% away from MIDAS's values (model 18 passed only within tolerance).
+  p.AsH = 2 * tw * H;
+  p.AsB = 2 * tf * B;
   return p;
 }
 

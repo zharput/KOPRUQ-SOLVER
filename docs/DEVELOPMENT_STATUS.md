@@ -2322,3 +2322,43 @@ force recovery reproduce MIDAS essentially exactly; all remaining model-21 resid
 property conventions. Current production (unchanged): Beam Force 19351/22560 (85.78%), Reaction
 606/720 (84.17%), Displacements 9108/10800 (84.33%). Changing E/shear-area/J conventions is a
 formulation change awaiting user approval; STRK/SOCT J needs MIDAS's own section values.
+
+## Model 21 revision (flat combinations, 2 more STRK/SOCT sections): EN Ecm formula + MIDAS section conventions implemented (2026-11-20)
+
+User decisions (2026-11-20): (1) no nested load combinations in the verification models --
+combinations are plain factored sums of load cases (the importer still expands nested CB terms
+exactly; nothing removed); (2) concrete E from the EN1992-1-1 formula, not the Table 3.1 rounded
+values. The user revised model 21 (flat COMBO-1..4; added SEC6 STRK H=1.2 B=3.0 and SEC7 SOCT
+1.3x2.5 a=0.4 b=0.25) and exported MIDAS's own section properties (Section_prop.xlsx). All four
+new reference exports are now exactly self-consistent (combination rows == factored primitive
+rows); the former nested-combination displacement inconsistency is gone with the flat definitions.
+
+Production changes (MidasMaterialLibrary.hpp, MidasSectionLibrary.hpp):
+- Concrete Ecm = 22*((fck+8)/10)^0.3 GPa for every EN grade (C35/45: 34077.15 MPa). The Table 3.1
+  lookup and the old 9.5*(fck+8)^(1/3) fallback (a different, older curve) are removed.
+- Box (B) shear areas: AsH = 2*tw*H, AsB = 2*tf*B (MIDAS convention; exact on model 21 SEC3 and
+  model 18; replaces the Zhuravskii quadrature). Bredt J unchanged (already exact vs MIDAS).
+- STRK: J = Roark rectangle formula on the equal-area rectangle (A/H x H); AsH = 5/6*Ls*H +
+  0.9*pi*R^2, AsB = Ls*H + 0.9*pi*R^2. Exact (6 digits) on SEC4 and SEC6 against MIDAS.
+- SOCT: AsH = AsB = 5/6*A (exact on SEC5 and SEC7). J kept as the exact St. Venant FDM value:
+  MIDAS's SOCT J (0.379948 for SEC5, 1.026500 for SEC7, ~12% below exact) matched no closed form
+  tried (equal-area/bounding/decomposed rectangles, ellipse, A^4/Ip forms, exhaustive search of
+  rectangle combinations: best 0.5% off, coincidental) -- not guessed.
+Tests: new tests/unit/midas_section_midas_conventions_tests.cpp (7 tests). Existing tests whose
+expected values encoded the superseded requirements were updated explicitly (not to force a
+pass; the requirement changed by user decision): midas_material_library_tests (3 tests,
+cube-root/Table-3.1 expectations -> EN formula 34077.146 MPa; two renamed), the two box
+shear-area expectations (midas_section_shear_area_tests, midas_section_library_tests;
+Zhuravskii 2.188/4.476 -> 2*tw*H=2.0 / 2*tf*B=5.0, one renamed), and the J line of the STRK
+degenerate-case test (circle J within 1% -> MIDAS convention 0.0551904; A/I/As circle checks kept).
+
+Results, all models (static categories, same untruncated diagnostic, before -> after): no
+regression anywhere; model 17 Beam Force 817 -> 819; model 21 Displacements 8544 -> 8611/8640
+(99.66%), Beam Force 15598 -> 17367/18048 (96.23%), Reaction 475 -> 563/576 (97.74%). Every other
+model's counts identical. Diagnostic experiment (not production): overriding ONLY the two SOCT J
+values with MIDAS's gives model 21 8640/8640, 18048/18048, 576/576 -- the remaining 723 FAILs are
+entirely the SOCT torsion-constant convention. Models 02/03/04/08/09 (pre-existing FAILs in this
+diagnostic) and 10/22 (do not solve: 'element property reference missing') are unchanged and
+were not investigated in this milestone.
+
+Regression: Debug 278/278, Release 278/278, gui-release 308/308.

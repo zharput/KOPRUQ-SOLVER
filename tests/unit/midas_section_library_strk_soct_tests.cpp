@@ -30,11 +30,15 @@ TEST(MidasSectionLibraryStrkSoct, SolidTrackDegenerateCaseMatchesSolidCircleExac
   rel(t.area, c.area, "area", 1e-9);
   rel(t.IH, c.IH, "IH", 1e-9);
   rel(t.IB, c.IB, "IB", 1e-9);
-  // J is each shape's own numerical FDM solve (solidCircle itself is exact pi*D^4/32, solidTrack
-  // is the general FDM solver evaluated at a near-degenerate boundary) -- not expected to be
-  // bit-identical, but should be close: curved-boundary staircase aliasing, not a formulation
-  // difference (see solidTrack's/torsionConstantFEMStadium's own header comment).
-  EXPECT_NEAR(t.J, c.J, 0.01 * c.J);
+  // J (2026-11-20, user decision: MIDAS NX's STRK convention) is the Roark rectangle formula on
+  // the equal-area rectangle (A/H x H), so at B=H it is intentionally NOT the circle's exact
+  // pi*D^4/32 = 0.064412: width A/H = pi*H/4 = 0.706858, J = 0.9*0.706858^3*(1/3 - 0.21*r*(1 -
+  // r^4/12)), r = 0.785398 -> 0.0551904 (independent Python computation). Supersedes the
+  // earlier "J within 1% of the circle" expectation of the exact FDM J (that exact J is still
+  // checked directly in midas_section_midas_conventions_tests.cpp).
+  rel(t.J, 0.05519037126534103, "J (MIDAS equal-area-rectangle convention)", 1e-9);
+  rel(t.AsH, c.AsH, "AsH (Ls=0: only the 0.9*A circular part remains)", 1e-9);
+  rel(t.AsB, c.AsB, "AsB (Ls=0: only the 0.9*A circular part remains)", 1e-9);
 }
 
 // Model 21's own "SEC4"/STRK dimensions (H=0.9, B=2.0 m, confirmed directly from the user's

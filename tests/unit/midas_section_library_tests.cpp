@@ -54,13 +54,11 @@ TEST(MidasSectionLibrary, HollowBoxMatchesHandComputation_Pier2) {
   rel(p.IH, 3.0, "IH = (5*8 - 4*1)/12");
   rel(p.IB, 15.5, "IB = (2*125 - 1*64)/12");
   rel(p.J, 7.59375, "Bredt torsion constant", 1e-6);
-  // AsH/AsB (2026-11-19): rigorous Zhuravskii/Timoshenko quadrature (detail::timoshenkoShearArea),
-  // replacing the earlier coarser "webs alone"/"flanges alone" approximation. Reference values
-  // are an independent computation (scipy.integrate.quad, a separate implementation/language/
-  // numerical method from this project's C++ midpoint-rule quadrature), not read back from the
-  // production function.
-  rel(p.AsH, 2.188448530780822, "AsH (Zhuravskii quadrature, independent scipy.integrate.quad)", 1e-5);
-  rel(p.AsB, 4.4760067199079066, "AsB (Zhuravskii quadrature, independent scipy.integrate.quad)", 1e-5);
+  // AsH/AsB (2026-11-20, user decision: match MIDAS NX): MIDAS's gross-wall-area convention,
+  // AsH = 2*tw*H = 2.0, AsB = 2*tf*B = 5.0 (confirmed against MIDAS data on models 18 and 21);
+  // supersedes the 2026-11-19 Zhuravskii expectation 2.188449 / 4.476007.
+  rel(p.AsH, 2.0, "AsH = 2*tw*H");
+  rel(p.AsB, 5.0, "AsB = 2*tf*B");
 }
 
 TEST(MidasSectionLibrary, TSectionMatchesHandComputation_Baslik) {

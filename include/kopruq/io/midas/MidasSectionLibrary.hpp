@@ -24,6 +24,7 @@
 // of the mapping. Keeping the two concerns apart avoids silently baking
 // an unverified axis-convention guess into the section-property math.
 #include "../../core/Types.hpp"
+#include "../../sections/SectionFE.hpp"
 #include <Eigen/Sparse>
 #include <Eigen/SparseCholesky>
 #include <algorithm>
@@ -52,7 +53,16 @@ namespace kopruq::io::midas {
 // i.e. they are directly usable as Iy/Iz once the importer applies this same rotation to
 // reference_y (same rotation mechanic as MidasOrientation.hpp's own Beta angle) -- see
 // equalAngleSection's header comment for the derivation.
-struct ResolvedSectionProperties { Real area{}, IH{}, IB{}, J{}, AsH{}, AsB{}; Real principalAngleRad{0}; };
+// extentH / extentB: the section's overall outer dimensions along H (local z at Beta=0) and B
+// (local y) -- what MIDAS's temperature gradient "Use Section Hz / Hy" takes as the distance
+// between the two outermost faces (confirmed on model 22's PSC box, 2026-11-20). Set by the
+// dispatchers (resolveDbUserSection / resolveCatalogSection / resolvePsc1CellSection); 0 means
+// "not defined" (e.g. a principal-axis-rotated angle), and a gradient needing it is rejected.
+struct ResolvedSectionProperties { Real area{}, IH{}, IB{}, J{}, AsH{}, AsB{}; Real principalAngleRad{0}; Real extentH{0}, extentB{0}; };
+
+namespace detail {
+inline ResolvedSectionProperties withExtents(ResolvedSectionProperties p, Real H, Real B) { p.extentH = H; p.extentB = B; return p; }
+} // namespace detail
 
 namespace detail {
 // Saint-Venant torsion constant, solid rectangle (a = longer side, b = shorter side),
@@ -666,14 +676,14 @@ inline ResolvedSectionProperties resolveCatalogSection(const std::string& shape,
   // property MIDAS itself used, back-calculated per element from MIDAS's own results of
   // verification model 10 (2026-11-20 revision), to the back-calculation's precision.
   if (dbName == "AISC10(US)") {
-    if (shape == "H" && sectName == "W36X247") return aiscTabulatedISection(72.5, 36.7, 16.5, 0.800, 1.35, 16700, 1010, 34.7);
-    if (shape == "H" && sectName == "HP14X89") return aiscTabulatedISection(26.1, 13.8, 14.7, 0.615, 0.615, 904, 326, 3.59);
+    if (shape == "H" && sectName == "W36X247") return detail::withExtents(aiscTabulatedISection(72.5, 36.7, 16.5, 0.800, 1.35, 16700, 1010, 34.7), 36.7 * 0.0254, 16.5 * 0.0254);
+    if (shape == "H" && sectName == "HP14X89") return detail::withExtents(aiscTabulatedISection(26.1, 13.8, 14.7, 0.615, 0.615, 904, 326, 3.59), 13.8 * 0.0254, 14.7 * 0.0254);
     throw std::invalid_argument("unsupported catalog section '" + sectName + "' (shape '" + shape + "', DB_NAME '" + dbName +
                                 "'): only W36X247 and HP14X89 (shape H) are implemented");
   }
   if (dbName != "UNI") throw std::invalid_argument("unsupported catalog DB_NAME '" + dbName + "' (only 'UNI' and 'AISC10(US)' are implemented)");
-  if (shape == "H" && sectName == "HEB160") return iSection(0.160, 0.160, 0.008, 0.013);
-  if (shape == "C" && sectName == "UPN100") return channelSection(0.100, 0.050, 0.006, 0.0085);
+  if (shape == "H" && sectName == "HEB160") return detail::withExtents(iSection(0.160, 0.160, 0.008, 0.013), 0.160, 0.160);
+  if (shape == "C" && sectName == "UPN100") return detail::withExtents(channelSection(0.100, 0.050, 0.006, 0.0085), 0.100, 0.050);
   if (shape == "L" && sectName == "L50x5") {
     // area: overridden to the published EN 10056-1 tabulated value (4.80 cm^2, root fillets
     // included) rather than equalAngleSection's own idealized no-fillet geometric decomposition
@@ -698,35 +708,114 @@ inline ResolvedSectionProperties resolveCatalogSection(const std::string& shape,
 inline ResolvedSectionProperties resolveDbUserSection(const std::string& shape, const std::vector<Real>& vSize) {
   if (shape == "SB") {
     if (vSize.size() < 2) throw std::invalid_argument("SB section requires at least 2 vSIZE values (H,B)");
-    return solidRectangle(vSize[0], vSize[1]);
+    return detail::withExtents(solidRectangle(vSize[0], vSize[1]), vSize[0], vSize[1]);
   }
   if (shape == "SR") {
     if (vSize.empty()) throw std::invalid_argument("SR section requires at least 1 vSIZE value (D)");
-    return solidCircle(vSize[0]);
+    return detail::withExtents(solidCircle(vSize[0]), vSize[0], vSize[0]);
   }
   if (shape == "B") {
     if (vSize.size() < 4) throw std::invalid_argument("B section requires at least 4 vSIZE values (H,B,tw,tf)");
-    return hollowBox(vSize[0], vSize[1], vSize[2], vSize[3]);
+    return detail::withExtents(hollowBox(vSize[0], vSize[1], vSize[2], vSize[3]), vSize[0], vSize[1]);
   }
   if (shape == "T") {
     if (vSize.size() < 4) throw std::invalid_argument("T section requires at least 4 vSIZE values (H,B,tw,tf)");
-    return tSection(vSize[0], vSize[1], vSize[2], vSize[3]);
+    return detail::withExtents(tSection(vSize[0], vSize[1], vSize[2], vSize[3]), vSize[0], vSize[1]);
   }
   if (shape == "STRK") {
     if (vSize.size() < 2) throw std::invalid_argument("STRK section requires at least 2 vSIZE values (H,B)");
-    return solidTrack(vSize[0], vSize[1]);
+    return detail::withExtents(solidTrack(vSize[0], vSize[1]), vSize[0], vSize[1]);
   }
   if (shape == "SOCT") {
     if (vSize.size() < 4) throw std::invalid_argument("SOCT section requires at least 4 vSIZE values (H,B,a,b)");
-    return solidOctagon(vSize[0], vSize[1], vSize[2], vSize[3]);
+    return detail::withExtents(solidOctagon(vSize[0], vSize[1], vSize[2], vSize[3]), vSize[0], vSize[1]);
   }
   if (shape == "H") {
     if (vSize.size() < 6) throw std::invalid_argument("H section requires at least 6 vSIZE values (H,B1,tw,tf1,B2,tf2)");
     if ((vSize.size() > 6 && vSize[6] != 0) || (vSize.size() > 7 && vSize[7] != 0))
       throw std::invalid_argument("H section with nonzero fillet radii r1/r2 is not supported (MIDAS's treatment of fillets is unverified)");
-    return unequalFlangeISection(vSize[0], vSize[1], vSize[2], vSize[3], vSize[4], vSize[5]);
+    return detail::withExtents(unequalFlangeISection(vSize[0], vSize[1], vSize[2], vSize[3], vSize[4], vSize[5]), vSize[0], std::max(vSize[1], vSize[4]));
   }
   throw std::invalid_argument("unsupported DBUSER section shape '" + shape + "' (only SB, B, SR, T, H, STRK, SOCT are implemented)");
+}
+
+// MIDAS NX PSC "1CEL" (PSC-1CELL single-cell box girder), symmetric, all joints (JO1..JO3,
+// JI1..JI5) off. Parameter order of the four JSON arrays = MIDAS API order (midasapi-python
+// Section.PSC.CEL12), confirmed for every nonzero entry against the user's MIDAS "Section Data"
+// dialog of verification model 22 (2026-11-20):
+//   vSIZE_PSC_A = [HO1, HO2, HO2-1, HO2-2, HO3, HO3-1]       vSIZE_PSC_B = [BO1, BO1-1, BO1-2, BO2, BO2-1, BO3]
+//   vSIZE_PSC_C = [HI1, HI2, HI2-1, HI2-2, HI3, HI3-1, HI4, HI4-1, HI4-2, HI5]
+//   vSIZE_PSC_D = [BI1, BI1-1, BI1-2, BI2-1, BI3, BI3-1, BI3-2, BI4]
+// Geometry (MIDAS manual "Section Properties - PSC", PSC-1CELL guide diagram; half section, the
+// centre line at y = 0, top at z = 0). Joint dimensions (-1/-2 suffixes, BI4) only apply when the
+// matching joint is on, and are ignored otherwise, as in MIDAS's dialog (greyed out):
+//   outer: cantilever tip thickness HO1 at y = W = BO1+BO2+BO3; straight underside to the web top
+//          at y = BO2+BO3, depth HO1+HO2; outer web face to the bottom corner y = BO3, depth
+//          H = HO1+HO2+HO3; flat bottom.
+//   inner: top slab HI1 thick on the centre line, straight to the inner web top at y = BI1, depth
+//          HI1+HI2; inner web to y = BI3, depth HI1+HI2+HI3; straight to the centre line at depth
+//          H-HI5 (bottom slab HI5 thick there, HI5+HI4 at the web). HI1+..+HI5 must equal H.
+// A, centroid, Iy, Iz: exact polygon integration (SectionGeometry.hpp). Confirmed on model 22's
+// box against MIDAS's own Section Properties table: A 10.58, Iyy 13.67209, Izz 68.70453, centroid
+// 1.326008 below the top (all exact).
+// J and shear areas: MIDAS computes them numerically on a section mesh (its dialog's "Mesh Size for
+// Stiff. Calc.", and its values sit between a coarse and a converged FE solution -- 2026-11-20).
+// Here: the 2D FE section analysis of SectionFE.hpp (warping-function torsion, Pilkey shear
+// functions with nu = 0 -- section properties in MIDAS are material independent), on a mesh fine
+// enough to be converged (h = min wall thickness / 16, at most ~80k nodes). Being converged, the
+// values sit slightly BELOW MIDAS's mesh-dependent ones: model 22 box J 27.85 vs 27.92 (-0.25%),
+// Asy 5.422 vs 5.435 (-0.25%), Asz 3.654 vs 3.681 (-0.75%).
+struct Psc1CellDims { Real HO1, HO2, HO3, BO1, BO2, BO3, HI1, HI2, HI3, HI4, HI5, BI1, BI3; };
+
+inline ResolvedSectionProperties psc1CellSection(const Psc1CellDims& d) {
+  const Real H = d.HO1 + d.HO2 + d.HO3, W = d.BO1 + d.BO2 + d.BO3;
+  if (!(d.HO1 > 0) || !(d.HO2 >= 0) || !(d.HO3 > 0) || !(d.BO1 >= 0) || !(d.BO2 >= 0) || !(d.BO3 > 0))
+    throw std::invalid_argument("PSC 1CEL: outer dimensions must be HO1, HO3, BO3 > 0 and HO2, BO1, BO2 >= 0");
+  if (!(d.HI1 > 0) || !(d.HI2 >= 0) || !(d.HI3 > 0) || !(d.HI4 >= 0) || !(d.HI5 > 0) || !(d.BI1 > 0) || !(d.BI3 > 0))
+    throw std::invalid_argument("PSC 1CEL: inner dimensions must be HI1, HI3, HI5, BI1, BI3 > 0 and HI2, HI4 >= 0");
+  const Real Hi = d.HI1 + d.HI2 + d.HI3 + d.HI4 + d.HI5;
+  if (std::abs(Hi - H) > 1e-9 * H)
+    throw std::invalid_argument("PSC 1CEL: inner heights HI1+..+HI5 do not add up to the outer height HO1+HO2+HO3");
+  using sections::Contour;
+  using sections::Point2;
+  Contour outer; // counter-clockwise
+  auto push = [](Contour& c, Real y, Real z) { if (c.empty() || (c.back() - Point2(y, z)).norm() > 1e-12) c.emplace_back(y, z); };
+  push(outer, d.BO3, -H); push(outer, d.BO3 + d.BO2, -(d.HO1 + d.HO2)); push(outer, W, -d.HO1); push(outer, W, 0);
+  push(outer, -W, 0); push(outer, -W, -d.HO1); push(outer, -(d.BO3 + d.BO2), -(d.HO1 + d.HO2)); push(outer, -d.BO3, -H);
+  Contour hole; // clockwise (a hole for computePolygonSection)
+  const Real zWebTop = -(d.HI1 + d.HI2), zWebBot = -(H - d.HI5 - d.HI4);
+  push(hole, 0, -(H - d.HI5)); push(hole, -d.BI3, zWebBot); push(hole, -d.BI1, zWebTop); push(hole, 0, -d.HI1);
+  push(hole, d.BI1, zWebTop); push(hole, d.BI3, zWebBot);
+  // The cell must lie strictly inside the outer boundary (webs of positive thickness).
+  for (const auto& p : hole)
+    if (!sections::detail_fe::pointInContour(outer, p) || std::abs(p.x()) >= W)
+      throw std::invalid_argument("PSC 1CEL: the inner cell is not strictly inside the outer boundary (check BI1/BI3 against BO2+BO3/BO3)");
+  const auto geo = sections::computePolygonSection({outer, hole});
+  ResolvedSectionProperties p;
+  p.area = geo.area;
+  p.IH = geo.Iyy; // about the horizontal centroidal axis (vertical bending), this project's Iy
+  p.IB = geo.Izz;
+  Real tmin = std::min({d.HO1, d.HI1, d.HI5});
+  {
+    // Web thickness: horizontal distance between the outer and inner web lines at the inner web's
+    // top and bottom ends (the thinnest point of a straight web is at one of its ends). Only sets
+    // the mesh size; the wall geometry itself is validated by the inside-test above.
+    auto outerY = [&](Real z) { // outer web face, z clamped to [-H, -(HO1+HO2)]
+      const Real z0 = -H, z1 = -(d.HO1 + d.HO2);
+      z = std::clamp(z, z0, z1);
+      return d.BO3 + d.BO2 * (z - z0) / (z1 - z0);
+    };
+    tmin = std::min({tmin, outerY(zWebTop) - d.BI1, outerY(zWebBot) - d.BI3});
+  }
+  if (!(tmin > 0)) throw std::invalid_argument("PSC 1CEL: a wall has non-positive thickness");
+  const Real h = std::max(tmin / 16, std::sqrt(geo.area / 80000));
+  const auto fe = sections::analyzeSectionFE({outer, hole}, h, 0.0);
+  p.J = fe.J;
+  p.AsH = fe.Asz; // shear along H (vertical)
+  p.AsB = fe.Asy; // shear along B (horizontal)
+  p.extentH = H;
+  p.extentB = 2 * W;
+  return p;
 }
 
 } // namespace kopruq::io::midas

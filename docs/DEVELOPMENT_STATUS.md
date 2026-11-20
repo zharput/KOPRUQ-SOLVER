@@ -2468,3 +2468,66 @@ properties; the larger maxRel figures (2.2e-3) are on near-zero entries (absolut
 All other models (01-09, 11-21, model 10 revision 1): counts identical.
 
 Regression: Debug 297/297, Release 297/297, gui-release 327/327.
+
+## Model 22: temperature gradient (GTMP), PSC 1-cell box, 2D FE section analysis, STYP -- 2026-11-20
+
+User-approved tasks: (1) import of MIDAS beam temperature gradients, (2) MIDAS PSC "1CEL" box
+section, (3) a 2D finite-element cross-section analysis module. Model 22 exports copied to
+build/gui-release/m22r1. Sources: the user saved the MIDAS CIVIL NX online-manual pages
+("Temperature Gradient", "Section Properties - PSC", "Section Properties - DB/User", "Sectional
+Property Calculator", "Beam Section Temperatures") to C:\_ZHarput_Data\MIDAS NX_ONLINE HELP (read
+only), and supplied MIDAS's Section Data / Section Properties screenshots for model 22's box.
+
+Gradient (GTMP, MidasJsonImporter.hpp). Manual: TZ = T2z - T1z between the outermost faces, T2z
+on the +z face; M = alpha E I dT / h; "Use Section Hz/Hy" = the section's overall depth / width.
+KOPRUQ's gradient_*_delta_t is the opposite difference (ThermalLoads.hpp: a positive value bends a
+cantilever toward +z), so gradient_z_delta_t = -TZ, gradient_y_delta_t = -TY. Proven from MIDAS's
+own TG results: per-element back-calculation with the gradient fixed-end moments of either sign
+-- only this sign reproduces EIy (13.67209, = TU-case value) and EIz (68.70453, = MIDAS's Izz),
+with h = 3.15 / 10.0 (the box's full depth / width). Physical tests: a hot top face curls a
+cantilever tip down by exactly kappa L^2/2; a hot +y face moves it to -y. Plate gradients (TYPE
+!= 1) and missing depths are rejected. ResolvedSectionProperties now carries extentH/extentB.
+
+PSC 1CEL (MidasSectionLibrary.hpp, psc1CellSection). Geometry from the manual's PSC-1CELL guide
+diagram; JSON array order = MIDAS API order (verified for every nonzero entry against the dialog).
+A, centroid, Iy, Iz by exact polygon integration: A 10.58, Iyy 13.6720934, Izz 68.7045333,
+centroid 1.326008 below the top -- identical to MIDAS's Section Properties table. MIDAS's J and
+shear areas are NOT closed-form: the manual's Bredt note gives J 19.73 (MIDAS 27.92024) and a
+Zhuravskii strip integral gives Asz 5.12 (MIDAS 3.681402). An independent Python 2D FE analysis
+reproduces MIDAS's three values on a coarse mesh (h = 0.1: J 27.93, Asy 5.434, Asz 3.675) and
+converges below them (h = 0.0125: J 27.85023, Asy 5.421686, Asz 3.653751) -- MIDAS evaluates them
+on its own section mesh. Joints on, 2CEL, unsymmetric, user stiffness, small holes: rejected.
+
+2D FE section analysis (new include/kopruq/sections/SectionFE.hpp, own implementation): Bowyer-
+Watson Delaunay mesh of boundary samples + interior triangular lattice, conforming boundary
+recovery by sub-segment splitting, meshed area checked against the exact polygon area; linear
+triangles; torsion by the warping function (multiply connected sections need no extra
+condition); shear areas by Pilkey's shear functions (nu = 0 for MIDAS sections, which are
+material independent). Verified: rectangle J vs Saint-Venant series (0.05% at h = 0.025,
+converging from above), rectangle shear area 5/6 A, nu = 0.2 rectangle vs independent Python,
+solid circle J = pi r^4/2 and 6/7 A, circular tube J = pi (R^4 - r^4)/2 and Cowper's area,
+model 22 box vs independent Python (within 1.2e-4).
+
+STYP (structure type, MidasJsonImporter.hpp) -- found while verifying model 22, a pre-existing
+importer gap: STYP was ignored. Model 22 exports STYP = 1 (X-Z plane) and MIDAS's results have
+DY = RX = RZ = 0 at every node in every case (with constraint reactions at non-CONS nodes); model
+20, re-solved by the user as a MIDAS 2D model, also exports STYP = 1; all 3D models export 0.
+STYP = 1 now restrains UY, RX, RZ at every node; other nonzero values are reported, not guessed.
+
+Model 22 results (untruncated, |d| <= absTol + 1% |ref|): before -> did not solve; after
+Displacements 1419/1422, Beam Force 2617/2808, Reaction 205/216; the TG (gradient) case is 100%
+in all three categories. Remaining differences fully explained by diagnostic overrides (not
+production): with MIDAS's T-section convention for the 4 cap-beam elements (section "BASLIK",
+T [2,2,1,1]: J = Roark's T-section formula, 1.052851562 vs MIDAS back-calc 1.052851615; Asz =
+tw*H = 2.0 from back-calculation; Asy = 5/6*B*tf as seen in model 18) -> 1422/1422, 2804/2808,
+216/216; additionally with MIDAS's own mesh-dependent PSC J/Asy/Asz -> 100% in all categories
+(max rel 4e-6). The 4 rows left by the converged PSC values are deck Moment-y values near a
+zero crossing in TU (122 and 6 kNm, abs diff 6 kNm, deck moments up to 3e4 kNm). The T-section
+convention is NOT implemented in this milestone (not in the approved scope; next task).
+All other models: counts identical (01-21, model 10 revisions 1 and 2).
+
+Existing tests whose meaning shifted (pass unchanged): MidasJsonImporter.GtmpIsRejectedExplicitlyWhenPresent
+(its GTMP item has no depth and no USE_HZ -> now rejected for a missing depth, still no load
+fabricated). New tests: tests/unit/section_fe_tests.cpp (7), tests/unit/midas_psc_gradient_styp_tests.cpp (10).
+
+Regression: Debug 314/314, Release 314/314, gui-release 344/344.

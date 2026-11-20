@@ -27,10 +27,13 @@
 // other than BEAM; any MATL TYPE other than CONC or any code family other
 // than EN..(RC); any SECT shape other than SB/B/SR; any ELNK whose LINK is
 // not "GEN" or whose R_S has any true entry (see the ELNK handling below);
-// GTMP/BTMP (gradient/beam-section temperature -- MIDAS's T1/T2
-// top-fiber sign convention could not be confirmed from accessible
-// documentation, and guessing would silently flip which way a member
-// bends); any BODF whose direction is not exactly global -Z; any BMLD
+// BTMP (beam-section temperature profile -- conventions not verified);
+// GTMP items other than TYPE 1 (beam), or without a usable gradient depth
+// (GTMP beam gradients themselves ARE imported since 2026-11-20, sign
+// convention proven from MIDAS's manual and its own model-22 results, see
+// the GTMP handling below); PSC sections other than a symmetric 1CEL with
+// every joint off; STYP values other than 0 (3D) and 1 (X-Z plane);
+// any BODF whose direction is not exactly global -Z; any BMLD
 // whose CMD/TYPE/DIRECTION is not the one combination implemented above.
 //
 // Disclosed, not silent, substitutions (MidasImportReport::assumptions):
@@ -179,21 +182,44 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
   // MidasSectionLibrary.hpp's ResolvedSectionProperties::principalAngleRad and
   // equalAngleSection's header comment. 0 (absent from the map) for every symmetric shape.
   std::map<Id, Real> sectionPrincipalRotation;
+  // sectionExtent: section id -> (overall H, overall B), for temperature gradients with MIDAS's
+  // "Use Section Hz / Hy" (see the GTMP handling below). Absent or 0 = not defined.
+  std::map<Id, std::pair<Real, Real>> sectionExtent;
 
   // --- SECT ---
   if (dbg.contains("SECT"))
     for (auto it = dbg.at("SECT").begin(); it != dbg.at("SECT").end(); ++it) {
       const Id id = detail::parseId(it.key());
       const auto& v = it.value();
-      if (v.at("SECTTYPE").get<std::string>() != "DBUSER") { out.report.rejected.push_back("section " + it.key() + ": unsupported SECTTYPE (only DBUSER is implemented)"); continue; }
+      const std::string sectType = v.at("SECTTYPE").get<std::string>();
+      if (sectType != "DBUSER" && sectType != "PSC") { out.report.rejected.push_back("section " + it.key() + ": unsupported SECTTYPE '" + sectType + "' (only DBUSER and PSC are implemented)"); continue; }
       const auto& before = v.at("SECT_BEFORE");
       const std::string shape = before.at("SHAPE").get<std::string>();
       const bool useShear = before.value("USE_SHEAR_DEFORM", false);
       try {
         const auto& sectI = before.at("SECT_I");
-        const auto p = sectI.contains("DB_NAME")
-            ? resolveCatalogSection(shape, sectI.at("DB_NAME").get<std::string>(), sectI.at("SECT_NAME").get<std::string>())
-            : resolveDbUserSection(shape, detail::toRealVector(sectI.at("vSIZE")));
+        ResolvedSectionProperties p;
+        if (sectType == "PSC") {
+          // PSC: only the single-cell symmetric box with every joint off (MidasSectionLibrary.hpp,
+          // psc1CellSection); anything else is rejected, not approximated.
+          if (shape != "1CEL") throw std::invalid_argument("unsupported PSC shape '" + shape + "' (only 1CEL is implemented)");
+          if (!before.value("USE_SYMMETRIC", true)) throw std::invalid_argument("PSC 1CEL with USE_SYMMETRIC=false is not supported");
+          if (before.value("USE_USER_INTPUT_STIFF", false)) throw std::invalid_argument("PSC with user-input stiffness (USE_USER_INTPUT_STIFF) is not supported");
+          if (before.value("USE_SMALL_HOLE", false)) throw std::invalid_argument("PSC with USE_SMALL_HOLE is not supported");
+          if (before.contains("JOINT"))
+            for (const auto& j : before.at("JOINT"))
+              if (j.get<bool>()) throw std::invalid_argument("PSC 1CEL with a joint (JO1..JO3/JI1..JI5) switched on is not supported");
+          const auto A = detail::toRealVector(sectI.at("vSIZE_PSC_A")), B = detail::toRealVector(sectI.at("vSIZE_PSC_B"));
+          const auto C = detail::toRealVector(sectI.at("vSIZE_PSC_C")), D = detail::toRealVector(sectI.at("vSIZE_PSC_D"));
+          if (A.size() < 6 || B.size() < 6 || C.size() < 10 || D.size() < 5) throw std::invalid_argument("PSC 1CEL: vSIZE_PSC_A/B/C/D arrays are too short");
+          p = psc1CellSection(Psc1CellDims{A[0], A[1], A[4], B[0], B[3], B[5], C[0], C[1], C[4], C[6], C[9], D[0], D[4]});
+          out.report.assumptions.push_back("section " + it.key() + ": PSC 1CEL J and shear areas from KOPRUQ's converged 2D FE section analysis (SectionFE.hpp); MIDAS evaluates them on its own coarser section mesh, so they can differ from MIDAS's by a fraction of a percent");
+        } else {
+          p = sectI.contains("DB_NAME")
+              ? resolveCatalogSection(shape, sectI.at("DB_NAME").get<std::string>(), sectI.at("SECT_NAME").get<std::string>())
+              : resolveDbUserSection(shape, detail::toRealVector(sectI.at("vSIZE")));
+        }
+        if (p.extentH > 0 && p.extentB > 0 && p.principalAngleRad == 0) sectionExtent[id] = {p.extentH, p.extentB};
         // Iy = IH (the H/depth dimension's inertia): at MIDAS Beta=0 the local z axis is
         // "vertical" (MidasOrientation.hpp), and KOPRUQ-SOLVER's Iy resists bending in the
         // local x-z plane -- i.e. exactly the bending H's depth resists. Symmetrically
@@ -461,6 +487,28 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
     }
   }
 
+  // STYP (MIDAS "Structure Type"), 2026-11-20. STYP = 1 is MIDAS's X-Z plane (2D) structure type:
+  // UY, RX and RZ are suppressed at every node, whatever the geometry. Evidence: (a) model 20
+  // (Y = 0 planar truss), which the user re-solved explicitly as a MIDAS "2D" model, exports
+  // STYP = 1, while every 3D model exports STYP = 0; (b) model 22 exports STYP = 1 although its
+  // geometry spans Y (10 m), and MIDAS's own results for it have DY = RX = RZ = 0 exactly at every
+  // node in every load case, with constraint reactions (MX, MZ) at nodes that carry no CONS
+  // record. Other nonzero STYP values (other planes / "constrain RZ") have not been verified and
+  // are reported, not guessed.
+  if (dbg.contains("STYP") && !dbg.at("STYP").empty()) {
+    const auto& st = dbg.at("STYP").begin().value();
+    const int styp = st.value("STYP", 0);
+    if (styp == 1) {
+      for (const auto& n : out.input.model.nodes) {
+        auto& flags = out.input.restraints[n.id];
+        flags[1] = flags[3] = flags[5] = true;
+      }
+      out.report.assumptions.push_back("STYP=1 (MIDAS X-Z plane structure type): UY, RX and RZ restrained at every node (see MidasJsonImporter.hpp)");
+    } else if (styp != 0) {
+      out.report.rejected.push_back("STYP=" + std::to_string(styp) + ": MIDAS structure type other than 3D (0) or X-Z plane (1) is not mapped; the model is analysed as fully 3D");
+    }
+  }
+
   std::map<std::string, std::size_t> caseIndex;
   auto caseFor = [&](const std::string& name) -> LoadCase& {
     auto found = caseIndex.find(name);
@@ -544,14 +592,49 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
         ++out.report.thermal_loads;
       }
     }
-  // GTMP (gradient, TZ/TY deltas across the section) and BTMP (beam-section-specific temperature
-  // differences) are recognized but NOT mapped: which of MIDAS's T1/T2 is the top fiber could not
-  // be confirmed from accessible documentation (support.midasuser.com returns HTTP 403), and
-  // guessing the sign would silently flip which way the member bends -- exactly what this project
-  // does not do. Rejected explicitly, not silently dropped, only when actually present.
-  for (const char* key : {"GTMP", "BTMP"})
-    if (dbg.contains(key) && !dbg.at(key).empty())
-      out.report.rejected.push_back(std::string(key) + ": gradient/beam-section temperature records are present but not mapped (MIDAS's T1/T2 top-fiber sign convention could not be confirmed); only uniform ETMP temperature is imported");
+  // --- GTMP (beam temperature gradient), 2026-11-20. MIDAS manual "Temperature Gradient" (saved
+  // copy supplied by the user): TZ = T2z - T1z, the temperature difference between the two
+  // outermost faces in the element local z direction, T2z on the +z face (dialog diagram); TY =
+  // T2y - T1y likewise, T2y on the +y face; equivalent moment M = alpha*E*I*dT/h, h = HZ/HY, or the
+  // section's overall dimension when USE_HZ/USE_HY ("Use Section Hz/Hy") is set.
+  // KOPRUQ's MemberThermalLoad gradient_*_delta_t is the opposite difference (ThermalLoads.hpp:
+  // a positive gradient_z_delta_t bends a cantilever's tip toward +z, i.e. the -z face is the hot
+  // one), so  gradient_z_delta_t = -TZ,  gradient_y_delta_t = -TY.  Proven from MIDAS's own results
+  // of verification model 22 (TG case): back-calculating each box-girder element's EI with the
+  // gradient fixed-end moments of either sign, only this sign reproduces the section's EIy and EIz
+  // (Iy 13.67209 = TU-case value, Iz 68.70453 = MIDAS's own Izz; the other sign gives
+  // element-to-element scatter), and with h = the section's full depth (3.15) and full width (10.0).
+  // TYPE 1 = beam is the only type mapped (plate gradients do not apply to beam elements).
+  if (dbg.contains("GTMP")) {
+    std::map<Id, Id> elementSection;
+    for (const auto& b : out.input.model.beams) elementSection[b.id] = b.section;
+    for (auto it = dbg.at("GTMP").begin(); it != dbg.at("GTMP").end(); ++it) {
+      const Id element = detail::parseId(it.key());
+      for (const auto& item : it.value().at("ITEMS")) {
+        const std::string lc = item.at("LCNAME").get<std::string>();
+        const std::string where = "GTMP element " + it.key() + " (load case '" + lc + "')";
+        if (item.value("TYPE", 1) != 1) { out.report.rejected.push_back(where + ": TYPE " + std::to_string(item.value("TYPE", 0)) + " is not a beam gradient (only TYPE 1 is mapped)"); continue; }
+        const Real TZ = item.value("TZ", Real(0)), TY = item.value("TY", Real(0));
+        Real hz = item.value("HZ", Real(0)), hy = item.value("HY", Real(0));
+        const auto sec = elementSection.find(element);
+        const auto ext = sec == elementSection.end() ? sectionExtent.end() : sectionExtent.find(sec->second);
+        const bool needZ = TZ != 0 && item.value("USE_HZ", false), needY = TY != 0 && item.value("USE_HY", false);
+        if ((needZ || needY) && ext == sectionExtent.end()) {
+          out.report.rejected.push_back(where + ": 'Use Section Hz/Hy' requested but the element's section has no defined overall dimensions (missing/rejected section or a principal-axis-rotated shape)");
+          continue;
+        }
+        if (needZ) hz = ext->second.first;
+        if (needY) hy = ext->second.second;
+        if ((TZ != 0 && !(hz > 0)) || (TY != 0 && !(hy > 0))) { out.report.rejected.push_back(where + ": gradient depth HZ/HY must be positive"); continue; }
+        caseFor(lc).thermal.push_back(MemberThermalLoad{element, 0, -TY, TY != 0 ? hy : Real(0), -TZ, TZ != 0 ? hz : Real(0)});
+        ++out.report.thermal_loads;
+      }
+    }
+  }
+  // BTMP (beam-section temperatures, a piecewise temperature profile over the section) is still
+  // recognized but NOT mapped -- its conventions have not been verified against MIDAS results.
+  if (dbg.contains("BTMP") && !dbg.at("BTMP").empty())
+    out.report.rejected.push_back("BTMP: beam-section temperature records are present but not mapped (conventions not verified); only ETMP and GTMP temperatures are imported");
 
   out.report.load_cases = out.input.load_cases.size();
 

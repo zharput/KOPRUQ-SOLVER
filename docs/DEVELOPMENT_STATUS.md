@@ -2398,3 +2398,36 @@ verified against MIDAS for all static categories. All other models (01-20, 22): 
 to the previous milestone (no regression; 10 and 22 still do not solve -- next task).
 
 Regression: Debug 287/287, Release 287/287, gui-release 317/317.
+
+## Model 10 (3D frame): MIDAS DBUSER "H" section implemented -- model 10 fully verified (2026-11-20)
+
+Root cause of "element property reference missing": model 10's section 3 ("PROFIL") is a MIDAS
+DBUSER shape "H", vSIZE [1.0, 0.5, 0.02, 0.03, 0.6, 0.05, 0, 0], which the importer rejected
+(not implemented), leaving its 4 elements without a section. Fresh MIDAS exports (the user re-ran
+model 10, files dated 2026-11-20 09:49-09:51) were copied to build/gui-release/m10r1.
+
+Before implementing, every property MIDAS uses for this section was back-calculated per element
+from MIDAS's own results (independent Python, scratchpad backcalc_all.py; nodal-load cases
+FORCE-2/FORCE-3; 2-node Timoshenko fit, residual ~1e-7; the tool was first checked against the
+known SB/SR sections of the same model): A 0.06340000, IH 0.010876745, IB 0.001213113,
+J 0.000032060, AsH 0.020000, AsB 0.037500. These fix the vSIZE order [H, B1, tw, tf1, B2, tf2]
+(top flange B1 x tf1, bottom flange B2 x tf2) and MIDAS's conventions exactly:
+  J = (B1 tf1^3 + B2 tf2^3 + (H - (tf1+tf2)/2) tw^3)/3  (clear-height 0.000031953 and full-height
+      0.000032167 web variants do not match); AsH = tw*H; AsB = 5/6 (B1 tf1 + B2 tf2).
+Evidence is one geometry (the only DBUSER H available). Nonzero fillet radii r1/r2 are rejected
+with a clear message (MIDAS's treatment unverified). The catalog path (HEB160 -> iSection) is
+unchanged.
+
+Production change: MidasSectionLibrary.hpp, new unequalFlangeISection() + "H" dispatch.
+Tests: new tests/unit/midas_section_h_dbuser_tests.cpp (6 tests: model-10 values, independent
+literals at 1e-9 and MIDAS back-calc at 5e-6; symmetric-I closed form; flange-swap invariance;
+dispatch; rejections). Existing MidasSectionLibrary.RejectsUnsupportedShapeAndInvalidDimensions
+still passes unchanged: its "H" with 2 vSIZE values is now rejected as too few values instead of
+as an unsupported shape.
+
+Model 10 (untruncated, |d| <= absTol + 1% |ref|): before -> did not solve; after Displacements
+1104/1104, Beam Force 2304/2304, Reaction 96/96 (100%); max relative deviations 4.6e-6 / 1.1e-6
+/ 6.1e-8. All other models (01-09, 11-21): counts identical (model 22 still does not solve --
+separate cause, not yet investigated).
+
+Regression: Debug 293/293, Release 293/293, gui-release 323/323.

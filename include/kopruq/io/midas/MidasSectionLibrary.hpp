@@ -502,6 +502,47 @@ inline ResolvedSectionProperties iSection(Real H, Real B, Real tw, Real tf) {
   return p;
 }
 
+// MIDAS NX DBUSER "H" (I/H section with possibly unequal flanges), vSIZE [H, B1, tw, tf1, B2, tf2,
+// r1, r2]: overall depth H, top flange B1 x tf1, web thickness tw, bottom flange B2 x tf2 (r1, r2
+// fillet radii -- not supported, the caller rejects nonzero values). Web clear height
+// hw = H - tf1 - tf2. Every property below follows MIDAS NX's own DBUSER H convention, identified
+// 2026-11-20 by back-calculating each one per element from MIDAS's own displacement/beam-force
+// results of verification model 10 (section "PROFIL" [1.0, 0.5, 0.02, 0.03, 0.6, 0.05], four
+// elements, nodal-load cases only) and matched to 6-9 significant digits:
+//   A   = B1*tf1 + B2*tf2 + tw*hw                                   (MIDAS 0.06340000)
+//   IH  = strong axis, about the overall centroid (parallel-axis)    (MIDAS 0.010876745)
+//   IB  = tf1*B1^3/12 + tf2*B2^3/12 + hw*tw^3/12                      (MIDAS 0.001213113)
+//   J   = (B1*tf1^3 + B2*tf2^3 + (H - (tf1+tf2)/2)*tw^3) / 3          (MIDAS 0.000032060)
+//         -- thin-strip sum with the web measured flange-midline to flange-midline; the clear-
+//            height (0.000031953) and full-height (0.000032167) variants do NOT match
+//   AsH = tw*H                       (shear along H, the web)          (MIDAS 0.020000)
+//   AsB = (5/6)*(B1*tf1 + B2*tf2)    (shear along B, the flanges)      (MIDAS 0.037500)
+// A, IH and IB fix the vSIZE order unambiguously (any other pairing changes A or IB). Evidence is
+// one geometry (the only DBUSER H available); a second geometry would be a useful confirmation.
+// The section is used about its centroid (OFFSET_PT "CC"); for unequal flanges the shear centre
+// is off the centroid, which MIDAS's beam does not model either (the 2-node Timoshenko fit of its
+// results has residual ~1e-7). The catalog path (resolveCatalogSection, HEB160) keeps iSection.
+inline ResolvedSectionProperties unequalFlangeISection(Real H, Real B1, Real tw, Real tf1, Real B2, Real tf2) {
+  if (!(H > 0) || !(B1 > 0) || !(tw > 0) || !(tf1 > 0) || !(B2 > 0) || !(tf2 > 0))
+    throw std::invalid_argument("H section requires positive H, B1, tw, tf1, B2 and tf2");
+  const Real hw = H - tf1 - tf2;
+  if (!(hw > 0)) throw std::invalid_argument("H section flange thicknesses tf1+tf2 must be less than H");
+  if (!(tw <= B1) || !(tw <= B2)) throw std::invalid_argument("H section web thickness tw must not exceed either flange width");
+  ResolvedSectionProperties p;
+  const Real A1 = B1 * tf1, Aw = tw * hw, A2 = B2 * tf2;
+  p.area = A1 + Aw + A2;
+  const Real y1 = tf1 / 2, yw = tf1 + hw / 2, y2 = H - tf2 / 2; // piece centroids, down from the top fiber
+  const Real ybar = (A1 * y1 + Aw * yw + A2 * y2) / p.area;
+  p.IH = B1 * tf1 * tf1 * tf1 / 12 + A1 * (ybar - y1) * (ybar - y1)
+       + tw * hw * hw * hw / 12 + Aw * (ybar - yw) * (ybar - yw)
+       + B2 * tf2 * tf2 * tf2 / 12 + A2 * (ybar - y2) * (ybar - y2);
+  p.IB = tf1 * B1 * B1 * B1 / 12 + tf2 * B2 * B2 * B2 / 12 + hw * tw * tw * tw / 12;
+  p.J = (B1 * tf1 * tf1 * tf1 + B2 * tf2 * tf2 * tf2 + (H - (tf1 + tf2) / 2) * tw * tw * tw) / 3;
+  p.AsH = tw * H;
+  p.AsB = detail::kRectangularShearFactor * (A1 + A2);
+  return p;
+}
+
 // Channel (web on one side, two flanges projecting the same way, e.g. a MIDAS "C"-shape/European
 // UPN profile): overall depth H, overall flange width B (web face to flange tip), web thickness
 // tw, flange thickness tf. Symmetric about the horizontal (H) centroidal axis -- so IH uses the
@@ -647,7 +688,13 @@ inline ResolvedSectionProperties resolveDbUserSection(const std::string& shape, 
     if (vSize.size() < 4) throw std::invalid_argument("SOCT section requires at least 4 vSIZE values (H,B,a,b)");
     return solidOctagon(vSize[0], vSize[1], vSize[2], vSize[3]);
   }
-  throw std::invalid_argument("unsupported DBUSER section shape '" + shape + "' (only SB, B, SR, T, STRK, SOCT are implemented)");
+  if (shape == "H") {
+    if (vSize.size() < 6) throw std::invalid_argument("H section requires at least 6 vSIZE values (H,B1,tw,tf1,B2,tf2)");
+    if ((vSize.size() > 6 && vSize[6] != 0) || (vSize.size() > 7 && vSize[7] != 0))
+      throw std::invalid_argument("H section with nonzero fillet radii r1/r2 is not supported (MIDAS's treatment of fillets is unverified)");
+    return unequalFlangeISection(vSize[0], vSize[1], vSize[2], vSize[3], vSize[4], vSize[5]);
+  }
+  throw std::invalid_argument("unsupported DBUSER section shape '" + shape + "' (only SB, B, SR, T, H, STRK, SOCT are implemented)");
 }
 
 } // namespace kopruq::io::midas

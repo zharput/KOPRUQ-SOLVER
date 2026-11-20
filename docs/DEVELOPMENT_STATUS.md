@@ -2606,3 +2606,20 @@ spectrum results had only been spot-checked by hand (8 reaction values). No code
   under the per-row criterion; not tolerated away.
 - Model 17 (SPECX, SPECY, 40 modes): displacements 948/948, reactions 96/96, beam forces
   1872/1872 (max rel 3.8e-3), eigen 40/40.
+
+## Models 13-15 (eigen) re-tested -- all 100% (2026-11-20)
+
+GUI matcher (verification::matchEigenvalueFrequencies: frequency and angular frequency per mode,
+1%) on ModalSolver (lumped mass, the model's own EIGV mode count), scratchpad tool diag_modal,
+built twice: against commit 6d7573b (before the planar heuristic was removed) and the current tree.
+No code change in this step.
+- 13 Eigen-1 (planar X-Z frame, STYP 0, 20 modes): before 0/40 (frequencies 160-410% off: the
+  removed zero-extent heuristic suppressed every out-of-plane mode, so MIDAS's 3D mode sequence
+  could not match) -> now 40/40, max rel 3.5e-5.
+- 14 Eigen-2 (planar, STYP 0, 30 modes): before 0/60 (6-20% off, same cause) -> now 60/60,
+  max rel 3.7e-5.
+- 15 Eigen-3 (3D, 1630 nodes, 100 modes): 200/200 before and now, max rel 1.3e-4.
+- Same tool on models 16/17: 40/40 (3.5e-5) and 80/80 (3.5e-5).
+The "isolated small mode divergence" previously noted as an accepted residual (models 13-15 and
+17) no longer exists: model 17's came from the T-section stiffness, models 13/14's (as far as the
+current data shows) from the planar heuristic introduced 2026-11-19.

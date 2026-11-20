@@ -2590,3 +2590,19 @@ New tests: tests/unit/midas_offset_planar_tests.cpp (4; DY = PL^3/3EIz on a STYP
 CT: DX = +P L^2 e / 2EIy, RX = -P e L / GJ, both derived from beam theory; rejections).
 
 Regression: Debug 321/321, Release 321/321, gui-release 351/351.
+
+## Models 16 and 17: response-spectrum and eigen results compared in full (2026-11-20)
+
+Automated comparison of every MIDAS response-spectrum row (CQC, lumped mass; peak magnitudes,
+|KOPRUQ| vs |MIDAS|, |d| <= absTol + 1% |ref|) and the eigen frequencies (1%), scratchpad tool
+diag_rs17 (ResponseSpectrumSolver / ModalSolver on the imported model). Previously model 16/17
+spectrum results had only been spot-checked by hand (8 reaction values). No code change.
+- Model 16 (SPECX, 20 modes): displacements 234/234 (max rel 7.2e-5), reactions 24/24 (8.6e-5),
+  beam forces 454/456, eigen 20/20. The 2 FAIL rows are the same value: element 88 J / 89 I,
+  Moment-y at node 98 (mid-height of the X = 40 pier) -- KOPRUQ 15.97, MIDAS 16.60 kNm (abs 0.62).
+  The pier works in double curvature and the dominant mode's moment crosses zero there (|My| along
+  the pier: 2896, 1438, 16.6, 1452, 2873 kNm; model maximum 10516): the value is the CQC residue of
+  the other modes, extremely sensitive. abs diff = 0.04% of the adjacent values. Reported as FAIL
+  under the per-row criterion; not tolerated away.
+- Model 17 (SPECX, SPECY, 40 modes): displacements 948/948, reactions 96/96, beam forces
+  1872/1872 (max rel 3.8e-3), eigen 40/40.

@@ -2739,3 +2739,25 @@ tests/unit/midas_user_profiles_tests.cpp (4).
 Model 20 (GUI path, real CLI + GUI matchers): Displacements 252/252, Reaction 36/36, Beam Force
 432/432, Truss Force 78/78; max relative deviation 8.1e-8 (displacements), 7.3e-7 (forces).
 All other models unchanged. Regression: Debug 324/324, Release 324/324, gui-release 357/357.
+
+## Model 10 rebuilt with user-defined filleted H sections -- re-test (2026-11-21)
+
+The user redefined model 10's two AISC catalog sections as DB/User H sections with web-to-flange
+fillets and an empty bottom flange (files 20.11 17:40-17:42; workspace build/gui-release/m10r3):
+PROFIL-2 [0.93218, 0.4191, 0.02032, 0.03429, 0, 0, r1 0.02413] (W36X247 dimensions) and PROFIL-4
+[0.35052, 0.37338, 0.015621, 0.015621, 0, 0, r1 0.017653] (HP14X89). Model is 3D (STYP 0).
+Result (GUI path, real CLI + GUI matchers): Displacements 1104/1104, Reaction 96/96, Beam Force
+2288/2304. All 16 FAILs: section 4 Torsion (elements 41/43/44/45, FORCE-3 and COMBO), KOPRUQ 5.3%
+below MIDAS.
+Back-calculation from MIDAS's own results (FORCE-2/FORCE-3, nodal loads only): A, IH, IB (fillets
+included), AsH, AsB all match KOPRUQ; only J differs. MIDAS J vs candidates:
+  section 4: MIDAS 1.4548661-672e-5; Roark I-section with fillet 1.4548667e-5; KOPRUQ strip 1.3776e-5
+  section 6: MIDAS 1.6694107-110e-6; Roark 1.6694108e-6; KOPRUQ strip 1.3743e-6 (no FAIL only because
+             its members carry almost no torsion)
+  section 5 (r1 = 0): MIDAS 2.5830000e-5 = midline strip; Roark would give 2.5813e-5
+=> MIDAS's DBUSER H torsion constant: r1 > 0 -> Roark's I-section formula (El Darwish & Johnston,
+   K = 2 K1 + K2 + 2 alpha D^4, K1 = b tf^3 [1/3 - 0.21 (tf/b)(1 - tf^4/(12 b^4))], K2 = (h - 2 tf) tw^3/3,
+   alpha = (t/t1)(0.15 + 0.10 r/tf), D = ((tf + r)^2 + tw (r + tw/4)) / (2 r + tf)); r1 = 0 -> midline
+   thin-strip sum. This contradicts the manual sentence "r1 and r2 are not taken into account in Ixx".
+   Verified on two symmetric filleted sections (7 digits); unequal flanges with r1 > 0 not covered.
+Not implemented yet (user asked to test and stop).

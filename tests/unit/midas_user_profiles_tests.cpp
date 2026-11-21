@@ -23,7 +23,10 @@ TEST(MidasUserProfiles, HWithFilletsMatchesStripIntegrationAndMidas) {
   rel(p.area, 0.005425141652942296, "A = 2 b tf + (h-2tf) tw + (4-pi) r^2", 1e-12);
   rel(p.IH, 2.49200101115416e-05, "IH (independent strips)", 1e-7);
   rel(p.IB, 8.892347353940925e-06, "IB (independent strips)", 1e-7);
-  rel(p.J, 2.594346666666667e-07, "J without fillets (MIDAS manual)", 1e-12);
+  // 2026-11-21: model 10 (3D, filleted user H) showed MIDAS's J for r1 > 0 is Roark's filleted
+  // I-section formula, not the fillet-free strip sum (2.594346666666667e-07) this line expected
+  // before -- see midas_user_h_fillet_torsion_tests.cpp. Independent Python value:
+  rel(p.J, 3.136635532436194e-07, "J = Roark filleted I (MIDAS convention for r1 > 0)", 1e-12);
   rel(p.AsH, 0.00128, "AsH = H tw (fillets excluded)", 1e-12);
   rel(p.area, 0.00542514, "A vs MIDAS", 2e-6);
   rel(p.IH, 2.4920e-05, "IH vs MIDAS", 5e-6);

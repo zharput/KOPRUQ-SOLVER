@@ -84,6 +84,21 @@ inline Real roarkTeeTorsion(Real B, Real tf, Real hw, Real tw) {
   const Real D = (tf * tf + tw * tw / 4) / tf;
   return K1 + K2 + alpha * D * D * D * D;
 }
+// Roark's torsion constant of a symmetric I section WITH web-to-flange fillets r (El Darwish &
+// Johnston; Roark's Formulas for Stress and Strain, torsion of an I section): flanges b x tf, web
+// tw over the clear height h - 2 tf:
+//   K1 = b tf^3 [1/3 - 0.21 (tf/b)(1 - tf^4/(12 b^4))],  K2 = (h - 2 tf) tw^3 / 3,
+//   alpha = (t/t1)(0.15 + 0.10 r/tf), t = min(tf, tw), t1 = max(tf, tw),
+//   D = ((tf + r)^2 + tw (r + tw/4)) / (2 r + tf),      J = 2 K1 + K2 + 2 alpha D^4.
+// MIDAS NX's DBUSER H convention when r1 > 0 -- see unequalFlangeISection().
+inline Real roarkIFilletTorsion(Real h, Real b, Real tw, Real tf, Real r) {
+  const Real K1 = b * tf * tf * tf * (Real(1) / 3 - Real(0.21) * (tf / b) * (1 - std::pow(tf / b, 4) / 12));
+  const Real K2 = (h - 2 * tf) * tw * tw * tw / 3;
+  const Real t = std::min(tf, tw), t1 = std::max(tf, tw);
+  const Real alpha = (t / t1) * (Real(0.15) + Real(0.10) * r / tf);
+  const Real D = ((tf + r) * (tf + r) + tw * (r + tw / 4)) / (2 * r + tf);
+  return 2 * K1 + K2 + 2 * alpha * D * D * D * D;
+}
 // Timoshenko shear correction factor for a solid rectangular cross-section: k = 5/6,
 // independent of the H/B aspect ratio (Timoshenko & Goodier, "Theory of Elasticity",
 // S3.1 beam shear). Applies identically to shear along either H or B.
@@ -534,9 +549,16 @@ inline ResolvedSectionProperties tSection(Real H, Real B, Real tw, Real tf) {
 // Fillets (2026-11-20, verification model 20 "PROF-I" [0.16, 0.16, 0.008, 0.013, 0, 0, r1 = 0.015]):
 // r1 is the web-to-flange fillet radius -- four spandrels (one each side of the web, under each
 // flange). MIDAS includes them in A and the bending inertias (back-calculated A 0.00542514 =
-// 2*b*tf + (h-2tf)*tw + (4-pi)*r^2, IH 2.4920e-5 = the strip-integrated 2.491996e-5) but NOT in the
-// torsion constant (MIDAS manual, Section Properties - DB/User: "When the user inputs r1 and r2,
-// the calculation of Ixx does not take into account r1 and r2") nor in AsH (0.001280 = H*tw).
+// 2*b*tf + (h-2tf)*tw + (4-pi)*r^2, IH 2.4920e-5 = the strip-integrated 2.491996e-5; IB confirmed
+// on model 10, 2026-11-21) but NOT in AsH (0.001280 = H*tw) or AsB.
+// Torsion constant (2026-11-21, verification model 10 rebuilt with filleted user H sections):
+// r1 = 0 -> the midline thin-strip sum; r1 > 0 -> Roark's filleted I-section formula
+// (detail::roarkIFilletTorsion). MIDAS back-calculated J: [0.93218, 0.4191, 0.02032, 0.03429,
+// r1 0.02413] 1.4548661-672e-5 vs Roark 1.4548667e-5; [0.35052, 0.37338, 0.015621, 0.015621,
+// r1 0.017653] 1.6694107-110e-6 vs 1.6694108e-6; [0.9, 1.0, 0.03, 0.03, r1 0] 2.5830000e-5 =
+// strip (Roark 2.5813e-5). This contradicts the manual's DB/User sentence "When the user inputs r1
+// and r2, the calculation of Ixx does not take into account r1 and r2" -- MIDAS's results win.
+// Roark's formula is for a symmetric I: unequal flanges with r1 > 0 are rejected (no data).
 // One spandrel, measured from its flange-face edge (width w(y) = r - sqrt(r^2 - (r-y)^2), 0<=y<=r):
 //   A_f = r^2 (1 - pi/4),  S_f = int y dA = r^3 (5/6 - pi/4),  I_f = int y^2 dA = r^4 (1 - 5 pi/16)
 // (the same three numbers about the web face, by the spandrel's symmetry). The same model shows that
@@ -551,6 +573,8 @@ inline ResolvedSectionProperties unequalFlangeISection(Real H, Real B1, Real tw,
   if (!(tw <= B1) || !(tw <= B2)) throw std::invalid_argument("H section web thickness tw must not exceed either flange width");
   if (r1 > 0 && (!(2 * r1 <= hw) || !(tw + 2 * r1 <= std::min(B1, B2))))
     throw std::invalid_argument("H section fillet radius r1 does not fit between the flanges / within the flange width");
+  if (r1 > 0 && (B1 != B2 || tf1 != tf2))
+    throw std::invalid_argument("H section with fillets r1 > 0 and unequal flanges is not supported (MIDAS's torsion constant verified only for symmetric filleted sections)");
   ResolvedSectionProperties p;
   const Real A1 = B1 * tf1, Aw = tw * hw, A2 = B2 * tf2;
   const Real Af = r1 * r1 * (1 - Real(kPi) / 4), Sf = r1 * r1 * r1 * (Real(5) / 6 - Real(kPi) / 4),
@@ -569,7 +593,8 @@ inline ResolvedSectionProperties unequalFlangeISection(Real H, Real B1, Real tw,
   p.IB = tf1 * B1 * B1 * B1 / 12 + tf2 * B2 * B2 * B2 / 12 + hw * tw * tw * tw / 12
        + 4 * ((tw / 2) * (tw / 2) * Af + tw * Sf + If);
   p.topFiber = ybar;
-  p.J = (B1 * tf1 * tf1 * tf1 + B2 * tf2 * tf2 * tf2 + (H - (tf1 + tf2) / 2) * tw * tw * tw) / 3; // fillets excluded (MIDAS manual)
+  p.J = r1 > 0 ? detail::roarkIFilletTorsion(H, B1, tw, tf1, r1)                                       // MIDAS, r1 > 0
+               : (B1 * tf1 * tf1 * tf1 + B2 * tf2 * tf2 * tf2 + (H - (tf1 + tf2) / 2) * tw * tw * tw) / 3; // MIDAS, r1 = 0
   p.AsH = tw * H;
   p.AsB = detail::kRectangularShearFactor * (A1 + A2);
   return p;

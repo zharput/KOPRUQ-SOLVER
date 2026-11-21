@@ -2761,3 +2761,19 @@ included), AsH, AsB all match KOPRUQ; only J differs. MIDAS J vs candidates:
    thin-strip sum. This contradicts the manual sentence "r1 and r2 are not taken into account in Ixx".
    Verified on two symmetric filleted sections (7 digits); unequal flanges with r1 > 0 not covered.
 Not implemented yet (user asked to test and stop).
+
+## Fix: torsion constant of filleted user H sections (Roark) -- model 10 100% (2026-11-21)
+
+User-approved fix for the model 10 finding above. MidasSectionLibrary.hpp: new
+detail::roarkIFilletTorsion (Roark / El Darwish & Johnston filleted I section); unequalFlangeISection
+uses it for J when r1 > 0 (r1 = 0 keeps the midline strip sum); r1 > 0 with unequal flanges is now
+rejected (MIDAS's J verified for symmetric filleted sections only). Comment updated: the manual's
+"r1/r2 not in Ixx" sentence is contradicted by MIDAS's own results.
+Tests: new tests/unit/midas_user_h_fillet_torsion_tests.cpp (4: both model-10 sections vs Roark
+literals at 1e-12 and MIDAS's back-calculated J at 1e-6; r1 = 0 strip sum; unequal + fillet
+rejected). Existing MidasUserProfiles.HWithFilletsMatchesStripIntegrationAndMidas expected the
+fillet-free strip J (2.5943e-7) for model 20's filleted H; updated to the Roark value 3.1366e-7
+(documented in the test; model 20 is planar so its results do not depend on J).
+Results (GUI path): model 10 Displacements 1104/1104, Reaction 96/96, Beam Force 2288 -> 2304/2304.
+Every other model unchanged (model 20 still 100% incl. truss 78/78).
+Regression: Debug 328/328, Release 328/328, gui-release 361/361.

@@ -327,7 +327,14 @@ inline ResolvedSectionProperties solidRectangle(Real H, Real B) {
   p.area = H * B;
   p.IH = B * H * H * H / 12;   // resists bending from a load along H
   p.IB = H * B * B * B / 12;   // resists bending from a load along B
-  p.J = detail::solidRectangleTorsion(std::max(H, B), std::min(H, B));
+  // Torsion: MIDAS NX's DBUSER SB convention -- Roark's rectangle formula, EXCEPT for an exactly
+  // square section, where MIDAS uses the classical closed form J = 2.25 a^4 (a = half side,
+  // Timoshenko), i.e. 0.140625 * side^4 (Roark would give 0.140833 * side^4). Evidence: model 19,
+  // SB 0.5 x 0.5, MIDAS J back-calculated per element 0.0087890580 .. 0.0087890635 vs
+  // 2.25 * 0.25^4 = 0.0087890625 (2026-11-21); non-square SB (model 21, 1.0 x 0.4) and the
+  // rectangle limit of SOCT (1.3 x 2.5) match Roark. How MIDAS treats a NEARLY square section is
+  // unknown; only exact equality switches formula.
+  p.J = (H == B) ? Real(2.25) * std::pow(H / 2, 4) : detail::solidRectangleTorsion(std::max(H, B), std::min(H, B));
   p.AsH = p.AsB = detail::kRectangularShearFactor * p.area;
   return p;
 }

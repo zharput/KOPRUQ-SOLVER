@@ -2777,3 +2777,24 @@ fillet-free strip J (2.5943e-7) for model 20's filleted H; updated to the Roark 
 Results (GUI path): model 10 Displacements 1104/1104, Reaction 96/96, Beam Force 2288 -> 2304/2304.
 Every other model unchanged (model 20 still 100% incl. truss 78/78).
 Regression: Debug 328/328, Release 328/328, gui-release 361/361.
+
+## Model 19: last FAIL traced and fixed -- square SB torsion constant (2026-11-21)
+
+Model 19 (grid of SB 0.5 x 0.5 beams, nodal springs, two elastic links; files unchanged since
+18.11) had 1 FAIL: FORCE, node 41 RY 0.000540 vs MIDAS 0.000556. The deviation was systematic
+(RY differed by about 1.5e-5 at every node, RX at node 49 by 41% of a tiny value) and only crossed
+the tolerance where RY is near zero. The affected rotations are the twist of the Y-direction beams.
+Back-calculation of MIDAS's own torsion stiffness (T L / (G dtheta); member loads are vertical and
+produce no torsional fixed-end action): J = 0.0087890580 .. 0.0087890635 for the SB 0.5 x 0.5,
+= 2.25 a^4 with a = half side = 0.0087890625 (classical square formula, 0.140625 side^4); KOPRUQ used
+Roark's rectangle formula 0.0088021 (0.140833 side^4). Non-square SB (model 21, 1.0 x 0.4) and the
+rectangle limit of SOCT (1.3 x 2.5) match Roark in MIDAS. Diagnostic override (only J) -> model 19
+100% (RY max rel 2.0e-5).
+Fix: solidRectangle() uses 2.25 (side/2)^4 for an exactly square section, Roark otherwise (only the
+SB shape; STRK/SOCT keep their Roark-based conventions). New tests:
+tests/unit/midas_sb_square_torsion_tests.cpp (2). The existing square test (5% band around
+0.1406 a^4) still holds unchanged.
+Results: model 19 Displacements 293 -> 294/294, Reaction 84/84, Beam Force 552/552. Every other static
+model unchanged; eigen: model 14 max rel 3.7e-5 -> 3.5e-5, model 15 (square SB 1.0 and 0.6)
+1.27e-4 -> 3.5e-5 (all 100% before and after); spectrum 16/17 unchanged.
+Regression: Debug 330/330, Release 330/330, gui-release 363/363.

@@ -2909,3 +2909,24 @@ Diagnostic solves (not production): h = 0.1 values -> model 23 100%, model 22 st
 elements 22/23 Moment-y 7.509 vs 7.786, zero crossing); MIDAS's own values -> models 22 and 23 100%
 in every category. Conclusion: the remaining 1 (model 23) + 4 (model 22) zero-crossing rows can only be
 removed by MIDAS's own section values; KOPRUQ keeps its converged FE values.
+
+## Standard section mesh size h = 0.01 m for meshed section properties (2026-11-21)
+
+User decision: J, Asy, Asz of PSC sections (and of any other section whose properties need a section
+mesh) are computed with the fixed standard mesh size h = 0.01 m. SectionFE.hpp:
+sections::kStandardSectionMeshSize = 0.01; psc1CellSection uses it (previously
+h = max(tmin/16, sqrt(A/80000)), 0.0156 m for the model 22/23 box). Only PSC 1CEL uses the section FE
+at present.
+Box section (models 22/23) at h = 0.01: 123043 nodes, about 1.4 s per solve; J 27.84919, Asy 5.42152,
+Asz 3.65344 (h = 0.0156: 27.85132 / 5.42194 / 3.65433; MIDAS 27.92024 / 5.43495 / 3.68140).
+Re-test (GUI path):
+- Model 22: Displacements 1422/1422, Reaction 216/216, Beam Force 2804/2808 (TU Moment-y zero
+  crossings: elements 13/14 121.98 vs 127.93, 22/23 5.87 vs 7.79 -- same rows as before).
+- Model 23: Displacements 1080/1080, Reaction 756/756, Beam Force 1835/1836 (element 92 UNIFORM J-end
+  Moment-y 312.26 vs 319.87), Reaction(Local) 108/108, Elastic Link 216/216.
+- Every other model unchanged.
+Counts are the same as with the previous mesh rule; the zero-crossing rows moved marginally further
+from MIDAS (the values are closer to the h -> 0 limit, MIDAS's are mesh-dependent, see the J research
+above). No test changed.
+Regression: Debug 353/353, Release 353/353, gui-release 388/388. Debug suite time 21 s -> 90 s (the
+three MidasPsc1Cell tests take up to 63 s each unoptimised with 123k nodes); Release 7.4 s.

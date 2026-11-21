@@ -727,10 +727,11 @@ inline ResolvedSectionProperties resolveDbUserSection(const std::string& shape, 
 // J and shear areas: MIDAS computes them numerically on a section mesh (its dialog's "Mesh Size for
 // Stiff. Calc.", and its values sit between a coarse and a converged FE solution -- 2026-11-20).
 // Here: the 2D FE section analysis of SectionFE.hpp (warping-function torsion, Pilkey shear
-// functions with nu = 0 -- section properties in MIDAS are material independent), on a mesh fine
-// enough to be converged (h = min wall thickness / 16, at most ~80k nodes). Being converged, the
-// values sit slightly BELOW MIDAS's mesh-dependent ones: model 22 box J 27.85 vs 27.92 (-0.25%),
-// Asy 5.422 vs 5.435 (-0.25%), Asz 3.654 vs 3.681 (-0.75%).
+// functions with nu = 0 -- section properties in MIDAS are material independent) with the project
+// standard mesh size h = sections::kStandardSectionMeshSize = 0.01 m (user decision 2026-11-21;
+// before: h = max(min wall thickness / 16, sqrt(A / 80000))). The values sit slightly BELOW MIDAS's
+// mesh-dependent ones (MIDAS's automatic section mesh is not documented or exported): model 22/23
+// box J 27.849 vs 27.920 (-0.26%), Asy 5.4215 vs 5.4350 (-0.25%), Asz 3.6534 vs 3.6814 (-0.76%).
 struct Psc1CellDims { Real HO1, HO2, HO3, BO1, BO2, BO3, HI1, HI2, HI3, HI4, HI5, BI1, BI3; };
 
 inline ResolvedSectionProperties psc1CellSection(const Psc1CellDims& d) {
@@ -764,8 +765,8 @@ inline ResolvedSectionProperties psc1CellSection(const Psc1CellDims& d) {
   Real tmin = std::min({d.HO1, d.HI1, d.HI5});
   {
     // Web thickness: horizontal distance between the outer and inner web lines at the inner web's
-    // top and bottom ends (the thinnest point of a straight web is at one of its ends). Only sets
-    // the mesh size; the wall geometry itself is validated by the inside-test above.
+    // top and bottom ends (the thinnest point of a straight web is at one of its ends). Used to
+    // reject a wall of non-positive thickness; the cell position is validated by the inside-test above.
     auto outerY = [&](Real z) { // outer web face, z clamped to [-H, -(HO1+HO2)]
       const Real z0 = -H, z1 = -(d.HO1 + d.HO2);
       z = std::clamp(z, z0, z1);
@@ -774,8 +775,7 @@ inline ResolvedSectionProperties psc1CellSection(const Psc1CellDims& d) {
     tmin = std::min({tmin, outerY(zWebTop) - d.BI1, outerY(zWebBot) - d.BI3});
   }
   if (!(tmin > 0)) throw std::invalid_argument("PSC 1CEL: a wall has non-positive thickness");
-  const Real h = std::max(tmin / 16, std::sqrt(geo.area / 80000));
-  const auto fe = sections::analyzeSectionFE({outer, hole}, h, 0.0);
+  const auto fe = sections::analyzeSectionFE({outer, hole}, sections::kStandardSectionMeshSize, 0.0);
   p.J = fe.J;
   p.AsH = fe.Asz; // shear along H (vertical)
   p.AsB = fe.Asy; // shear along B (horizontal)

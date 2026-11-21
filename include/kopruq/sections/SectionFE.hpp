@@ -309,6 +309,11 @@ inline SectionMesh meshPolygonSection(const std::vector<Contour>& contours, Real
 // Torsion constant and shear areas of the polygonal section `contours` (contours[0] outer, rest
 // holes). h: target element size; nu: Poisson's ratio in the shear functions (nu = 0 gives the
 // classical energy-consistent Timoshenko shear areas, e.g. exactly 5/6 A for a rectangle).
+// Project standard mesh size for section properties computed on a section mesh (J, Asy, Asz of PSC
+// and any other meshed section): h = 0.01 m (user decision, 2026-11-21). Model 22/23 box girder:
+// 123k nodes, about 1.5 s; J/Asy/Asz within 0.01% of the h -> 0 limit.
+inline constexpr Real kStandardSectionMeshSize = 0.01;
+
 inline SectionFEResult analyzeSectionFE(const std::vector<Contour>& contours, Real h, Real nu = 0) {
   const SectionMesh mesh = meshPolygonSection(contours, h);
   const int n = static_cast<int>(mesh.nodes.size());

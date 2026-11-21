@@ -2857,3 +2857,33 @@ New tests (19 core + 2 GUI-only): rigid_link_dof_mask_tests (6), node_local_axes
 midas_bmld_extended_tests (5), result_matcher_links_local_tests (2, GUI build).
 Regression: Debug 349/349, Release 349/349, gui-release 384/384 (before: 330 / 330 / 363; no test
 removed or changed).
+
+## Model 23 open findings resolved: Timoshenko-consistent member-load vectors; PSC J explained (2026-11-21)
+
+User decision: resolve the open findings, then complete Task 1 (Timoshenko load vectors).
+
+Finding 1 -- fixed (production). Loads.hpp: consistent member-load vectors for Timoshenko members use
+the interdependent interpolation shape functions (deflection H1..H4 for forces, rotation G1..G4 for
+moments; Phi = 12 E I/(G As L^2) per bending plane, computed in assembleLoadCase exactly as
+Beam3D::localStiffness does). They reduce to the cubic Hermite functions at Phi = 0. Applies to
+distributed forces/moments and concentrated forces/moments. A missing material/section is now an error
+there (it was already one in assembly).
+New tests: tests/unit/timoshenko_member_load_tests.cpp (4), hand-derived Timoshenko solutions with
+Phi = 1.44: cantilever under uniform distributed moment (tip v = m L^3/3EI, no shear term), cantilever
+under an off-centre point load, fixed-fixed beam under uniform moment (|V| = m/(1+Phi),
+|M| = m L Phi/(2(1+Phi))), load-vector invariants. No existing test changed.
+Results: model 23 Reaction 748 -> 756/756, Beam Force 1803 -> 1835/1836; every other model unchanged
+in counts and in values up to round-off (max |dF| <= 5e-10 kN: they carry only full-length uniform
+loads or Euler-Bernoulli members, for which the two vectors coincide).
+
+Finding 2 -- explained, not adjustable without MIDAS data. Model 23's PSC 1CEL section is the model-22
+section; MIDAS's own Section Properties table gives J = 27.92024 (KOPRUQ converged FE 27.85132,
+-0.25%). MIDAS computes it on its automatic section mesh (export: USE_USER_DEF_MESHSIZE false,
+USE_USER_INTPUT_STIFF false); the saved manual documents only the user mesh-size option, not the
+automatic rule, and MIDAS's mesh generator differs from SectionFE's, so the value cannot be reproduced
+without curve fitting. Diagnostic only (not production): with MIDAS's published J, model 23 is 100% in
+every category (Displacements 1080, Reaction 756, Beam Force 1836, Reaction(Local) 108, Elastic Link
+216). The single remaining FAIL (element 92 UNIFORM J-end Moment-y, a zero crossing) is therefore fully
+explained by J. Exact path, needs user data: import MIDAS's user-input stiffness
+(USE_USER_INTPUT_STIFF) once a sample export with it is available (JSON field names not yet known).
+Regression: Debug 353/353, Release 353/353, gui-release 388/388 (before: 349 / 349 / 384).

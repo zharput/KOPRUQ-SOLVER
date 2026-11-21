@@ -74,7 +74,7 @@ static AppliedLoads assembleLoadCase(const Model&m,const DofManager&dm,const Loa
   std::unordered_map<Id,const Beam3DConnection*> beams; beams.reserve(m.beams.size());
   for(const auto&e:m.beams)beams[e.id]=&e;
   auto matIdx=detail::index_by_id(m.materials); auto secIdx=detail::index_by_id(m.sections);
-  struct Frame{const Beam3DConnection*e;Beam3DGeometry g;Beam3DAxes ax;Eigen::Matrix3d R;Real L;bool released;Beam3DMatrix kl;};
+  struct Frame{const Beam3DConnection*e;Beam3DGeometry g;Beam3DAxes ax;Eigen::Matrix3d R;Real L;bool released;Beam3DMatrix kl;Real phiy{0},phiz{0};};
   auto frameOf=[&](Id element,const char*what){
     auto it=beams.find(element);
     if(it==beams.end())throw AssemblyError(AssemblyErrorCode::InvalidLoad,std::string(what)+" references missing element");
@@ -85,6 +85,14 @@ static AppliedLoads assembleLoadCase(const Model&m,const DofManager&dm,const Loa
     f.ax=Beam3D::axes(f.g);
     f.R.row(0)=f.ax.x.transpose(); f.R.row(1)=f.ax.y.transpose(); f.R.row(2)=f.ax.z.transpose();
     f.L=(f.g.node2-f.g.node1).norm();
+    {
+      // Timoshenko shear parameters, exactly as Beam3D::localStiffness computes them, for the member-load
+      // shape functions (Loads.hpp); 0 when the shear area is 0 (Euler-Bernoulli).
+      const Material*mat=detail::find_by_id(matIdx,e.material); const Section*sec=detail::find_by_id(secIdx,e.section);
+      if(!mat||!sec)throw AssemblyError(AssemblyErrorCode::MissingNode,"element property reference missing");
+      const Real E=mat->elastic_modulus,G=E/(2*(1+mat->poisson_ratio));
+      f.phiy=sec->Asy>0?12*E*sec->Iz/(G*sec->Asy*f.L*f.L):0; f.phiz=sec->Asz>0?12*E*sec->Iy/(G*sec->Asz*f.L*f.L):0;
+    }
     if(f.released){
       // Released members pass their loads to the nodes through the condensed load vector.
       const Material*mat=detail::find_by_id(matIdx,e.material); const Section*sec=detail::find_by_id(secIdx,e.section);
@@ -120,14 +128,14 @@ static AppliedLoads assembleLoadCase(const Model&m,const DofManager&dm,const Loa
       Real ratio=std::sqrt(std::max(Real(0),1-c*c));
       trueLength.w1*=ratio; trueLength.w2*=ratio; trueLength.projected=false;
     }
-    accumulate(f,detail::memberLoadEffect(trueLength,f.R,f.L));
+    accumulate(f,detail::memberLoadEffect(trueLength,f.R,f.L,f.phiy,f.phiz));
   }
   for(const auto&ld:lc.point){
     if(ld.direction<0||ld.direction>2)throw AssemblyError(AssemblyErrorCode::InvalidLoad,"member point load direction must be 0, 1 or 2");
     if(!std::isfinite(ld.value)||!std::isfinite(ld.position)||ld.position<0||ld.position>1)
       throw AssemblyError(AssemblyErrorCode::InvalidLoad,"member point load value or position is invalid");
     auto f=frameOf(ld.element,"member point load");
-    accumulate(f,detail::pointLoadEffect(ld,f.R,f.L));
+    accumulate(f,detail::pointLoadEffect(ld,f.R,f.L,f.phiy,f.phiz));
   }
   for(const auto&ld:lc.thermal){
     auto f=frameOf(ld.element,"thermal load");

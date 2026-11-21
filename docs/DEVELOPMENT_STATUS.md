@@ -2887,3 +2887,25 @@ every category (Displacements 1080, Reaction 756, Beam Force 1836, Reaction(Loca
 explained by J. Exact path, needs user data: import MIDAS's user-input stiffness
 (USE_USER_INTPUT_STIFF) once a sample export with it is available (JSON field names not yet known).
 Regression: Debug 353/353, Release 353/353, gui-release 388/388 (before: 349 / 349 / 384).
+
+## PSC 1CEL torsion constant: attempt to compute MIDAS's J (2026-11-21, research only, no production change)
+
+User request: no manually entered values; compute J so that it matches MIDAS. New user file
+verification/models/23 Box Girder/Section_prop.xlsx (MIDAS section table); the model JSON is unchanged.
+MIDAS's values for the BOX section, full precision as stored in its binary model file (.mcb):
+A 10.58, Asy 5.434952376349154, Asz 3.6814017605396754, Ixx 27.92024425925223, Iyy 13.672093412623411,
+Izz 68.70453333333342. KOPRUQ: A, Iyy, Izz identical (exact polygon integration); FE quantities
+J 27.85132 (-0.25%), Asy 5.42194 (-0.24%), Asz 3.65433 (-0.74%) -- all three below MIDAS, as expected
+when MIDAS evaluates them on a coarser displacement-based FE mesh.
+Sources checked for MIDAS's discretization: export JSON (USE_USER_DEF_MESHSIZE false,
+USE_USER_INTPUT_STIFF false), .mct (mesh size empty), .mcb section record (computed values and
+perimeters only), .spa (no section data), saved manual (only the user mesh-size option is described).
+The automatic mesh rule is not available.
+SectionFE mesh-size scan (h: J / Asy / Asz): 0.2: 28.097/5.4542/3.7113; 0.125: 27.971/5.4379/3.6843;
+0.1: 27.931/5.4339/3.6774; 0.0625: 27.881/5.4264/3.6631; 0.0156: 27.852/5.4219/3.6543. No single h
+reproduces the three MIDAS values together (J needs h ~0.098, Asz ~0.11): MIDAS's mesh/element type
+differs from SectionFE's, so choosing an h would be curve fitting.
+Diagnostic solves (not production): h = 0.1 values -> model 23 100%, model 22 still 2 FAIL (TU,
+elements 22/23 Moment-y 7.509 vs 7.786, zero crossing); MIDAS's own values -> models 22 and 23 100%
+in every category. Conclusion: the remaining 1 (model 23) + 4 (model 22) zero-crossing rows can only be
+removed by MIDAS's own section values; KOPRUQ keeps its converged FE values.

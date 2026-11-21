@@ -2930,3 +2930,10 @@ from MIDAS (the values are closer to the h -> 0 limit, MIDAS's are mesh-dependen
 above). No test changed.
 Regression: Debug 353/353, Release 353/353, gui-release 388/388. Debug suite time 21 s -> 90 s (the
 three MidasPsc1Cell tests take up to 63 s each unoptimised with 123k nodes); Release 7.4 s.
+
+## Section mesh rule reverted to h = max(tmin/16, sqrt(A/80000)) (2026-11-21)
+
+User decision after the h = 0.01 re-test: results barely changed (same counts in models 22/23) while
+analysis and Debug test times grew (Debug suite 21 s -> 90 s), so the previous rule is restored
+(code of commit cdbcf51 reverted; kStandardSectionMeshSize removed). Box section: h = 0.015625,
+J 27.85132, Asy 5.42194, Asz 3.65433 (values and model 22/23 results as before cdbcf51).

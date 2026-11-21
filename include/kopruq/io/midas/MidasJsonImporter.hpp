@@ -219,7 +219,7 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
           const auto C = detail::toRealVector(sectI.at("vSIZE_PSC_C")), D = detail::toRealVector(sectI.at("vSIZE_PSC_D"));
           if (A.size() < 6 || B.size() < 6 || C.size() < 10 || D.size() < 5) throw std::invalid_argument("PSC 1CEL: vSIZE_PSC_A/B/C/D arrays are too short");
           p = psc1CellSection(Psc1CellDims{A[0], A[1], A[4], B[0], B[3], B[5], C[0], C[1], C[4], C[6], C[9], D[0], D[4]});
-          out.report.assumptions.push_back("section " + it.key() + ": PSC 1CEL J and shear areas from KOPRUQ's 2D FE section analysis (SectionFE.hpp) with the standard mesh size h = 0.01 m; MIDAS evaluates them on its own (undocumented) section mesh, so they can differ from MIDAS's by a fraction of a percent");
+          out.report.assumptions.push_back("section " + it.key() + ": PSC 1CEL J and shear areas from KOPRUQ's converged 2D FE section analysis (SectionFE.hpp); MIDAS evaluates them on its own coarser section mesh, so they can differ from MIDAS's by a fraction of a percent");
         } else {
           // Catalog / database profiles (DB_NAME: AISC, EN/UNI, ...) are not supported -- removed
           // 2026-11-20 by user decision (precast concrete bridges first; steel members are entered

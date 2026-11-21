@@ -34,8 +34,8 @@
 // GTMP items other than TYPE 1 (beam), or without a usable gradient depth
 // (GTMP beam gradients themselves ARE imported since 2026-11-20, sign
 // convention proven from MIDAS's manual and its own model-22 results, see
-// the GTMP handling below); PSC sections other than a symmetric 1CEL with
-// every joint off; STYP values other than 0 (3D) and 1 (X-Z plane);
+// the GTMP handling below); PSC sections other than a symmetric 1CEL with every joint off or a
+// symmetric PSCI (joints JL1/JL4 only, H1 = 0); STYP values other than 0 (3D) and 1 (X-Z plane);
 // section offsets other than OFFSET_PT "CC"/"CT" without user-defined parts
 // ("CT" is imported as a rigid node-to-centroid member-end offset);
 // any BODF whose direction is not exactly global -Z; any BMLD
@@ -208,18 +208,28 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
         if (sectType == "PSC") {
           // PSC: only the single-cell symmetric box with every joint off (MidasSectionLibrary.hpp,
           // psc1CellSection); anything else is rejected, not approximated.
-          if (shape != "1CEL") throw std::invalid_argument("unsupported PSC shape '" + shape + "' (only 1CEL is implemented)");
-          if (!before.value("USE_SYMMETRIC", true)) throw std::invalid_argument("PSC 1CEL with USE_SYMMETRIC=false is not supported");
+          if (shape != "1CEL" && shape != "PSCI") throw std::invalid_argument("unsupported PSC shape '" + shape + "' (only 1CEL and PSCI are implemented)");
+          if (!before.value("USE_SYMMETRIC", true)) throw std::invalid_argument("PSC " + shape + " with USE_SYMMETRIC=false is not supported");
           if (before.value("USE_USER_INTPUT_STIFF", false)) throw std::invalid_argument("PSC with user-input stiffness (USE_USER_INTPUT_STIFF) is not supported");
           if (before.value("USE_SMALL_HOLE", false)) throw std::invalid_argument("PSC with USE_SMALL_HOLE is not supported");
-          if (before.contains("JOINT"))
-            for (const auto& j : before.at("JOINT"))
-              if (j.get<bool>()) throw std::invalid_argument("PSC 1CEL with a joint (JO1..JO3/JI1..JI5) switched on is not supported");
+          std::vector<bool> joints;
+          if (before.contains("JOINT")) for (const auto& j : before.at("JOINT")) joints.push_back(j.get<bool>());
           const auto A = detail::toRealVector(sectI.at("vSIZE_PSC_A")), B = detail::toRealVector(sectI.at("vSIZE_PSC_B"));
           const auto C = detail::toRealVector(sectI.at("vSIZE_PSC_C")), D = detail::toRealVector(sectI.at("vSIZE_PSC_D"));
-          if (A.size() < 6 || B.size() < 6 || C.size() < 10 || D.size() < 5) throw std::invalid_argument("PSC 1CEL: vSIZE_PSC_A/B/C/D arrays are too short");
-          p = psc1CellSection(Psc1CellDims{A[0], A[1], A[4], B[0], B[3], B[5], C[0], C[1], C[4], C[6], C[9], D[0], D[4]});
-          out.report.assumptions.push_back("section " + it.key() + ": PSC 1CEL J and shear areas from KOPRUQ's converged 2D FE section analysis (SectionFE.hpp); MIDAS evaluates them on its own coarser section mesh, so they can differ from MIDAS's by a fraction of a percent");
+          if (shape == "1CEL") {
+            for (bool j : joints) if (j) throw std::invalid_argument("PSC 1CEL with a joint (JO1..JO3/JI1..JI5) switched on is not supported");
+            if (A.size() < 6 || B.size() < 6 || C.size() < 10 || D.size() < 5) throw std::invalid_argument("PSC 1CEL: vSIZE_PSC_A/B/C/D arrays are too short");
+            p = psc1CellSection(Psc1CellDims{A[0], A[1], A[4], B[0], B[3], B[5], C[0], C[1], C[4], C[6], C[9], D[0], D[4]});
+          } else { // PSCI (MidasSectionLibrary.hpp, pscISection): symmetric; joints JL1/JL4 (= JR1/JR4) supported
+            if (A.size() < 10 || B.size() < 7) throw std::invalid_argument("PSC PSCI: vSIZE_PSC_A/B arrays are too short (10 / 7 values)");
+            if (joints.size() != 9) throw std::invalid_argument("PSC PSCI: JOINT must have 9 flags [J1, JL1..JL4, JR1..JR4]");
+            if (joints[0] || joints[2] || joints[3] || joints[6] || joints[7])
+              throw std::invalid_argument("PSC PSCI with joint J1, JL2/JR2 or JL3/JR3 switched on is not supported (geometry not verified)");
+            if (joints[1] != joints[5] || joints[4] != joints[8]) throw std::invalid_argument("PSC PSCI: symmetric section with different left/right joints");
+            if (A[0] != 0) throw std::invalid_argument("PSC PSCI with H1 != 0 is not supported (meaning not verified)");
+            p = pscISection(PscIDims{A[1], A[2], A[3], A[5], A[6], A[7], A[9], B[0], B[1], B[2], B[4], B[5], joints[1], joints[4]});
+          }
+          out.report.assumptions.push_back("section " + it.key() + ": PSC " + shape + " J and shear areas from KOPRUQ's converged 2D FE section analysis (SectionFE.hpp); MIDAS evaluates them on its own coarser section mesh, so they can differ from MIDAS's by a fraction of a percent");
         } else {
           // Catalog / database profiles (DB_NAME: AISC, EN/UNI, ...) are not supported -- removed
           // 2026-11-20 by user decision (precast concrete bridges first; steel members are entered
@@ -263,7 +273,7 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
         const Real Asy = useShear ? p.AsB : Real(0);
         const Real Asz = useShear ? p.AsH : Real(0);
         out.input.model.sections.push_back(Section{id, p.area, /*Iy=*/p.IH, /*Iz=*/p.IB, p.J, Asy, Asz});
-        if (useShear)
+        if (useShear && sectType != "PSC") // PSC shear areas come from the section FE (reported above)
           out.report.assumptions.push_back("section " + it.key() + ": USE_SHEAR_DEFORM is set in the source; shear areas computed from the shape's classical Timoshenko shear correction factor (see MidasSectionLibrary.hpp), not read from MIDAS directly (MIDAS does not export an effective shear area for a DBUSER section)");
       } catch (const std::exception& e) {
         out.report.rejected.push_back("section " + it.key() + ": " + e.what());

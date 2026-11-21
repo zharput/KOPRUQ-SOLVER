@@ -2937,3 +2937,24 @@ User decision after the h = 0.01 re-test: results barely changed (same counts in
 analysis and Debug test times grew (Debug suite 21 s -> 90 s), so the previous rule is restored
 (code of commit cdbcf51 reverted; kStandardSectionMeshSize removed). Box section: h = 0.015625,
 J 27.85132, Asy 5.42194, Asz 3.65433 (values and model 22/23 results as before cdbcf51).
+
+## Model 24 (precast girder, PSC-I): PSCI section implemented -- model 24 100% (2026-11-21)
+
+Model 24: two PSC sections of shape PSCI (GIRDER-1, joints off; GIRDER-2, joints JL1/JL4 = JR1/JR4
+on), OFFSET_PT CT, STYP=1, 2 elastic links, cases FORCE / POINT. The only gap was the PSCI shape.
+Implemented: MidasSectionLibrary pscISection (PscIDims) from the manual's PSC-I dialog and PSC Viewer
+(saved page): A = [H1, HL1, HL2, HL2-1, HL2-2, HL3, HL4, HL4-1, HL4-2, HL5], B = [BL1, BL2, BL2-1,
+BL2-2, BL4, BL4-1, BL4-2], JOINT = [J1, JL1..JL4, JR1..JR4]. The diagram leaves open whether BL2-1/BL4-1
+are measured from the flange edge or the centre line; MIDAS's own section table decided it: with the
+edge reading GIRDER-2 gives A 1.513, Iyy 1.28533, Izz 0.17741, centroid 1.17922 below the top, outer
+perimeter 9.89681 (MIDAS 1.513 / 1.2853 / 0.1774 / 1.1792 / 9.8968); the centre reading gives
+A 1.293. GIRDER-1 exact as well. J and shear areas: SectionFE with the PSC mesh rule; vs MIDAS (full
+precision from its model file): J -0.17% / -0.16%, Asy -0.08% / -0.04%, Asz -0.09% / -0.07% (same
+direction as the box: MIDAS's coarser mesh). Rejected (not verified): H1 != 0, joints J1/JL2/JL3,
+unsymmetric or left/right-different joints. Importer: the "classical shear correction factor" note is
+no longer printed for PSC sections (their shear areas come from the section FE).
+Results (GUI path): Displacements 420/420, Reaction 60/60, Beam Force 768/768 (no Elastic Link
+export in the model folder). Every other model unchanged.
+New tests: tests/unit/midas_psc_i_tests.cpp (5): both girders' geometry vs exact rational integration
+and MIDAS, mesh-dependent properties within 0.3% of MIDAS, invalid joints, importer mapping/rejections.
+Regression: Debug 358/358 (28.8 s), Release 358/358, gui-release 393/393.

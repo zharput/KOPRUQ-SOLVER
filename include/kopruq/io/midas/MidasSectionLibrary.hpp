@@ -785,4 +785,73 @@ inline ResolvedSectionProperties psc1CellSection(const Psc1CellDims& d) {
   return p;
 }
 
+// MIDAS NX PSC "PSCI" (PSC-I precast I girder), symmetric, 2026-11-21 (verification model 24).
+// Parameters (MIDAS manual "Section Properties - PSC", PSC-I dialog and PSC Viewer; saved page):
+//   vSIZE_PSC_A = [H1, HL1, HL2, HL2-1, HL2-2, HL3, HL4, HL4-1, HL4-2, HL5]
+//   vSIZE_PSC_B = [BL1, BL2, BL2-1, BL2-2, BL4, BL4-1, BL4-2]          (C/D: the right side)
+//   JOINT = [J1, JL1, JL2, JL3, JL4, JR1, JR2, JR3, JR4]
+// Geometry (half section, centre line y = 0, top z = 0; H = HL1 + HL2 + HL3 + HL4 + HL5):
+//   top flange half width BL2, edge thickness HL1; flange underside straight to the web top at
+//   (BL1, HL1 + HL2) -- through the joint JL1 when on, at BL2-1 inward FROM THE FLANGE EDGE and
+//   HL2-1 below the bottom of HL1; web half thickness BL1 down to depth HL1 + HL2 + HL3; bottom haunch
+//   straight to the bottom flange edge (BL4, H - HL5) -- through the joint JL4 when on, at BL4-1 inward
+//   from the bottom flange edge and HL4-1 above the top of HL5; bottom flange edge thickness HL5.
+// The edge-measured reading of BL2-1/BL4-1 was decided by MIDAS's own section table (model 24,
+// GIRDER-2 with JL1/JL4 on): A 1.513, Iyy 1.28533, Izz 0.17741, centroid 1.17922 below the top,
+// outer perimeter 9.89681 -- all exact; the centre-line reading gives A 1.293. GIRDER-1 (joints off):
+// A 0.62, Iyy 0.20615, Izz 0.02297, 0.84731, perimeter 5.94573 -- exact.
+// Not verified, rejected by the importer: H1 != 0, joints J1/JL2/JL3, unsymmetric sections.
+// J and shear areas: SectionFE as for PSC 1CEL (same mesh rule).
+struct PscIDims { Real HL1, HL2, HL21, HL3, HL4, HL41, HL5, BL1, BL2, BL21, BL4, BL41; bool JL1{false}, JL4{false}; };
+
+inline ResolvedSectionProperties pscISection(const PscIDims& d) {
+  if (!(d.HL1 > 0) || !(d.HL2 >= 0) || !(d.HL3 > 0) || !(d.HL4 >= 0) || !(d.HL5 > 0))
+    throw std::invalid_argument("PSC-I: heights must be HL1, HL3, HL5 > 0 and HL2, HL4 >= 0");
+  if (!(d.BL1 > 0) || !(d.BL2 >= d.BL1) || !(d.BL4 >= d.BL1))
+    throw std::invalid_argument("PSC-I: widths must be BL1 > 0 and BL2, BL4 >= BL1");
+  const Real H = d.HL1 + d.HL2 + d.HL3 + d.HL4 + d.HL5;
+  const Real zWebTop = -(d.HL1 + d.HL2), zWebBot = -(d.HL1 + d.HL2 + d.HL3), zBotFl = -(H - d.HL5);
+  using sections::Contour;
+  using sections::Point2;
+  // Left half from the top-left corner down to the bottom-left corner (y < 0).
+  std::vector<Point2> left;
+  left.emplace_back(-d.BL2, 0); left.emplace_back(-d.BL2, -d.HL1);
+  if (d.JL1) {
+    const Real y = -(d.BL2 - d.BL21), z = -(d.HL1 + d.HL21);
+    if (!(d.BL21 > 0) || !(y < -d.BL1) || !(z > zWebTop) || !(d.HL21 >= 0))
+      throw std::invalid_argument("PSC-I: joint JL1 (BL2-1, HL2-1) lies outside the top flange haunch");
+    left.emplace_back(y, z);
+  }
+  left.emplace_back(-d.BL1, zWebTop); left.emplace_back(-d.BL1, zWebBot);
+  if (d.JL4) {
+    const Real y = -(d.BL4 - d.BL41), z = zBotFl + d.HL41;
+    if (!(d.BL41 > 0) || !(y < -d.BL1) || !(z < zWebBot) || !(d.HL41 >= 0))
+      throw std::invalid_argument("PSC-I: joint JL4 (BL4-1, HL4-1) lies outside the bottom flange haunch");
+    left.emplace_back(y, z);
+  }
+  left.emplace_back(-d.BL4, zBotFl); left.emplace_back(-d.BL4, -H);
+  // Counter-clockwise outline: down the left side, then up the mirrored right side.
+  Contour outer;
+  auto push = [&](Real y, Real z) { if (outer.empty() || (outer.back() - Point2(y, z)).norm() > 1e-12) outer.emplace_back(y, z); };
+  for (const auto& q : left) push(q.x(), q.y());
+  for (auto it = left.rbegin(); it != left.rend(); ++it) push(-it->x(), it->y());
+  if ((outer.front() - outer.back()).norm() <= 1e-12) outer.pop_back();
+  const auto geo = sections::computePolygonSection({outer});
+  if (!(geo.area > 0)) throw std::invalid_argument("PSC-I: the outline has non-positive area");
+  ResolvedSectionProperties p;
+  p.area = geo.area;
+  p.IH = geo.Iyy;
+  p.IB = geo.Izz;
+  const Real tmin = std::min({d.HL1, d.HL5, 2 * d.BL1});
+  const Real h = std::max(tmin / 16, std::sqrt(geo.area / 80000));
+  const auto fe = sections::analyzeSectionFE({outer}, h, 0.0);
+  p.J = fe.J;
+  p.AsH = fe.Asz;
+  p.AsB = fe.Asy;
+  p.extentH = H;
+  p.extentB = 2 * std::max(d.BL2, d.BL4);
+  p.topFiber = -geo.Cz;
+  return p;
+}
+
 } // namespace kopruq::io::midas

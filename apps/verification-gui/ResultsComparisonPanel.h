@@ -17,6 +17,7 @@ public:
   QTableWidget* categoryTable() const { return categoryTable_; }
   QTableWidget* displacementsTable() const { return displacementsTable_; }
   QTableWidget* reactionsTable() const { return reactionsTable_; }
+  QTableWidget* localReactionsTable() const { return localReactionsTable_; }
   QTableWidget* beamForcesTable() const { return beamForcesTable_; }
   QTableWidget* trussForcesTable() const { return trussForcesTable_; }
   QTableWidget* elasticLinksTable() const { return elasticLinksTable_; }
@@ -40,6 +41,7 @@ private:
   QTableWidget* categoryTable_{};
   QTableWidget* displacementsTable_{};
   QTableWidget* reactionsTable_{};
+  QTableWidget* localReactionsTable_{};
   QTableWidget* beamForcesTable_{};
   QTableWidget* trussForcesTable_{};
   QTableWidget* elasticLinksTable_{};

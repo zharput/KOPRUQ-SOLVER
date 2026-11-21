@@ -141,7 +141,19 @@ static AppliedLoads assembleLoadCase(const Model&m,const DofManager&dm,const Loa
 // Results for a displacement field U under an assembled load case; K is the full (unreduced) stiffness matrix.
 static AnalysisResults recoverAssembled(const Model&m,const Restraints&rs,const DofManager&dm,const Eigen::SparseMatrix<Real>&K,const AppliedLoads&ap,const Eigen::VectorXd&U){
   Eigen::VectorXd q=K*U-ap.F;AnalysisResults o;auto nodes=detail::index_by_id(m.nodes);o.nodes.reserve(m.nodes.size());o.elements.reserve(m.beams.size());o.springs.reserve(m.springs.size());Real sfb=0,sfs=0,smb=0,sms=0;bool firstEl=true;
-  for(const auto&n:m.nodes){NodeResults z;z.node_id=n.id;auto d=dm.node_dofs(n.id);auto it=rs.find(n.id);z.restrained=it!=rs.end()?it->second:std::array<bool,6>{};for(int i=0;i<6;++i){z.displacement[i]=U((Eigen::Index)d[i]);z.reaction[i]=z.restrained[i]?q((Eigen::Index)d[i]):0;}o.nodes.push_back(z);}
+  for(const auto&n:m.nodes){NodeResults z;z.node_id=n.id;auto d=dm.node_dofs(n.id);auto it=rs.find(n.id);z.restrained=it!=rs.end()?it->second:std::array<bool,6>{};
+    auto ax=m.node_axes.find(n.id);
+    if(ax==m.node_axes.end()){for(int i=0;i<6;++i){z.displacement[i]=U((Eigen::Index)d[i]);z.reaction[i]=z.restrained[i]?q((Eigen::Index)d[i]):0;}z.reaction_local=z.reaction;}
+    else{
+      // Node local axes: restraint flags act along the local axes, so the reaction is masked there
+      // (an unrestrained local direction carries none) and rotated back to global.
+      z.local_axes=true;const Eigen::Matrix3d&R=ax->second;Eigen::Vector3d qf,qm;for(int i=0;i<3;++i){qf(i)=q((Eigen::Index)d[i]);qm(i)=q((Eigen::Index)d[i+3]);}
+      Eigen::Vector3d lf=R*qf,lm=R*qm;for(int i=0;i<3;++i){z.reaction_local[i]=z.restrained[i]?lf(i):0;z.reaction_local[i+3]=z.restrained[i+3]?lm(i):0;}
+      Eigen::Vector3d gf=R.transpose()*Eigen::Vector3d(z.reaction_local[0],z.reaction_local[1],z.reaction_local[2]),gm=R.transpose()*Eigen::Vector3d(z.reaction_local[3],z.reaction_local[4],z.reaction_local[5]);
+      for(int i=0;i<3;++i){z.reaction[i]=gf(i);z.reaction[i+3]=gm(i);}
+      for(int i=0;i<6;++i)z.displacement[i]=U((Eigen::Index)d[i]);
+    }
+    o.nodes.push_back(z);}
   std::map<Id,const Material*>ma;for(const auto&x:m.materials)ma[x.id]=&x;std::map<Id,const Section*>se;for(const auto&x:m.sections)se[x.id]=&x;
   for(const auto&e:m.beams){
     const Node*a=detail::find_by_id(nodes,e.node1),*b=detail::find_by_id(nodes,e.node2);auto&p=*ma[e.material];auto&s=*se[e.section];
@@ -247,7 +259,7 @@ static StaticSolution solve(const Model&m,const Restraints&rs,const std::vector<
 // so a model without rigid_links, the overwhelming majority including every previously verified test,
 // runs through this exact unmodified code, unaffected by the feature's existence).
 static MultiCaseSolution solveCases(const Model&m,const Restraints&rs,const std::vector<LoadCase>&cases,const std::vector<LoadCombination>&combos={}){
-  if(!m.rigid_links.empty())return solveCasesWithRigidLinks(m,rs,cases,combos);
+  if(!m.rigid_links.empty()||!m.node_axes.empty())return solveCasesWithRigidLinks(m,rs,cases,combos);
   MultiCaseSolution out;out.cases.resize(cases.size());out.combinations.resize(combos.size());
   auto fail=[&](const SolverStatus&st){out.status=st;for(auto&c:out.cases)c.status=st;for(auto&c:out.combinations)c.status=st;return out;};
   try{
@@ -316,9 +328,8 @@ static MultiCaseSolution solveCasesWithRigidLinks(const Model&m,const Restraints
     for(const auto&cb:combos)for(const auto&t:cb.terms)if(t.first>=cases.size()||!std::isfinite(t.second))throw AssemblyError(AssemblyErrorCode::InvalidLoad,"load combination term is invalid");
     auto red=RigidLinkReduction::build(m,dm);
     auto all=rs;for(const auto&n:m.nodes)if(!all.count(n.id))all[n.id]={};
-    for(const auto&slave:red.slaveNodes){auto it=all.find(slave);if(it!=all.end())for(bool flag:it->second)if(flag)throw AssemblyError(AssemblyErrorCode::MissingNode,"rigid-link slave node "+std::to_string(slave)+" cannot carry its own restraints");}
-    auto allRetained=all;for(const auto&slave:red.slaveNodes)allRetained.erase(slave);
-    auto bFull=MatrixAssembler::classify(dm,allRetained);
+    red.checkRestraints(all);
+    auto bFull=red.classifyRetained(dm,all);
     std::vector<std::size_t> freeReduced,fixedReduced;
     for(auto fi:bFull.free)freeReduced.push_back(red.fullToReduced(fi));
     for(auto fi:bFull.fixed)fixedReduced.push_back(red.fullToReduced(fi));
@@ -340,7 +351,9 @@ static MultiCaseSolution solveCasesWithRigidLinks(const Model&m,const Restraints
       o.global=red.expand(Umid);
       o.results=recoverAssembled(m,all,dm,K,ap,o.global);
       o.reactions=Eigen::VectorXd::Zero((Eigen::Index)dm.dof_count());for(const auto&n:o.results.nodes){auto d=dm.node_dofs(n.node_id);for(int i=0;i<6;++i)o.reactions((Eigen::Index)d[i])=n.reaction[i];}
-      o.fixed.resize(bFull.fixed.size());for(size_t i=0;i<bFull.fixed.size();++i)o.fixed[i]=o.reactions((Eigen::Index)bFull.fixed[i]);
+      // fixed[i]: reaction along fixed DOF i in the axes its restraint acts in (local for a node with local axes).
+      Eigen::VectorXd rl=Eigen::VectorXd::Zero((Eigen::Index)dm.dof_count());for(const auto&n:o.results.nodes){auto d=dm.node_dofs(n.node_id);for(int i=0;i<6;++i)rl((Eigen::Index)d[i])=n.reaction_local[i];}
+      o.fixed.resize(bFull.fixed.size());for(size_t i=0;i<bFull.fixed.size();++i)o.fixed[i]=rl((Eigen::Index)bFull.fixed[i]);
       o.status={true,"linear static solution and recovery completed",SolverStatusCode::Success};
     };
     for(size_t c=0;c<cases.size();++c){auto Ff=freeLoads(applied[c]);out.cases[c].free=noFreeDofs?Eigen::VectorXd(0):fac.solve(Ff);finish(out.cases[c],applied[c],Ff);}

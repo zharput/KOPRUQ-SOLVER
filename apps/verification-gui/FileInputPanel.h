@@ -18,7 +18,7 @@ class FileInputPanel : public QGroupBox {
   Q_OBJECT
 public:
   // One row per required input file, in the approved layout's order.
-  enum class Row { MidasModel, BeamForce, TrussForce, Displacements, ElasticLink, Reactions, EigenvalueMode, Count };
+  enum class Row { MidasModel, BeamForce, TrussForce, Displacements, ElasticLink, Reactions, ReactionsLocal, EigenvalueMode, Count };
   enum class Status { NotSelected, Selected, Invalid, Unsupported };
 
   explicit FileInputPanel(QWidget* parent = nullptr);

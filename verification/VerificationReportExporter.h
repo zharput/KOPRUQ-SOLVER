@@ -17,6 +17,7 @@ struct ReportMetadata {
   std::string executionDateTimeIso;   // when the comparison that produced this data was run
   std::string displacementsFileName;  // empty if that category's file was not selected/usable
   std::string reactionsFileName;
+  std::string localReactionsFileName; // MIDAS "Reaction(Local)", 2026-11-21
   std::string beamForceFileName;
   std::string trussForceFileName;
   std::string elasticLinkFileName;
@@ -27,6 +28,7 @@ struct ReportMetadata {
 struct ReportData {
   ReportMetadata metadata;
   std::vector<ComparisonRow> displacements, reactions, beamForces, trussForces, elasticLinks;
+  std::vector<ComparisonRow> localReactions; // 2026-11-21
   // Exactly the diagnostics already aggregated and shown in the GUI's Diagnostik tab -- not
   // re-collected here, so the report and the GUI can never disagree with each other.
   std::vector<std::string> diagnostics;

@@ -65,7 +65,43 @@
       "items": {
         "$ref": "#/$defs/rigid_link"
       },
-      "description": "Master-slave multi-point constraints; a slave's 6 DOFs follow its master's rigidly. See kopruq/assembly/RigidLink.hpp. Supported by the static solver only."
+      "description": "Master-slave multi-point constraints; the slave's tied DOFs (all six, or `dofs`) follow its master's rigidly. See kopruq/assembly/RigidLink.hpp."
+    },
+    "node_axes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "description": "Local x and y axes (global components, orthogonal unit vectors); local z = x cross y.",
+        "properties": {
+          "node": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "local_x": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "local_y": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3
+          }
+        },
+        "required": [
+          "node",
+          "local_x",
+          "local_y"
+        ],
+        "additionalProperties": false
+      },
+      "description": "Node local axes (MIDAS Node Local Axis / SKEW): the node's restraint flags act along these axes and its reaction is also reported in them (results `reaction_local`). Not allowed on a rigid-link slave."
     },
     "supports": {
       "type": "array",
@@ -257,11 +293,7 @@
           },
           "minItems": 3,
           "maxItems": 3,
-          "default": [
-            0,
-            1,
-            0
-          ],
+          "default": [0, 1, 0],
           "description": "Defines local y: its component normal to the member axis"
         },
         "releases": {
@@ -437,7 +469,7 @@
     },
     "rigid_link": {
       "type": "object",
-      "description": "A slave node's 6 DOFs are entirely determined by its master's via rigid-body kinematics; the slave cannot carry its own restraints.",
+      "description": "The slave's tied DOFs (`dofs`, default all six) are determined by its master's via rigid-body kinematics; a tied DOF cannot be restrained, an untied one can.",
       "properties": {
         "id": {
           "type": "integer",
@@ -450,6 +482,15 @@
         "slave": {
           "type": "integer",
           "minimum": 1
+        },
+        "dofs": {
+          "type": "array",
+          "items": {
+            "type": "boolean"
+          },
+          "minItems": 6,
+          "maxItems": 6,
+          "description": "Tied slave DOFs UX..RZ (global); omitted = all six."
         }
       },
       "required": [

@@ -36,6 +36,15 @@ CategoryComparison matchDisplacements(const nlohmann::json& results, const Refer
 CategoryComparison matchReactions(const nlohmann::json& results, const ReferenceTable& ref, const ToleranceSettings& tol);
 CategoryComparison matchBeamForces(const nlohmann::json& results, const ReferenceTable& ref, const ToleranceSettings& tol);
 
+// 2026-11-21. MIDAS "Reaction(Local)": reactions in each node's local axes (node "reaction_local" in
+// results.json, written only for nodes with local axes; any other node's local reaction is its
+// global "reaction"). Columns Fx/Fy/Fz/Mx/My/Mz.
+CategoryComparison matchLocalReactions(const nlohmann::json& results, const ReferenceTable& ref, const ToleranceSettings& tol);
+
+// 2026-11-21. MIDAS "Elastic Link" forces (No./Load/Node, Axial..Moment-z in link-local axes, the
+// same internal force on both node rows) against results.json "springs" local_end_forces[6..11].
+CategoryComparison matchElasticLinks(const nlohmann::json& results, const ReferenceTable& ref, const ToleranceSettings& tol);
+
 // Response spectrum (2026-11-20): appends every successful case of a response-spectrum results
 // document (kopruq::io::writeResponseSpectrumResults, the CLI's `spectrum` command) to
 // results["load_cases"] under MIDAS's own load-case name "<name>(RS)", with its combined nodal
@@ -60,10 +69,8 @@ struct CategoryStats { int total{}, pass{}, fail{}, na{}; double maxAbsDiff{}, m
 // NotApplicable and Unsupported rows, matching the approved UI's single N/A tile.
 CategoryStats summarizeCategory(const std::vector<ComparisonRow>& rows);
 
-// Elastic links: Phase 7B's importer unconditionally rejects every MIDAS ELNK record
-// (non-coincident-node elastic links are a real formulation gap in SpringLink, not a missing-
-// data gap -- see MidasJsonImporter.hpp), so no element in results.json can ever correspond to
-// one. Every reference row is reported Unsupported, never guessed at or silently skipped.
+// Marks every Elastic Link reference row Unsupported. Since 2026-11-21 the GUI compares elastic
+// links with matchElasticLinks (above); this is kept for callers that cannot compare them.
 CategoryComparison markElasticLinksUnsupported(const ReferenceTable& ref);
 
 // `modalResults` is `kopruq-modal-results` (io::writeModalResults's own JSON, read back with

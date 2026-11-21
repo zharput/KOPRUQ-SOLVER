@@ -8,10 +8,13 @@
 // Explicitly supported (per docs/MIDAS_JSON_DATA_AUDIT.md): NODE, ELEM
 // (TYPE="BEAM" only), MATL/MATD (TYPE="CONC", grade-named via a
 // EN..(RC) code family only), SECT (SECTTYPE="DBUSER", shapes SB/B/SR
-// only), CONS (point restraints), RIGD (master/slave rigid links), BODF
+// only), CONS (point restraints), RIGD (master/slave rigid links, per-DOF
+// "DOF" mask; restrained slave DOFs are dropped from the link -- see the RIGD
+// handling), SKEW (node local axes, iMETHOD 1 with one rotation angle), BODF
 // (self-weight, direction must be exactly global -Z), CNLD (concentrated
 // nodal loads FX/FY/FZ/MX/MY/MZ, global axes), BMLD
-// (CMD="BEAM", TYPE="UNILOAD", DIRECTION="GZ" uniform member loads),
+// (CMD="BEAM", TYPE UNILOAD/UNIMOMENT/CONLOAD/CONMOMENT, local or global
+// direction, uniform / multi-point trapezoidal -- see the BMLD handling),
 // ETMP (uniform element temperature -- maps directly onto
 // MemberThermalLoad::uniform_delta_t, Phase 7T; TEMP is already a
 // temperature CHANGE, the same quantity that load takes). ELNK with
@@ -36,7 +39,8 @@
 // section offsets other than OFFSET_PT "CC"/"CT" without user-defined parts
 // ("CT" is imported as a rigid node-to-centroid member-end offset);
 // any BODF whose direction is not exactly global -Z; any BMLD
-// whose CMD/TYPE/DIRECTION is not the one combination implemented above.
+// whose CMD/TYPE/DIRECTION is not implemented, or that uses projection,
+// eccentricity or the pressure "additional height".
 //
 // Disclosed, not silent, substitutions (MidasImportReport::assumptions):
 // material Poisson's ratio/unit weight (MidasMaterialLibrary.hpp);
@@ -286,11 +290,21 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
   if (dbg.contains("RIGD"))
     for (auto it = dbg.at("RIGD").begin(); it != dbg.at("RIGD").end(); ++it) {
       const Id master = detail::parseId(it.key());
-      for (const auto& item : it.value().at("ITEMS"))
+      for (const auto& item : it.value().at("ITEMS")) {
+        // "DOF" (MIDAS "DOF of Rigid Link", DX DY DZ RX RY RZ in GCS): exported as an integer such as
+        // 111111 (leading zeros are lost, so 11 = RY RZ) or as a string; absent = all six.
+        std::array<bool,6> dofs{true,true,true,true,true,true};
+        if (item.contains("DOF")) {
+          std::string f = item.at("DOF").is_string() ? item.at("DOF").get<std::string>() : std::to_string(item.at("DOF").get<long long>());
+          if (f.size() > 6 || f.find_first_not_of("01") != std::string::npos) { out.report.rejected.push_back("rigid link master " + it.key() + ": DOF '" + f + "' is not a 6-digit 0/1 mask"); continue; }
+          f = std::string(6 - f.size(), '0') + f;
+          for (int i = 0; i < 6; ++i) dofs[(std::size_t)i] = f[(std::size_t)i] == '1';
+        }
         for (const auto& slaveJson : item.at("S_NODE")) {
-          RigidLink l; l.id = rigidLinkIdCounter++; l.master = master; l.slave = slaveJson.get<Id>();
+          RigidLink l; l.id = rigidLinkIdCounter++; l.master = master; l.slave = slaveJson.get<Id>(); l.dofs = dofs;
           out.input.model.rigid_links.push_back(l);
         }
+      }
     }
   out.report.rigid_links = out.input.model.rigid_links.size();
 
@@ -509,6 +523,63 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
     }
   }
 
+  // --- SKEW (MIDAS "Node Local Axis"), 2026-11-21 -> Model::node_axes. Only iMETHOD 1 (angles) with a
+  // single nonzero rotation angle is imported: rotation of the node's axes about that global axis by the
+  // angle (degrees, right-hand rule), e.g. ANGLE_Z = a: local x = (cos a, sin a, 0), local y =
+  // (-sin a, cos a, 0), local z = Z. Supports (CONS) at such a node then act along its local axes (MIDAS
+  // manual "Define Supports": "Nodal local coordinate system if it is defined"). Several nonzero angles
+  // need MIDAS's rotation order, which is not documented in the saved manual pages -> rejected, as are
+  // the other iMETHODs.
+  if (dbg.contains("SKEW"))
+    for (auto it = dbg.at("SKEW").begin(); it != dbg.at("SKEW").end(); ++it) {
+      const Id node = detail::parseId(it.key());
+      const auto& v = it.value();
+      const int method = v.value("iMETHOD", 0);
+      const Real ax = v.value("ANGLE_X", 0.0), ay = v.value("ANGLE_Y", 0.0), az = v.value("ANGLE_Z", 0.0);
+      const int nonzero = (ax != 0) + (ay != 0) + (az != 0);
+      if (method != 1) { out.report.rejected.push_back("node local axes at node " + it.key() + ": iMETHOD " + std::to_string(method) + " is not supported (only 1, angles)"); continue; }
+      if (nonzero > 1) { out.report.rejected.push_back("node local axes at node " + it.key() + ": more than one nonzero rotation angle (MIDAS rotation order not verified)"); continue; }
+      if (nonzero == 0) continue;
+      const int axis = ax != 0 ? 0 : (ay != 0 ? 1 : 2);
+      const Real a = (ax + ay + az) * std::acos(Real(-1)) / 180;
+      Eigen::Matrix3d R = Eigen::Matrix3d::Identity(); // rows: local x, y, z in global coordinates
+      const Real c = std::cos(a), sn = std::sin(a);
+      if (axis == 2) R << c, sn, 0, -sn, c, 0, 0, 0, 1;
+      else if (axis == 0) R << 1, 0, 0, 0, c, sn, 0, -sn, c;
+      else R << c, 0, -sn, 0, 1, 0, sn, 0, c;
+      bool known = false; for (const auto& n : out.input.model.nodes) if (n.id == node) known = true;
+      if (!known) { out.report.rejected.push_back("node local axes at node " + it.key() + ": unknown node"); continue; }
+      // STYP = 1 suppresses GLOBAL UY/RX/RZ; at a node with local axes that interaction with the local
+      // restraint directions is not verified, so it is accepted only where all six DOFs are restrained
+      // anyway (then the axes affect the reaction output only; verification model 23).
+      const bool planar = dbg.contains("STYP") && !dbg.at("STYP").empty() && dbg.at("STYP").begin().value().value("STYP", 0) == 1;
+      if (planar) {
+        auto r = out.input.restraints.find(node);
+        bool allFixed = r != out.input.restraints.end(); if (allFixed) for (bool f : r->second) allFixed = allFixed && f;
+        if (!allFixed) { out.report.rejected.push_back("node local axes at node " + it.key() + ": combination with STYP=1 at a not fully restrained node is not verified; local axes not applied"); continue; }
+      }
+      out.input.model.node_axes[node] = R;
+    }
+  if (!out.input.model.node_axes.empty())
+    out.report.assumptions.push_back(std::to_string(out.input.model.node_axes.size()) + " node(s) with local axes (SKEW): their supports act along, and their reactions are also reported in, the node's local axes");
+
+  // Rigid-link slave DOFs that are themselves restrained (CONS, STYP, truss auto-restraint), 2026-11-21:
+  // MIDAS keeps the support and drops that DOF from the link. Evidence: verification model 23, link
+  // 1 -> 93 (DOF 111111, slave CONS 0111000 + STYP=1): MIDAS's own displacements give slave DZ = 0
+  // while master DZ != 0 (so DZ is not tied), yet slave DX = master DX + RY_m * (z_s - z_m) and slave
+  // RY = master RY (DX and RY are tied); the slave's reactions are all zero. The core rejects a
+  // restrained tied DOF, so the importer removes such DOFs from the link mask and reports it.
+  for (auto& l : out.input.model.rigid_links) {
+    auto r = out.input.restraints.find(l.slave);
+    if (r == out.input.restraints.end()) continue;
+    std::string dropped;
+    static const char* names[6] = {"DX", "DY", "DZ", "RX", "RY", "RZ"};
+    for (int i = 0; i < 6; ++i)
+      if (l.dofs[(std::size_t)i] && r->second[(std::size_t)i]) { l.dofs[(std::size_t)i] = false; dropped += (dropped.empty() ? "" : " ") + std::string(names[i]); }
+    if (!dropped.empty())
+      out.report.assumptions.push_back("rigid link " + std::to_string(l.master) + " -> " + std::to_string(l.slave) + ": restrained slave DOF(s) " + dropped + " removed from the link (MIDAS behaviour, see MidasJsonImporter.hpp)");
+  }
+
   std::map<std::string, std::size_t> caseIndex;
   auto caseFor = [&](const std::string& name) -> LoadCase& {
     auto found = caseIndex.find(name);
@@ -550,7 +621,15 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
       }
     }
 
-  // --- BMLD (uniform member loads, CMD=BEAM, TYPE=UNILOAD, DIRECTION=GZ only) ---
+  // --- BMLD (element beam loads, CMD=BEAM), extended 2026-11-21 (verification model 23) ---
+  // TYPE: UNILOAD (uniform / trapezoidal force, kN/m), UNIMOMENT (uniform / trapezoidal moment or
+  // torsion, kNm/m), CONLOAD (concentrated force, kN), CONMOMENT (concentrated moment, kNm).
+  // DIRECTION: LX/LY/LZ (element local axes) or GX/GY/GZ (global axes); for moments the axis of
+  // rotation. D/P (4 entries each, D as ratios of the element length): distributed loads are the
+  // piecewise-linear line through the points (D[i], P[i]) for as long as D increases (MIDAS
+  // "Trapezoidal Loads" x1..x4 / w1..w4; a uniform load exports [x1, x2, 0, 0] / [w, w, 0, 0]);
+  // concentrated loads are one load P[i] at D[i] for every nonzero P[i]. Rejected: other CMD/TYPE,
+  // projection (USE_PROJECTION, not yet verified against MIDAS) and eccentricity (USE_ECCEN).
   if (dbg.contains("BMLD"))
     for (auto it = dbg.at("BMLD").begin(); it != dbg.at("BMLD").end(); ++it) {
       const Id element = detail::parseId(it.key());
@@ -559,22 +638,45 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
         const std::string cmd = item.value("CMD", std::string());
         const std::string ltype = item.value("TYPE", std::string());
         const std::string dir = item.value("DIRECTION", std::string());
-        if (cmd != "BEAM" || dir != "GZ" || (ltype != "UNILOAD" && ltype != "CONLOAD")) {
-          out.report.rejected.push_back("member load on element " + it.key() + ", case '" + lc + "': unsupported CMD/TYPE/DIRECTION combination ('" + cmd + "'/'" + ltype + "'/'" + dir + "')");
+        const std::string where = "member load on element " + it.key() + ", case '" + lc + "'";
+        const bool distributed = ltype == "UNILOAD" || ltype == "UNIMOMENT";
+        const bool concentrated = ltype == "CONLOAD" || ltype == "CONMOMENT";
+        const bool validDir = dir.size() == 2 && (dir[0] == 'L' || dir[0] == 'G') && dir[1] >= 'X' && dir[1] <= 'Z';
+        if (cmd != "BEAM" || !validDir || (!distributed && !concentrated)) {
+          out.report.rejected.push_back(where + ": unsupported CMD/TYPE/DIRECTION combination ('" + cmd + "'/'" + ltype + "'/'" + dir + "')");
           continue;
         }
+        if (item.value("USE_ECCEN", false)) { out.report.rejected.push_back(where + ": eccentric beam load (USE_ECCEN) is not supported"); continue; }
+        if (item.value("USE_PROJECTION", false)) { out.report.rejected.push_back(where + ": projected beam load (USE_PROJECTION) is not yet verified against MIDAS and is not imported"); continue; }
+        if (item.value("USE_ADDITIONAL", false)) { out.report.rejected.push_back(where + ": additional height (USE_ADDITIONAL, pressure loads) is not supported"); continue; }
         const auto d = detail::toRealVector(item.at("D"));
         const auto p = detail::toRealVector(item.at("P"));
-        if (ltype == "UNILOAD") {
-          MemberLoad ml; ml.element = element; ml.axes = LoadAxes::Global; ml.direction = 2;
-          ml.w1 = p.at(0); ml.w2 = p.at(1); ml.start = d.at(0); ml.end = d.at(1);
-          caseFor(lc).member.push_back(ml);
-        } else { // CONLOAD: a single concentrated force at fractional position D[0], magnitude P[0]
-          MemberPointLoad pl; pl.element = element; pl.axes = LoadAxes::Global; pl.direction = 2;
-          pl.kind = MemberLoadKind::Force; pl.value = p.at(0); pl.position = d.at(0);
-          caseFor(lc).point.push_back(pl);
+        if (d.size() != p.size() || d.empty()) { out.report.rejected.push_back(where + ": D and P must have the same nonzero length"); continue; }
+        bool inRange = true; for (Real x : d) if (x < -1e-9 || x > 1 + 1e-9) inRange = false;
+        if (!inRange) { out.report.rejected.push_back(where + ": load position outside the element (D must be ratios in [0, 1])"); continue; }
+        const LoadAxes axes = dir[0] == 'L' ? LoadAxes::Local : LoadAxes::Global;
+        const int direction = dir[1] - 'X';
+        const MemberLoadKind kind = (ltype == "UNIMOMENT" || ltype == "CONMOMENT") ? MemberLoadKind::Moment : MemberLoadKind::Force;
+        auto clamp01 = [](Real x) { return std::min<Real>(1, std::max<Real>(0, x)); };
+        std::size_t added = 0;
+        if (distributed) {
+          std::size_t n = 1;
+          while (n < d.size() && d[n] > d[n - 1]) ++n;
+          if (n < 2) { out.report.rejected.push_back(where + ": distributed load needs at least two increasing positions in D"); continue; }
+          for (std::size_t i = 0; i + 1 < n; ++i) {
+            MemberLoad ml; ml.element = element; ml.axes = axes; ml.direction = direction; ml.kind = kind;
+            ml.w1 = p[i]; ml.w2 = p[i + 1]; ml.start = clamp01(d[i]); ml.end = clamp01(d[i + 1]);
+            caseFor(lc).member.push_back(ml); ++added;
+          }
+        } else {
+          for (std::size_t i = 0; i < p.size(); ++i) {
+            if (p[i] == 0) continue;
+            MemberPointLoad pl; pl.element = element; pl.axes = axes; pl.direction = direction;
+            pl.kind = kind; pl.value = p[i]; pl.position = clamp01(d[i]);
+            caseFor(lc).point.push_back(pl); ++added;
+          }
         }
-        ++out.report.member_loads;
+        if (added) ++out.report.member_loads;
       }
     }
 

@@ -120,6 +120,9 @@ class ResponseSpectrumSolver { public:
     ResponseSpectrumResults out;
     try {
       if (input.direction < 0 || input.direction > 2) throw std::invalid_argument("direction must be 0 (x), 1 (y) or 2 (z)");
+      // The influence vector below is built on global free DOFs; node local axes (2026-11-21) are not yet
+      // supported here, so they are rejected rather than silently misread.
+      if (!m.node_axes.empty()) throw std::invalid_argument("node local axes are not yet supported by the response-spectrum solver");
       auto modal = ModalSolver::solve(m, rs, input.num_modes, massType);
       if (!modal.status.success) { out.status = modal.status; return out; }
 
@@ -127,16 +130,14 @@ class ResponseSpectrumSolver { public:
       Eigen::SparseMatrix<Real> Mfull = massType == MassMatrixType::Lumped ? MatrixAssembler::assembleLumpedMass(m) : MatrixAssembler::assembleMass(m);
 
       auto all = rs; for (const auto& n : m.nodes) if (!all.count(n.id)) all[n.id] = {};
-      // A rigid-link slave node's 6 DOFs are not independent (see RigidLink.hpp) -- they must be
-      // excluded here exactly as LinearStaticSolver::solveCasesWithRigidLinks excludes them from
-      // `allRetained` before classify, or they would wrongly appear as extra "free" DOFs with
+      // A rigid-link slave node's TIED DOFs are not independent (see RigidLink.hpp) -- they must be
+      // excluded here exactly as LinearStaticSolver::solveCasesWithRigidLinks excludes them
+      // (RigidLinkReduction::classifyRetained), or they would wrongly appear as extra "free" DOFs with
       // their own iota=1 entries, double-counting mass already captured through the master's
       // modal response (ModalSolver::solve has already expanded each mode's shape through the
       // same rigid kinematics, so the slave DOFs' motion is already fully represented in `phi`).
-      std::set<Id> slaveNodes;
-      if (!m.rigid_links.empty()) slaveNodes = RigidLinkReduction::build(m, dm).slaveNodes;
-      auto allRetained = all; for (const auto& slave : slaveNodes) allRetained.erase(slave);
-      auto free = MatrixAssembler::classify(dm, allRetained).free;
+      auto free = m.rigid_links.empty() ? MatrixAssembler::classify(dm, all).free
+                                        : RigidLinkReduction::build(m, dm).classifyRetained(dm, all).free;
 
       // iota: 1 at every FREE translational DOF matching `direction` (DOF index mod 6:
       // 0=UX, 1=UY, 2=UZ), 0 everywhere else, including restrained DOFs -- see the

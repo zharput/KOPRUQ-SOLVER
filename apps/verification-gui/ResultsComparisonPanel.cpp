@@ -71,6 +71,11 @@ ResultsComparisonPanel::ResultsComparisonPanel(QWidget* parent) : QWidget(parent
                                  tr("Bağıl Fark"), tr("Birim"), tr("Durum")}, group);
   tabs_->addTab(reactionsTable_, tr("Mesnet Tepkimeleri (Global)"));
 
+  localReactionsTable_ = buildTable({tr("Yük Durumu"), tr("Düğüm ID"), tr("Bileşen"), tr("MIDAS Değeri"),
+                                      tr("SOLVER Değeri"), tr("İşaretli Fark"), tr("Mutlak Fark"),
+                                      tr("Bağıl Fark"), tr("Birim"), tr("Durum")}, group);
+  tabs_->addTab(localReactionsTable_, tr("Mesnet Tepkimeleri (Lokal)"));
+
   beamForcesTable_ = buildTable({tr("Yük Durumu"), tr("Eleman ID"), tr("Uç/İstasyon"), tr("Kuvvet Bileşeni"),
                                   tr("MIDAS Değeri"), tr("SOLVER Değeri"), tr("Fark"), tr("Birim"), tr("Durum")}, group);
   tabs_->addTab(beamForcesTable_, tr("Kiriş İç Kuvvetleri"));

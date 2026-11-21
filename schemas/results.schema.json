@@ -226,6 +226,15 @@
                 },
                 "minItems": 6,
                 "maxItems": 6
+              },
+              "reaction_local": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 6,
+                "maxItems": 6,
+                "description": "Reaction in the node's local axes; present only for nodes with local axes (model node_axes)."
               }
             },
             "required": [
@@ -279,6 +288,41 @@
               "strain_energy",
               "normalized_force_error",
               "normalized_moment_error"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "springs": {
+          "type": "array",
+          "description": "Two-node elastic link end forces (link-local / global axes, node1 then node2); present only when the model has springs.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "local_end_forces": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 12,
+                "maxItems": 12
+              },
+              "global_end_forces": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 12,
+                "maxItems": 12
+              }
+            },
+            "required": [
+              "id",
+              "local_end_forces",
+              "global_end_forces"
             ],
             "additionalProperties": false
           }

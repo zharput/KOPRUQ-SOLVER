@@ -109,7 +109,8 @@ bool readIdCell(const CellValue& cell, long& id) {
 // (node.reaction, FX/FY/FZ/MX/MY/MZ) -- identical structure, different field/column names.
 CategoryComparison matchNodeBasedCategory(const Json& results, const ReferenceTable& ref,
                                            const ToleranceSettings& tol, const char* jsonField,
-                                           const std::array<ComponentSpec, 6>& components) {
+                                           const std::array<ComponentSpec, 6>& components,
+                                           const char* fallbackField = nullptr) {
   CategoryComparison out;
   const int nodeCol = ref.columnIndex("Node");
   const int loadCol = ref.columnIndex("Load");
@@ -153,7 +154,9 @@ CategoryComparison matchNodeBasedCategory(const Json& results, const ReferenceTa
         out_row.result.status = ComparisonStatus::NotApplicable;
         out_row.result.referenceValue = cell.number;
       } else {
-        const double solverValue = nodeIt->second->at(jsonField).at(static_cast<std::size_t>(components[k].index)).get<double>();
+        const Json& node = *nodeIt->second;
+        const Json& values = (fallbackField && !node.contains(jsonField)) ? node.at(fallbackField) : node.at(jsonField);
+        const double solverValue = values.at(static_cast<std::size_t>(components[k].index)).get<double>();
         out_row.result = peak ? compareValues(std::abs(solverValue), std::abs(cell.number), components[k].category, tol)
                               : compareValues(solverValue, cell.number, components[k].category, tol);
       }
@@ -177,6 +180,80 @@ CategoryComparison matchReactions(const Json& results, const ReferenceTable& ref
       {"FX", 0, QuantityCategory::Force}, {"FY", 1, QuantityCategory::Force}, {"FZ", 2, QuantityCategory::Force},
       {"MX", 3, QuantityCategory::Moment}, {"MY", 4, QuantityCategory::Moment}, {"MZ", 5, QuantityCategory::Moment}}};
   return matchNodeBasedCategory(results, ref, tol, "reaction", kComponents);
+}
+
+CategoryComparison matchLocalReactions(const Json& results, const ReferenceTable& ref, const ToleranceSettings& tol) {
+  // MIDAS "Reaction(Local)" headers are Fx/Fy/Fz/Mx/My/Mz (columnIndex is case-insensitive). A node
+  // without local axes has no "reaction_local" in results.json: its local reaction is the global one.
+  static const std::array<ComponentSpec, 6> kComponents{{
+      {"Fx", 0, QuantityCategory::Force}, {"Fy", 1, QuantityCategory::Force}, {"Fz", 2, QuantityCategory::Force},
+      {"Mx", 3, QuantityCategory::Moment}, {"My", 4, QuantityCategory::Moment}, {"Mz", 5, QuantityCategory::Moment}}};
+  return matchNodeBasedCategory(results, ref, tol, "reaction_local", kComponents, "reaction");
+}
+
+CategoryComparison matchElasticLinks(const Json& results, const ReferenceTable& ref, const ToleranceSettings& tol) {
+  CategoryComparison out;
+  static const std::array<ComponentSpec, 6> kComponents{{
+      {"Axial", 0, QuantityCategory::Force}, {"Shear-y", 1, QuantityCategory::Force}, {"Shear-z", 2, QuantityCategory::Force},
+      {"Torsion", 3, QuantityCategory::Moment}, {"Moment-y", 4, QuantityCategory::Moment}, {"Moment-z", 5, QuantityCategory::Moment}}};
+  const int linkCol = ref.columnIndex("No.");
+  const int loadCol = ref.columnIndex("Load");
+  const int nodeCol = ref.columnIndex("Node");
+  if (linkCol < 0 || loadCol < 0) {
+    out.diagnostics.push_back("Beklenen sütunlar bulunamadı (No./Load).");
+    return out;
+  }
+  std::vector<int> compCols;
+  for (const auto& c : kComponents) compCols.push_back(ref.columnIndex(c.excelName));
+  std::map<std::string, std::map<long, const Json*>> cache;
+  bool missingSprings = false;
+  for (const auto& row : ref.rows) {
+    const std::string loadCase = row[loadCol].text;
+    long linkId = 0;
+    if (!readIdCell(row[linkCol], linkId)) { out.diagnostics.push_back("Geçersiz No. değeri (satır atlandı)."); continue; }
+    auto it = cache.find(loadCase);
+    if (it == cache.end()) {
+      std::map<long, const Json*> m;
+      const Json* lc = findLoadCase(results, loadCase);
+      if (lc && lc->contains("springs"))
+        for (const auto& e : lc->at("springs")) m[toId(e.at("id").get<double>())] = &e;
+      else if (lc && !isPeakMagnitudeCase(lc)) missingSprings = true;
+      if (!lc) out.diagnostics.push_back("Yük durumu results.json'da bulunamadı: " + loadCase);
+      it = cache.emplace(loadCase, std::move(m)).first;
+    }
+    const bool peak = isPeakMagnitudeCase(findLoadCase(results, loadCase));
+    const auto linkIt = it->second.find(linkId);
+    for (std::size_t k = 0; k < kComponents.size(); ++k) {
+      if (compCols[k] < 0) continue;
+      const CellValue& cell = row[compCols[k]];
+      if (!cell.isNumber) continue;
+      ComparisonRow out_row;
+      out_row.loadCase = loadCase;
+      out_row.id = std::to_string(linkId);
+      out_row.location = (nodeCol >= 0 && row[nodeCol].isNumber) ? std::to_string(toId(row[nodeCol].number)) : std::string{};
+      out_row.component = kComponents[k].excelName;
+      out_row.unit = ref.columns[compCols[k]].unit;
+      if (linkIt == it->second.end()) {
+        out_row.result.status = ComparisonStatus::NotApplicable;
+        out_row.result.referenceValue = cell.number;
+      } else {
+        // MIDAS reports one internal link force per component (identical on both node rows). It is
+        // the node2 (J) end force local_end_forces[6 + k] (SpringLink.hpp: k (u2 - u1), link-local
+        // axes) in MIDAS's beam-force convention at the J end: every component as is except
+        // Moment-y, which flips (kBeamForceFlipsAtIEnd above). Evidence, verification model 23:
+        // links 5/6 (the only ones with rotational stiffness), cases UNIFORM/POINT/TRAPEZ -- Axial,
+        // Shear-y/z, Torsion and Moment-z agree in sign and value, Moment-y has equal magnitude and
+        // opposite sign in all 12 rows (e.g. MIDAS -2.66 vs node2 end force +2.663).
+        const double v = toMidasBeamForceConvention(linkIt->second->at("local_end_forces").at(6 + k).get<double>(), /*isIEnd=*/false, k);
+        out_row.result = peak ? compareValues(std::abs(v), std::abs(cell.number), kComponents[k].category, tol)
+                              : compareValues(v, cell.number, kComponents[k].category, tol);
+      }
+      out.rows.push_back(std::move(out_row));
+    }
+  }
+  if (missingSprings)
+    out.diagnostics.push_back("results.json bazı yük durumlarında elastik bağlantı sonucu içermiyor (bağlantılar içe aktarılmamış olabilir): ilgili satırlar N/A.");
+  return out;
 }
 
 CategoryComparison matchBeamForces(const Json& results, const ReferenceTable& ref, const ToleranceSettings& tol) {

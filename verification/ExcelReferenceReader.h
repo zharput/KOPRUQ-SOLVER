@@ -21,7 +21,7 @@
 
 namespace kopruq::verification {
 
-enum class ReferenceFileKind { BeamForce, Displacements, Reaction, ElasticLink, TrussForce };
+enum class ReferenceFileKind { BeamForce, Displacements, Reaction, ElasticLink, TrussForce, ReactionLocal };
 
 // What MIDAS's own export literally calls each result category, used only for log/diagnostic
 // text (never for parsing decisions -- the actual column set is discovered from the file).

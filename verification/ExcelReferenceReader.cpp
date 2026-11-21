@@ -14,6 +14,7 @@ const char* referenceFileKindName(ReferenceFileKind kind) {
     case ReferenceFileKind::Reaction: return "Reaction(Global)";
     case ReferenceFileKind::ElasticLink: return "Elastic Link";
     case ReferenceFileKind::TrussForce: return "Truss Force";
+    case ReferenceFileKind::ReactionLocal: return "Reaction(Local)";
   }
   return "?";
 }

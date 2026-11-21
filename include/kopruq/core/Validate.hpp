@@ -55,6 +55,7 @@ class ModelValidator {
     springs(m);
     jointSprings(m);
     rigidLinks(m, rs);
+    nodeAxes(m);
     restraints(m, rs);
     for (std::size_t i = 0; i < cases.size(); ++i) loadCase(m, cases[i], "load_cases[" + std::to_string(i) + "]");
     combinations(cases, combos);
@@ -189,11 +190,21 @@ class ModelValidator {
     }
     for (const auto& [slave, master] : slaveToMaster)
       if (slaveToMaster.count(master)) issue("rigid_links", "chaining: node " + std::to_string(master) + " is both a master and a slave");
-    for (const auto& [slave, master] : slaveToMaster) {
-      (void)master;
+    std::map<Id, std::array<bool,6>> tied;
+    for (const auto& l : m.rigid_links) if (slaveToMaster.count(l.slave) && slaveToMaster.at(l.slave) == l.master) tied[l.slave] = l.dofs;
+    for (const auto& [slave, mask] : tied) {
       auto it = rs.find(slave);
       if (it == rs.end()) continue;
-      for (bool f : it->second) if (f) { issue("rigid_links", "slave node " + std::to_string(slave) + " cannot carry its own restraints"); break; }
+      for (int i = 0; i < 6; ++i) if (it->second[(std::size_t)i] && mask[(std::size_t)i]) { issue("rigid_links", "slave node " + std::to_string(slave) + " cannot carry its own restraints on a tied degree of freedom"); break; }
+    }
+  }
+  void nodeAxes(const Model& m) {
+    std::set<Id> slaves; for (const auto& l : m.rigid_links) slaves.insert(l.slave);
+    for (const auto& [id, R] : m.node_axes) {
+      const std::string p = "node_axes[" + std::to_string(id) + "]";
+      if (!coords_.count(id)) issue(p, "references unknown node " + std::to_string(id));
+      if (!R.allFinite() || (R * R.transpose() - Eigen::Matrix3d::Identity()).cwiseAbs().maxCoeff() > 1e-9 || R.determinant() < 0) issue(p, "must be a right-handed orthonormal rotation");
+      if (slaves.count(id)) issue(p, "a rigid-link slave node cannot have node local axes");
     }
   }
   void restraints(const Model&, const Restraints& rs) {

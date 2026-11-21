@@ -31,7 +31,7 @@ inline constexpr int model_schema_version = 1;
 // Keys accepted in each JSON object. io_tests checks these against schemas/model.schema.json.
 struct KeySpec { std::vector<std::string> required, optional; };
 namespace model_keys {
-inline const KeySpec top{{"schema","schema_version","nodes","materials","sections","beams","supports"},{"units","trusses","springs","joint_springs","rigid_links","load_cases","combinations","response_spectra"}};
+inline const KeySpec top{{"schema","schema_version","nodes","materials","sections","beams","supports"},{"units","trusses","springs","joint_springs","rigid_links","node_axes","load_cases","combinations","response_spectra"}};
 inline const KeySpec units{{},{"length","force","angle"}};
 inline const KeySpec node{{"id","x","y","z"},{}};
 inline const KeySpec material{{"id","elastic_modulus","poisson_ratio"},{"unit_weight","thermal_expansion"}};
@@ -42,7 +42,8 @@ inline const KeySpec beam{{"id","nodes","material","section"},{"reference_y","re
 inline const KeySpec truss{{"id","nodes","material","section"},{}};
 inline const KeySpec spring{{"id","nodes","stiffness"},{"local_x","reference_y"}};
 inline const KeySpec joint_spring{{"id","node","stiffness"},{"local_x","reference_y"}};
-inline const KeySpec rigid_link{{"id","master","slave"},{}};
+inline const KeySpec rigid_link{{"id","master","slave"},{"dofs"}};
+inline const KeySpec node_axes{{"node","local_x","local_y"},{}};
 inline const KeySpec releases{{},{"start","end"}};
 inline const KeySpec support{{"node","restraints"},{}};
 inline const KeySpec load_case{{"name"},{"self_weight","nodal","member","point","thermal"}};
@@ -107,6 +108,7 @@ class ModelReader {
     readSprings(root, R, in);
     readJointSprings(root, R, in);
     readRigidLinks(root, R, in);
+    readNodeAxes(root, R, in);
     readSupports(root, R, in);
     checkRigidLinkRestraints(in);
     readLoadCases(root, R, in);
@@ -485,6 +487,11 @@ class ModelReader {
       bool ok = id(b, p, "id", l.id);
       ok = id(b, p, "master", l.master) && ok;
       ok = id(b, p, "slave", l.slave) && ok;
+      if (b.contains("dofs")) {
+        const json& f = b.at("dofs");
+        if (!f.is_array() || f.size() != 6) { issue(key(p, "dofs"), "must be an array of 6 booleans (UX..RZ)"); ok = false; }
+        else for (std::size_t k = 0; k < 6; ++k) { if (!f[k].is_boolean()) { issue(key(p, "dofs"), "must be an array of 6 booleans (UX..RZ)"); ok = false; break; } l.dofs[k] = f[k].get<bool>(); }
+      }
       if (!ok) continue;
       bool valid = true;
       if (!nodeIds_.count(l.master)) { issue(key(p, "master"), "references unknown node " + std::to_string(l.master)); valid = false; }
@@ -500,12 +507,40 @@ class ModelReader {
       if (rigidSlaveToMaster_.count(master)) issue("rigid_links", "chaining: node " + std::to_string(master) + " is both a master and a slave");
   }
 
+  // node_axes (2026-11-21): [{"node": id, "local_x": [3], "local_y": [3]}]; local z = x cross y. Both
+  // vectors must be unit length and mutually orthogonal (no silent re-orthogonalisation).
+  void readNodeAxes(const json& root, const std::string& R, ModelInput& in) {
+    const json* a = array(root, R, "node_axes");
+    if (!a) return;
+    for (std::size_t i = 0; i < a->size(); ++i) {
+      const std::string p = at(key(R, "node_axes"), i);
+      const json& b = (*a)[i];
+      if (!object(b, p, model_keys::node_axes)) continue;
+      Id node{};
+      bool ok = id(b, p, "node", node);
+      std::vector<Real> x, y;
+      ok = numbers(b, p, "local_x", 3, x) && ok;
+      ok = numbers(b, p, "local_y", 3, y) && ok;
+      if (!ok) continue;
+      if (!nodeIds_.count(node)) { issue(key(p, "node"), "references unknown node " + std::to_string(node)); continue; }
+      if (in.model.node_axes.count(node)) { issue(key(p, "node"), "duplicate local axes for node " + std::to_string(node)); continue; }
+      const Eigen::Vector3d ex(x[0], x[1], x[2]), ey(y[0], y[1], y[2]);
+      if (std::abs(ex.norm() - 1) > 1e-9 || std::abs(ey.norm() - 1) > 1e-9 || std::abs(ex.dot(ey)) > 1e-9) { issue(p, "local_x and local_y must be orthogonal unit vectors"); continue; }
+      Eigen::Matrix3d Rm; Rm.row(0) = ex.transpose(); Rm.row(1) = ey.transpose(); Rm.row(2) = ex.cross(ey).transpose();
+      in.model.node_axes[node] = Rm;
+    }
+  }
+
   void checkRigidLinkRestraints(const ModelInput& in) {
+    for (const auto& l : in.model.rigid_links)
+      if (in.model.node_axes.count(l.slave)) issue("node_axes", "node " + std::to_string(l.slave) + " is a rigid-link slave and cannot have node local axes");
     for (const auto& [slave, master] : rigidSlaveToMaster_) {
       (void)master;
       auto it = in.restraints.find(slave);
       if (it == in.restraints.end()) continue;
-      for (bool f : it->second) if (f) { issue("supports", "node " + std::to_string(slave) + " is a rigid-link slave and cannot carry its own restraints"); break; }
+      const RigidLink* link = nullptr;
+      for (const auto& l : in.model.rigid_links) if (l.slave == slave) link = &l;
+      for (int k = 0; k < 6; ++k) if (it->second[(std::size_t)k] && (!link || link->dofs[(std::size_t)k])) { issue("supports", "node " + std::to_string(slave) + " is a rigid-link slave and cannot carry its own restraints on a tied degree of freedom"); break; }
     }
   }
 
@@ -794,7 +829,17 @@ inline json writeModel(const ModelInput& in) {
                             {"reference_y", {e.reference_y.x(), e.reference_y.y(), e.reference_y.z()}},
                             {"stiffness", {e.stiffness[0], e.stiffness[1], e.stiffness[2], e.stiffness[3], e.stiffness[4], e.stiffness[5]}}});
   j["rigid_links"] = json::array();
-  for (const auto& l : in.model.rigid_links) j["rigid_links"].push_back({{"id", l.id}, {"master", l.master}, {"slave", l.slave}});
+  for (const auto& l : in.model.rigid_links) {
+    json r{{"id", l.id}, {"master", l.master}, {"slave", l.slave}};
+    bool all = true; for (bool f : l.dofs) all = all && f;
+    if (!all) r["dofs"] = l.dofs; // omitted when all six are tied (unchanged output for existing models)
+    j["rigid_links"].push_back(r);
+  }
+  if (!in.model.node_axes.empty()) { // omitted when empty (unchanged output for existing models)
+    j["node_axes"] = json::array();
+    for (const auto& [node, Rm] : in.model.node_axes)
+      j["node_axes"].push_back({{"node", node}, {"local_x", {Rm(0, 0), Rm(0, 1), Rm(0, 2)}}, {"local_y", {Rm(1, 0), Rm(1, 1), Rm(1, 2)}}});
+  }
   j["supports"] = json::array();
   for (const auto& [node, r] : in.restraints) j["supports"].push_back({{"node", node}, {"restraints", r}});
   j["load_cases"] = json::array();

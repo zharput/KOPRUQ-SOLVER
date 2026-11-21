@@ -28,8 +28,8 @@ class ModalSolver { public:
     ModalResults out;
     try {
       DofManager dm(m);
-      if (!m.rigid_links.empty()) {
-        if (massType == MassMatrixType::Lumped) { out.status = {false, "Lumped mass is not yet supported together with rigid links", SolverStatusCode::InvalidModel}; return out; }
+      if (!m.rigid_links.empty() || !m.node_axes.empty()) {
+        if (massType == MassMatrixType::Lumped) { out.status = {false, "Lumped mass is not yet supported together with rigid links or node local axes", SolverStatusCode::InvalidModel}; return out; }
         return solveWithRigidLinks(m, rs, numModes, dm);
       }
       out.total_dofs = dm.dof_count();
@@ -174,9 +174,8 @@ class ModalSolver { public:
       if (rs.empty()) { out.status = {false, "no restraints", SolverStatusCode::NoRestraints}; return out; }
       auto red = RigidLinkReduction::build(m, dm);
       auto all = rs; for (const auto& n : m.nodes) if (!all.count(n.id)) all[n.id] = {};
-      for (const auto& slave : red.slaveNodes) { auto it = all.find(slave); if (it != all.end()) for (bool flag : it->second) if (flag) throw AssemblyError(AssemblyErrorCode::MissingNode, "rigid-link slave node " + std::to_string(slave) + " cannot carry its own restraints"); }
-      auto allRetained = all; for (const auto& slave : red.slaveNodes) allRetained.erase(slave);
-      auto bFull = MatrixAssembler::classify(dm, allRetained);
+      red.checkRestraints(all);
+      auto bFull = red.classifyRetained(dm, all);
       std::vector<std::size_t> freeReduced;
       for (auto fi : bFull.free) freeReduced.push_back(red.fullToReduced(fi));
       out.free_dofs = freeReduced.size(); out.fixed_dofs = bFull.fixed.size();

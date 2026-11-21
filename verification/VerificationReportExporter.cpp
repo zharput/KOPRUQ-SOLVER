@@ -34,6 +34,7 @@ void writeMetadataBlock(xlnt::worksheet& ws, const ReportMetadata& m, int& row) 
   line("Calistirma Zamani", m.executionDateTimeIso);
   line("Displacements Dosyasi", m.displacementsFileName.empty() ? "(secilmedi)" : m.displacementsFileName);
   line("Reaction Dosyasi", m.reactionsFileName.empty() ? "(secilmedi)" : m.reactionsFileName);
+  line("Reaction (Local) Dosyasi", m.localReactionsFileName.empty() ? "(secilmedi)" : m.localReactionsFileName);
   line("Beam Force Dosyasi", m.beamForceFileName.empty() ? "(secilmedi)" : m.beamForceFileName);
   line("Truss Force Dosyasi", m.trussForceFileName.empty() ? "(secilmedi)" : m.trussForceFileName);
   line("Elastic Link Dosyasi", m.elasticLinkFileName.empty() ? "(secilmedi)" : m.elasticLinkFileName);
@@ -128,6 +129,7 @@ bool exportVerificationReport(const std::string& outputXlsxPath, const ReportDat
     ++row;
     writeCategorySummaryRow(summary, row++, "Displacements", data.displacements);
     writeCategorySummaryRow(summary, row++, "Reactions", data.reactions);
+    writeCategorySummaryRow(summary, row++, "Reactions (Local)", data.localReactions);
     writeCategorySummaryRow(summary, row++, "Beam Forces", data.beamForces);
     writeCategorySummaryRow(summary, row++, "Truss Forces", data.trussForces);
     writeCategorySummaryRow(summary, row++, "Elastic Links", data.elasticLinks);
@@ -139,6 +141,10 @@ bool exportVerificationReport(const std::string& outputXlsxPath, const ReportDat
     auto reactions = wb.create_sheet();
     reactions.title("Reactions");
     writeNodeBasedSheet(reactions, data.reactions);
+
+    auto localReactions = wb.create_sheet();
+    localReactions.title("Reactions (Local)");
+    writeNodeBasedSheet(localReactions, data.localReactions);
 
     auto beamForces = wb.create_sheet();
     beamForces.title("Beam Forces");

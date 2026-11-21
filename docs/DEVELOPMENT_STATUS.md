@@ -2798,3 +2798,62 @@ Results: model 19 Displacements 293 -> 294/294, Reaction 84/84, Beam Force 552/5
 model unchanged; eigen: model 14 max rel 3.7e-5 -> 3.5e-5, model 15 (square SB 1.0 and 0.6)
 1.27e-4 -> 3.5e-5 (all 100% before and after); spectrum 16/17 unchanged.
 Regression: Debug 330/330, Release 330/330, gui-release 363/363.
+
+## Model 23 (box girder): per-DOF rigid links, node local axes, extended beam loads, elastic link and local reaction comparison (2026-11-21)
+
+User-approved scope: add everything model 23 needs (elastic link, rigid link, trapezoidal loads,
+uniform moment, node local axes / local reactions). Model 23: PSC 1CEL box girder in plan (STYP=1),
+6 elastic links (two with rotational stiffness), 2 rigid links, 6 skewed supports, cases UNIFORM /
+POINT / TRAPEZ.
+
+Implemented (production):
+- **Per-DOF rigid links.** `RigidLink::dofs` (default all six). RigidLinkReduction eliminates only the
+  tied slave DOFs; an untied slave DOF stays independent and may be restrained. Restraining a tied
+  DOF is still rejected (solvers, Validate.hpp, ModelJson). Importer reads RIGD `DOF` (integer, leading
+  zeros lost, or string). MIDAS rule found from MIDAS's own results: a restrained slave DOF (CONS,
+  STYP, truss auto-restraint) is dropped from the link. Evidence: link 1 -> 93 (DOF 111111, slave CONS
+  0111000, STYP=1): slave DZ = 0 while master DZ != 0, slave DX = master DX + RY*(z_s - z_m), slave
+  RY = master RY, slave reactions 0. Reported as an assumption per link.
+- **Node local axes** (`Model::node_axes`, rows = local x/y/z). Restraints act along local axes,
+  through the same DOF-transformation layer (U_global = R^T U_local per node). Reactions are masked
+  in local axes and reported both ways (`NodeResults::reaction_local`, results JSON `reaction_local`
+  only for such nodes). Modal supported (Lumped mass rejected, as with rigid links); response spectrum
+  rejects node axes explicitly. ModelJson `node_axes` read/write, schema updated. Importer SKEW:
+  iMETHOD 1 with one nonzero angle only (rotation order for several angles not documented ->
+  rejected); with STYP=1 only at fully restrained nodes (interaction with global plane restraint
+  unverified). Convention confirmed by MIDAS Reaction(Local): node 73 (ANGLE_Z 30): global FX 1162.87
+  -> local Fx 1007.08, Fy -581.44 = MIDAS.
+- **BMLD**: UNILOAD / UNIMOMENT / CONLOAD / CONMOMENT, directions LX..LZ and GX..GZ. Distributed loads
+  are the piecewise-linear line through (D[i], P[i]) while D increases (up to 4 points; a former
+  silent defect imported only the first segment of a 3-4 point trapezoid). All nonzero concentrated
+  points are imported. USE_PROJECTION / USE_ECCEN / USE_ADDITIONAL are rejected (previously ignored).
+- **Elastic link output and comparison.** Results JSON `springs` (link end forces). GUI matcher
+  `matchElasticLinks` replaces the Unsupported marking: MIDAS's value = node2 end force in the J-end
+  beam-force convention (only Moment-y flips; 12/12 rows of links 5/6 show equal magnitude, opposite
+  sign before the flip). MIDAS General link with bSHEAR = false reports zero link moments for links
+  without rotational stiffness despite ~11000 kN shear on 6.4 m links, i.e. no lever-arm coupling,
+  same as SpringLink; DR is irrelevant when bSHEAR = false.
+- **Reaction(Local)**: new GUI input row, `matchLocalReactions` (falls back to the global reaction for
+  nodes without local axes), new results tab and report sheet "Reactions (Local)".
+- CMake: `/bigobj` added to kopruq_solver_core (Debug C1128 in an existing test after header growth).
+
+Model 23 results (GUI path, production): Displacements 1080/1080, Reaction(Local) 108/108, Elastic Link
+216/216 (model 07's links also 12/12), Reaction 748/756, Beam Force 1803/1836. Every other model
+unchanged (sweep of 20 workspaces).
+
+Open finding 1 (formulation, awaiting user approval): all 8 Reaction and 32 of 33 Beam Force FAILs
+are in case POINT at the two members carrying UNIMOMENT GZ (elements 16/31, PSC, L 26.25 m, end RZ
+restrained by STYP). KOPRUQ's member-load vectors use Euler-Bernoulli Hermite shape functions also
+for Timoshenko members; MIDAS's end forces equal the exact Timoshenko fixed-end values (uniform moment:
+V = m/(1+Phi), M = m L Phi/(2(1+Phi)), Phi = 0.53 here). A scratch prototype with Timoshenko-consistent
+(interdependent interpolation, Friedman-Kosmatka) load vectors for force and moment member loads gives
+Reaction 756/756 and Beam Force 1835/1836, and leaves every other model's counts unchanged. Not in
+production: it changes the numerical formulation (CLAUDE.md: user decision).
+Open finding 2 (known limitation): element 92 UNIFORM J-end Moment-y 312.49 vs 319.87 is a zero
+crossing (I end -33298); torsion differs 0.19%. Scaling the PSC J by 1.0025 reproduces MIDAS's torsion
+6643.3 exactly: the same PSC 1CEL FE-mesh dependence of J as in model 22; not adjusted.
+
+New tests (19 core + 2 GUI-only): rigid_link_dof_mask_tests (6), node_local_axes_tests (8),
+midas_bmld_extended_tests (5), result_matcher_links_local_tests (2, GUI build).
+Regression: Debug 349/349, Release 349/349, gui-release 384/384 (before: 330 / 330 / 363; no test
+removed or changed).

@@ -42,13 +42,23 @@ inline json solutionJson(const std::string& name, const StaticSolution& s) {
     {"max_element_force_error", r.max_element_force_error}, {"max_element_moment_error", r.max_element_moment_error},
     {"strain_energy", r.strain_energy}, {"element_strain_energy", r.element_strain_energy}, {"energy_error", r.energy_error}};
   j["nodes"] = json::array();
-  for (const auto& n : r.nodes)
-    j["nodes"].push_back({{"id", n.node_id}, {"displacement", n.displacement}, {"reaction", n.reaction}, {"restrained", n.restrained}});
+  for (const auto& n : r.nodes) {
+    json jn{{"id", n.node_id}, {"displacement", n.displacement}, {"reaction", n.reaction}, {"restrained", n.restrained}};
+    if (n.local_axes) jn["reaction_local"] = n.reaction_local; // only for nodes with local axes (2026-11-21)
+    j["nodes"].push_back(jn);
+  }
   j["elements"] = json::array();
   for (const auto& e : r.elements)
     j["elements"].push_back({{"id", e.element_id}, {"local_end_forces", e.local_end_force}, {"global_end_forces", e.global_end_force},
                              {"strain_energy", e.strain_energy}, {"normalized_force_error", e.normalized_force_error},
                              {"normalized_moment_error", e.normalized_moment_error}});
+  // Two-node elastic links (2026-11-21): end forces exerted by the nodes on the link, link-local axes,
+  // [0..5] at node1 and [6..11] at node2 (SpringLink.hpp). Omitted when the model has none.
+  if (!r.springs.empty()) {
+    j["springs"] = json::array();
+    for (const auto& e : r.springs)
+      j["springs"].push_back({{"id", e.element_id}, {"local_end_forces", e.local_end_force}, {"global_end_forces", e.global_end_force}});
+  }
   return j;
 }
 

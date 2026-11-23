@@ -28,7 +28,7 @@ describe('station results', () => {
     expect(s.cases.length).toBe(0); expect(s.failed[0].name).toBe('x');
   });
   it('Diagrams tab draws six charts for the selected element; honest messages otherwise', () => {
-    useUi.setState({ view: null, results: null, stations: null, stationsNote: null, resultView: defaultResultView(), selection: null, bottomTab: 'Diagrams' });
+    useUi.setState({ view: null, results: null, stations: null, stationsNote: null, resultView: defaultResultView(), selection: null, tableTab: 'Diagrams' });
     act(() => useUi.getState().loadText(view, 'c'));
     render(<App />);
     expect(screen.getByTestId('diagrams-na').textContent).toMatch(/no results/);

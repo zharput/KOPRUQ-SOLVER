@@ -9,7 +9,7 @@ vi.mock('../src/components/fem-viewer/FEMViewer', () => ({ FEMViewer: () => <div
 const sample = readFileSync('tests/data/m100_view.json', 'utf-8');
 const load = (t: string, n: string) => act(() => { useUi.getState().loadText(t, n); });
 const menu = () => within(screen.getByRole('navigation', { name: 'Main menu' }));
-beforeEach(() => useUi.setState({ view: null, fileName: '', loadError: null, selection: null, search: '', bottomTab: 'Results' }));
+beforeEach(() => useUi.setState({ view: null, fileName: '', loadError: null, selection: null, search: '', tableTab: 'Results' }));
 
 describe('GUI shell', () => {
   it('shows the required top-level menus', () => {
@@ -52,12 +52,13 @@ describe('GUI shell', () => {
     load('not json', 'c.json');
     expect(screen.getByRole('alert').textContent).toMatch(/Not valid JSON/);
   });
-  it('switches result tabs; results and verification stay honest placeholders', () => {
+  it('switches result tabs; results stay honest placeholders', () => {
     render(<App />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Tables' }));
     fireEvent.click(screen.getByRole('tab', { name: 'Reactions' }));
     expect(screen.getByTestId('results-empty').textContent).toContain('no results');
-    fireEvent.click(screen.getByRole('tab', { name: 'Verification' }));
-    expect(screen.getByTestId('verification-empty').textContent).toContain('not implemented');
+    // 2026-11-23 (GUI V2): the Verification placeholder left the results area (it becomes its own workspace in Phase 6 of the GUI plan); the result categories moved into Tables
+    expect(screen.queryByRole('tab', { name: 'Verification' })).toBeNull();
   });
   it('toggles are part of the shared state', () => {
     render(<App />);

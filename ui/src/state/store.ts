@@ -7,7 +7,8 @@ import type { ResultSet } from '../results/types';
 import type { StationSet } from '../results/stations';
 
 export type Selection = { kind: 'node' | 'element'; id: number } | null;
-export type BottomTab = 'Log' | 'Results' | 'Displacements' | 'Reactions' | 'Element Forces' | 'Diagrams' | 'Tables' | 'Verification';
+export type CenterTab = '3d' | 'tables';
+export type TableTab = 'Results' | 'Displacements' | 'Reactions' | 'Element Forces' | 'Diagrams' | 'Tables';
 export type CameraPreset = 'iso' | 'front' | 'top' | 'side' | 'fit';
 export interface ShowFlags { nodes: boolean; elements: boolean; supports: boolean; links: boolean; solid: boolean }
 
@@ -28,13 +29,13 @@ interface UiState {
   stations: StationSet | null; stationsNote: string | null;
   results: ResultSet | null; resultView: ResultView; setResultView: (p: Partial<ResultView>) => void;
   view: ModelView | null; fileName: string; loadError: string | null;
-  selection: Selection; search: string; bottomTab: BottomTab;
+  selection: Selection; search: string; tableTab: TableTab; centerTab: CenterTab; setCenterTab: (t: CenterTab) => void;
   show: ShowFlags;
   camera: { preset: CameraPreset; n: number };   // n increments on every request so the same preset can be re-applied
   openRequest: number;                            // incremented to ask the shell to show the file dialog
   loadText: (text: string, name: string) => void;
   loadSample: () => Promise<void>;
-  select: (s: Selection) => void; setSearch: (s: string) => void; setBottomTab: (t: BottomTab) => void;
+  select: (s: Selection) => void; setSearch: (s: string) => void; setTableTab: (t: TableTab) => void;
   toggle: (k: keyof ShowFlags) => void; setCamera: (p: CameraPreset) => void; requestOpen: () => void;
 }
 
@@ -58,11 +59,11 @@ export const useUi = create<UiState>((set, get) => ({
     const state: RunState = f.cancelled ? 'cancelled' : (ok && !failedMsg ? 'done' : 'failed');
     const stages = { ...s.run.stages }; for (const k of Object.keys(stages)) if (stages[k] === 'running') stages[k] = f.cancelled ? 'pending' : 'failed'; // a cancelled stage did not fail
     const good = state === 'done' && results !== null;
-    return { stations: good ? null : s.stations, stationsNote: good ? (results!.kind === 'solve' ? 'Computing station results...' : null) : s.stationsNote, results: good ? results : s.results, resultView: good ? defaultResultView() : s.resultView, bottomTab: good ? (results!.kind === 'modal' ? 'Tables' as BottomTab : 'Displacements' as BottomTab) : s.bottomTab, run: { ...s.run, state, stages, seconds: f.seconds, resultPath: f.outputPath, summary, message: state === 'failed' ? (failedMsg ?? `The solver exited with code ${f.exit}`) : undefined } };
+    return { stations: good ? null : s.stations, stationsNote: good ? (results!.kind === 'solve' ? 'Computing station results...' : null) : s.stationsNote, results: good ? results : s.results, resultView: good ? defaultResultView() : s.resultView, tableTab: good ? (results!.kind === 'modal' ? 'Tables' as TableTab : 'Displacements' as TableTab) : s.tableTab, run: { ...s.run, state, stages, seconds: f.seconds, resultPath: f.outputPath, summary, message: state === 'failed' ? (failedMsg ?? `The solver exited with code ${f.exit}`) : undefined } };
   }),
   stations: null, stationsNote: null,
   results: null, resultView: defaultResultView(), setResultView: (p) => set((s) => ({ resultView: { ...s.resultView, ...p } })),
-  view: null, fileName: '', loadError: null, selection: null, search: '', bottomTab: 'Results',
+  view: null, fileName: '', loadError: null, selection: null, search: '', tableTab: 'Results', centerTab: '3d', setCenterTab: (centerTab) => set({ centerTab }),
   show: { nodes: true, elements: true, supports: true, links: true, solid: true },
   camera: { preset: 'iso', n: 0 }, openRequest: 0,
   loadText: (text, name) => {
@@ -75,7 +76,7 @@ export const useUi = create<UiState>((set, get) => ({
       get().loadText(await r.text(), 'sample: verification model 100 (inspect output)');
     } catch (e) { set({ loadError: `Could not load the sample model: ${(e as Error).message}` }); }
   },
-  select: (selection) => set({ selection }), setSearch: (search) => set({ search }), setBottomTab: (bottomTab) => set({ bottomTab }),
+  select: (selection) => set({ selection }), setSearch: (search) => set({ search }), setTableTab: (tableTab) => set({ tableTab }),
   toggle: (k) => set((s) => ({ show: { ...s.show, [k]: !s.show[k] } })),
   setCamera: (preset) => set((s) => ({ camera: { preset, n: s.camera.n + 1 } })),
   requestOpen: () => set((s) => ({ openRequest: s.openRequest + 1 })),

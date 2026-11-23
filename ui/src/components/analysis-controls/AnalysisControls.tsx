@@ -1,3 +1,4 @@
+import { LogView } from '../results-viewer/LogView';
 import { cancelAnalysis, startAnalysis } from '../../state/runner';
 import { type AnalysisKind, type StageState, useUi } from '../../state/store';
 
@@ -37,6 +38,7 @@ export function AnalysisControls() {
       {run.state === 'cancelled' && <p className="empty" style={{ padding: '8px 0' }}>Cancelled.</p>}
       <p className="empty" style={{ padding: '8px 0' }} data-testid="solver-connection">
         Solver: {solver.state === 'connected' ? `${solver.version}` : solver.state === 'missing' ? `not available — ${solver.error ?? ''}` : 'checking…'}</p>
+      <details className="logbox" open={run.state === 'failed' || undefined}><summary>Solver log{run.log.length ? ` (${run.log.length})` : ''}</summary><LogView /></details>
       {!canRun && !running && <p className="empty" style={{ padding: 0 }}>{why}</p>}
     </div>
   );

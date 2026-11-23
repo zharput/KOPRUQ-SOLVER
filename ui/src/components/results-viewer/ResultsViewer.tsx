@@ -2,7 +2,7 @@ import type { ColumnDef } from '@tanstack/react-table';
 import { useMemo } from 'react';
 import { COMPONENTS, FORCE_COLS } from '../../results/parse';
 import type { ModeRow, NodeValues, ResultCase } from '../../results/types';
-import { type BottomTab, useUi } from '../../state/store';
+import { type TableTab, useUi } from '../../state/store';
 import { DataTable, fmt } from './DataTable';
 import { ForceDiagram } from './ForceDiagram';
 
@@ -56,7 +56,7 @@ function Summary() {
     {r.failed.map((f, i) => <div key={i} className="warn">{f.name}: {f.message}</div>)}</div>;
 }
 
-export function ResultsViewer({ tab }: { tab: Exclude<BottomTab, 'Verification' | 'Log'> }) {
+export function ResultsViewer({ tab }: { tab: TableTab }) {
   const { results, resultView } = useUi();
   if (tab === 'Diagrams') return <ForceDiagram />;
   if (!results) return <div className="empty" data-testid="results-empty">{tab}: no results. Run an analysis in the desktop app; the values of the last successful run appear here.</div>;

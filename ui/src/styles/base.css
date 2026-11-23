@@ -80,3 +80,14 @@ code{font-family:var(--mono);color:#9fc5ee}
 .resov .legend .bar{height:10px;border-radius:2px}.resov .lab{display:flex;justify-content:space-between;gap:8px;font-size:11px}
 .charts{flex:1 1 0;min-height:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));grid-auto-rows:minmax(110px,1fr);gap:4px;padding:4px;overflow:auto}
 .chart{min-height:110px}
+
+/* centre workspace: 3D Model | Tables */
+.pane{display:flex;flex-direction:column;flex:1 1 0;min-height:0;min-width:0;position:relative}
+.pane.hidden{display:none}
+.pane>.viewer{flex:1 1 0;min-height:0;overflow:hidden;position:relative}
+.tablesws{display:flex;flex-direction:column;flex:1;min-height:0}
+.subtabs{display:flex;gap:2px;border-bottom:1px solid var(--line);background:var(--bg-2);padding:0 6px;flex-wrap:wrap}
+.subtabs .tab:disabled{opacity:.45;cursor:not-allowed}
+.tbody{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column}
+.logbox{margin:8px 0}.logbox summary{cursor:pointer;color:var(--text-dim)}
+.logbox .log{max-height:160px;overflow:auto}

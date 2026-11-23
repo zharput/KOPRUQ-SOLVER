@@ -70,6 +70,12 @@ Not yet: load arrows, local axes, element ID labels.
 Checked in headless Edge with the real model-100 result file (`spikes/cdp_results.mjs`, images `docs/results-*.png`);
 the desktop-shell path was not re-run after Phase 5.
 
+## GUI V2 Phase 1: layout (2026-11-23)
+The bottom results panel is gone. The centre is one workspace with two tabs, **3D Model** and **Tables**; both stay mounted so
+the 3D scene, selection, results and table category survive tab switches. Result categories (Element Forces, Displacements, Reactions,
+Element Stresses [disabled: the result files carry no stresses], Diagrams, Modal / Spectrum, Summary) are sub-tabs of Tables; the solver
+log is a collapsible section of the Analysis panel. Next phases: unit system, legend/units in the viewer, full tables, export.
+
 ## Layout
 
 | Area | Component |

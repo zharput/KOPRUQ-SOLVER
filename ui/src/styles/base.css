@@ -91,3 +91,16 @@ code{font-family:var(--mono);color:#9fc5ee}
 .tbody{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column}
 .logbox{margin:8px 0}.logbox summary{cursor:pointer;color:var(--text-dim)}
 .logbox .log{max-height:160px;overflow:auto}
+
+/* viewer overlays (V2 phase 3) */
+.viewer .vctl{position:absolute;inset:auto;top:6px;left:6px;right:6px;width:auto;display:flex;gap:14px;align-items:center;flex-wrap:wrap;background:rgba(11,21,37,.86);border:1px solid var(--line);border-radius:4px;padding:5px 10px;font-size:12px;z-index:2;overflow:visible}
+.vctl select,.vctl input,.legendv input,.unitpick button{background:var(--bg-2);color:var(--text);border:1px solid var(--line);padding:1px 4px;font-size:12px}
+.vctl label{display:flex;gap:6px;align-items:center;white-space:nowrap}.vctl input[type=number]{width:64px}
+.viewer .legendv{position:absolute;inset:auto;top:56px;right:10px;bottom:48px;width:96px;display:flex;flex-direction:column;gap:4px;background:rgba(11,21,37,.86);border:1px solid var(--line);border-radius:4px;padding:6px;font-size:11px;z-index:2;overflow:visible;max-height:420px}
+.legendv .lbody{position:relative;flex:1 1 auto;min-height:80px;display:flex;gap:6px}.legendv .lbar{width:14px;border-radius:2px;border:1px solid var(--line)}
+.legendv .lticks{position:relative;flex:1}.legendv .lticks span{position:absolute;transform:translateY(50%);right:0;font-variant-numeric:tabular-nums}
+.legendv .lrange{display:flex;gap:4px;align-items:center}.legendv .lman{display:flex;flex-direction:column;gap:2px}.legendv .lman input{width:70px}
+.viewer .unitpick{position:absolute;inset:auto;right:10px;bottom:8px;width:auto;z-index:3;overflow:visible;display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+.unitpick .umenu{display:flex;flex-direction:column;background:var(--bg-2);border:1px solid var(--line);border-radius:4px}
+.unitpick .umenu button{border:0;text-align:left;padding:4px 12px;cursor:pointer}.unitpick .umenu button.on,.unitpick .umenu button:hover{background:#1e3a5f}
+.vnote{cursor:help}

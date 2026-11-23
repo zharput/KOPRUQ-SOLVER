@@ -18,7 +18,7 @@ const click = (kind, idv) => ev(`(async()=>{
   cam.setFocalPoint(...w); cam.setPosition(w[0]+u[0]*near,w[1]+u[1]*near,w[2]+u[2]*near); s.grw.getRenderer().resetCameraClippingRange(); s.grw.getRenderWindow().render(); await new Promise(r=>setTimeout(r,300));
   const d=ogl.worldToDisplay(w[0],w[1],w[2],s.grw.getRenderer());
   const cx=rect.left+d[0]*rect.width/sz[0], cy=rect.bottom-d[1]*rect.height/sz[1];
-  for(const t of ['pointerdown','pointerup']) el.dispatchEvent(new PointerEvent(t,{clientX:cx,clientY:cy,bubbles:true,pointerId:1}));
+  const host=el.querySelector('.vtkhost')||el; for(const t of ['pointerdown','pointerup']) host.dispatchEvent(new PointerEvent(t,{clientX:cx,clientY:cy,bubbles:true,pointerId:1}));
   await new Promise(r=>setTimeout(r,900));
   const txt=document.querySelector('[aria-label=Properties] .body').innerText.replace(/\s+/g,' ');
   return txt.slice(0,60);})()`);

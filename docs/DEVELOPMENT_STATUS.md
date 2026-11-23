@@ -3168,3 +3168,10 @@ Evidence: C++ Debug 391/391, Release 391/391, gui-release 430/430 (+6 new). `npm
 desktop-shell end-to-end of the stations run (verified in headless Edge with the real model-100 stations file).
 n## GUI V2 Phase 2 -- central unit system (2026-11-23)
 ui/src/units/units.ts: display-layer conversion between the solver units (m, kN) and kN.m, Ton.m (tf), N.mm, kg.cm (kgf) with exact definitions (1 kgf = 9.80665 N); force, length, moment, stress, distributed load, area, inertia, unit weight; dimensionless values and rotations never converted. Setting saved in localStorage. 10 new tests (hand-derived values, round trips); `npm test` 56/56. Not yet applied to tables/legend (Phases 3-4).
+
+## GUI V2 Phase 3 -- 3D viewer controls, legend, units (2026-11-23)
+ui/: top bar (load case/combination, result type, display mode, scale), vertical legend at the right (name, unit, ticks, automatic/manual range), clickable unit
+picker at the bottom right, member-force contours N/Vy/Vz/T/My/Mz from the station results (linear between stations), displacement contours, all in the selected
+unit system (display only). Force contours are enabled only for Linear Static with station data; modal/spectrum/missing stations are disabled with the reason.
+Camera fit now projects the bounding box (independent of canvas shape). Verified: `npm test` 64/64 (cantilever My = P(L-x) at every vertex, units, ticks,
+availability, controls), headless Edge on model 100 (My max 30660 kNm = 3126.4 tf.m in Ton.m), picking script 16/16.

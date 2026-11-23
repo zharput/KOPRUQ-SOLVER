@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { parseModelView } from '../model/load';
 import { noHost, type Command, type Finished, type SolverHost, type SourceFormat } from '../platform/SolverHost';
 import type { ModelView } from '../model/types';
+import type { ContourId } from '../model/contourField';
 import { parseResults } from '../results/parse';
 import type { ResultSet } from '../results/types';
 import type { StationSet } from '../results/stations';
@@ -17,9 +18,10 @@ export type StageState = 'pending' | 'running' | 'done' | 'failed';
 export type RunState = 'idle' | 'running' | 'done' | 'failed' | 'cancelled';
 export interface RunInfo { state: RunState; command: Command | null; stages: Record<string, StageState>; log: string[]; seconds?: number; message?: string; resultPath?: string; summary?: string }
 export const idleRun = (): RunInfo => ({ state: 'idle', command: null, stages: {}, log: [] });
-export type Contour = 'none' | 'U' | 'UX' | 'UY' | 'UZ';
-export interface ResultView { caseIndex: number; deformed: boolean; scale: number; contour: Contour }
-export const defaultResultView = (): ResultView => ({ caseIndex: 0, deformed: false, scale: 50, contour: 'none' });
+export type Contour = ContourId;
+// range*: legend range in DISPLAY units; used when rangeAuto is false
+export interface ResultView { caseIndex: number; deformed: boolean; scale: number; contour: Contour; rangeAuto: boolean; rangeMin: number; rangeMax: number }
+export const defaultResultView = (): ResultView => ({ caseIndex: 0, deformed: false, scale: 50, contour: 'none', rangeAuto: true, rangeMin: 0, rangeMax: 1 });
 export type AnalysisKind = 'solve' | 'modal' | 'spectrum';
 
 interface UiState {

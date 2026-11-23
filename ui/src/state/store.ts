@@ -4,6 +4,7 @@ import { noHost, type Command, type Finished, type SolverHost, type SourceFormat
 import type { ModelView } from '../model/types';
 import { parseResults } from '../results/parse';
 import type { ResultSet } from '../results/types';
+import type { StationSet } from '../results/stations';
 
 export type Selection = { kind: 'node' | 'element'; id: number } | null;
 export type BottomTab = 'Log' | 'Results' | 'Displacements' | 'Reactions' | 'Element Forces' | 'Diagrams' | 'Tables' | 'Verification';
@@ -24,6 +25,7 @@ interface UiState {
   source: { path: string; format: SourceFormat } | null; analysis: AnalysisKind; modes: number; massType: 'consistent' | 'lumped'; run: RunInfo; activeRun: number;
   setHost: (h: SolverHost) => void; patchRun: (f: (r: RunInfo) => RunInfo) => void; finishRun: (f: Finished, resultText: string | null, readError: string | null) => void;
   set: (p: Partial<Pick<UiState, 'analysis' | 'modes' | 'massType' | 'solver' | 'source' | 'run' | 'activeRun'>>) => void;
+  stations: StationSet | null; stationsNote: string | null;
   results: ResultSet | null; resultView: ResultView; setResultView: (p: Partial<ResultView>) => void;
   view: ModelView | null; fileName: string; loadError: string | null;
   selection: Selection; search: string; bottomTab: BottomTab;
@@ -56,14 +58,15 @@ export const useUi = create<UiState>((set, get) => ({
     const state: RunState = f.cancelled ? 'cancelled' : (ok && !failedMsg ? 'done' : 'failed');
     const stages = { ...s.run.stages }; for (const k of Object.keys(stages)) if (stages[k] === 'running') stages[k] = f.cancelled ? 'pending' : 'failed'; // a cancelled stage did not fail
     const good = state === 'done' && results !== null;
-    return { results: good ? results : s.results, resultView: good ? defaultResultView() : s.resultView, bottomTab: good ? (results!.kind === 'modal' ? 'Tables' as BottomTab : 'Displacements' as BottomTab) : s.bottomTab, run: { ...s.run, state, stages, seconds: f.seconds, resultPath: f.outputPath, summary, message: state === 'failed' ? (failedMsg ?? `The solver exited with code ${f.exit}`) : undefined } };
+    return { stations: good ? null : s.stations, stationsNote: good ? (results!.kind === 'solve' ? 'Computing station results...' : null) : s.stationsNote, results: good ? results : s.results, resultView: good ? defaultResultView() : s.resultView, bottomTab: good ? (results!.kind === 'modal' ? 'Tables' as BottomTab : 'Displacements' as BottomTab) : s.bottomTab, run: { ...s.run, state, stages, seconds: f.seconds, resultPath: f.outputPath, summary, message: state === 'failed' ? (failedMsg ?? `The solver exited with code ${f.exit}`) : undefined } };
   }),
+  stations: null, stationsNote: null,
   results: null, resultView: defaultResultView(), setResultView: (p) => set((s) => ({ resultView: { ...s.resultView, ...p } })),
   view: null, fileName: '', loadError: null, selection: null, search: '', bottomTab: 'Results',
   show: { nodes: true, elements: true, supports: true, links: true, solid: true },
   camera: { preset: 'iso', n: 0 }, openRequest: 0,
   loadText: (text, name) => {
-    try { set({ view: parseModelView(text), results: null, resultView: defaultResultView(), fileName: name, loadError: null, selection: null, search: '', camera: { preset: 'iso', n: get().camera.n + 1 } }); }
+    try { set({ view: parseModelView(text), results: null, stations: null, stationsNote: null, resultView: defaultResultView(), fileName: name, loadError: null, selection: null, search: '', camera: { preset: 'iso', n: get().camera.n + 1 } }); }
     catch (e) { set({ loadError: (e as Error).message }); } // keep the previously loaded model
   },
   loadSample: async () => {

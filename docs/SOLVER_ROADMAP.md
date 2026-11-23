@@ -11,8 +11,8 @@ Build a standalone, production-grade C++20 three-dimensional finite-element stru
 - No unapproved edits to the separate KOPRUQ frontend project.
 
 ## Current capability summary — 2026-11-23 (verified state)
-What the solver does today. Everything listed is implemented and covered by tests (Debug 385/385,
-Release 385/385, gui-release 424/424) and, where noted, verified against MIDAS NX reference models.
+What the solver does today. Everything listed is implemented and covered by tests (Debug 391/391,
+Release 391/391, gui-release 430/430) and, where noted, verified against MIDAS NX reference models.
 Anything not listed is not supported; the MIDAS importer rejects unsupported records explicitly
 (never approximates them silently) and reports every disclosed assumption.
 

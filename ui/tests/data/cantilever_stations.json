@@ -1,0 +1,97 @@
+{
+  "combinations": [],
+  "load_cases": [
+    {
+      "elements": [
+        {
+          "closure_force": 0.0,
+          "closure_moment": 0.0,
+          "id": 7,
+          "length": 4.0,
+          "stations": [
+            {
+              "f": [
+                -0.0,
+                -0.0,
+                -1000.0,
+                0.0,
+                4000.0,
+                0.0
+              ],
+              "x": 0.0
+            },
+            {
+              "f": [
+                -0.0,
+                -0.0,
+                -1000.0,
+                0.0,
+                3000.0,
+                0.0
+              ],
+              "x": 1.0
+            },
+            {
+              "f": [
+                -0.0,
+                -0.0,
+                -1000.0,
+                0.0,
+                2000.0,
+                0.0
+              ],
+              "x": 2.0
+            },
+            {
+              "f": [
+                -0.0,
+                -0.0,
+                -1000.0,
+                0.0,
+                1000.0,
+                0.0
+              ],
+              "x": 3.0
+            },
+            {
+              "f": [
+                -0.0,
+                -0.0,
+                -1000.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "x": 4.0
+            }
+          ]
+        }
+      ],
+      "name": "tip",
+      "status": {
+        "code": "Success",
+        "message": "linear static solution and recovery completed",
+        "success": true
+      }
+    }
+  ],
+  "metadata": {
+    "convention": "solver local axes; f = [N, Vy, Vz, T, My, Mz] = force/moment exerted on the +x face of the piece [0,x] by the part beyond x (tension positive); no MIDAS sign flip",
+    "model_sha256": "76febc4b0b482096c59ed67565a1461219e0d664d90ef334e9d4198af97ee9a8",
+    "solver": "KOPRUQ-SOLVER",
+    "solver_version": "0.1.0",
+    "uniform_stations": 5,
+    "units": {
+      "force": "kN",
+      "length": "m",
+      "moment": "kNm"
+    }
+  },
+  "schema": "kopruq-element-stations",
+  "schema_version": 1,
+  "status": {
+    "code": "Success",
+    "message": "linear static solution and recovery completed",
+    "success": true
+  }
+}

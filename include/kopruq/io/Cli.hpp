@@ -1,5 +1,6 @@
 #pragma once
 // Command-line front end, kept separate from main() so it can be tested in-process.
+#include "ElementStationsJson.hpp"
 #include "ModalResultsJson.hpp"
 #include "ModelViewJson.hpp"
 #include "ResponseSpectrumResultsJson.hpp"
@@ -25,6 +26,8 @@ inline constexpr const char* cli_usage =
   "                         (solve, modal and spectrum accept --progress json: newline-delimited JSON events on stderr)\n"
   "       kopruq_solver_cli inspect <model.json> [-o <view.json>] [--format <native|midas-nx-json>]\n"
   "                         (writes the kopruq-model-view document for viewers; no analysis is run)\n"
+  "       kopruq_solver_cli stations <model.json> [-o <stations.json>] [--stations <n>] [--format <native|midas-nx-json>]\n"
+  "                         (static analysis + internal forces along every beam: kopruq-element-stations; default 11 uniform stations)\n"
   "\n"
   "--format midas-nx-json reads a MIDAS Civil NX JSON export instead of the native model\n"
   "schema (Phase 7B/7C importer; only the subset documented in\n"
@@ -42,7 +45,7 @@ inline constexpr const char* cli_usage =
 
 namespace detail {
 
-struct CommonArgs { std::string modelPath, outputPath, format = "native"; int numModes = 6; bool haveNumModes = false; MassMatrixType massType = MassMatrixType::Consistent; bool progress = false; };
+struct CommonArgs { std::string modelPath, outputPath, format = "native"; int numModes = 6; bool haveNumModes = false; MassMatrixType massType = MassMatrixType::Consistent; bool progress = false; int stations = 11; };
 
 // Parses the shared "<model.json> [-o <out>] [-n <modes>] [--format <fmt>] [--mass-type <type>]"
 // tail; -n/--mass-type are only meaningful for "modal"/"spectrum" but accepted here so every
@@ -56,6 +59,10 @@ inline bool parseArgs(const char* command, const std::vector<std::string>& args,
       if (i + 1 >= args.size()) { err << command << ": " << args[i] << " needs a number\n"; return false; }
       try { out.numModes = std::stoi(args[++i]); out.haveNumModes = true; }
       catch (const std::exception&) { err << command << ": invalid number of modes '" << args[i] << "'\n"; return false; }
+    } else if (args[i] == "--stations") {
+      if (i + 1 >= args.size()) { err << command << ": --stations needs a number\n"; return false; }
+      try { out.stations = std::stoi(args[++i]); } catch (const std::exception&) { err << command << ": invalid station count '" << args[i] << "'\n"; return false; }
+      if (out.stations < 2 || out.stations > 1001) { err << command << ": --stations must be between 2 and 1001\n"; return false; }
     } else if (args[i] == "--mass-type") {
       if (i + 1 >= args.size()) { err << command << ": " << args[i] << " needs 'consistent' or 'lumped'\n"; return false; }
       const std::string& v = args[++i];
@@ -164,6 +171,24 @@ inline int runSolve(const std::vector<std::string>& args, std::ostream& out, std
   return 0;
 }
 
+// stations (2026-11-23): static analysis as `solve`, but the document is kopruq-element-stations v1 (forces along the
+// members from equilibrium of the recovered end forces and the member loads). Same exit codes as `solve`.
+inline int runStations(const std::vector<std::string>& args, std::ostream& out, std::ostream& err) {
+  CommonArgs a; if (!parseArgs("stations", args, err, a)) return 2;
+  const Progress pr{a.progress, err};
+  std::string text; ModelInput model; int code;
+  pr.stage("read", "start");
+  if (!readModelFile(a.modelPath, a.format, err, text, model, code)) return code;
+  pr.stage("read", "done"); pr.stage("solve", "start");
+  const auto result = LinearStaticSolver::solveCases(model.model, model.restraints, model.load_cases, model.combinations);
+  pr.stage("solve", "done"); pr.stage("write", "start");
+  const std::string document = writeStations(model, result, sha256Hex(text), a.stations).dump(2) + "\n";
+  if (int rc = writeDocument(a.outputPath, document, out, err)) return rc;
+  pr.stage("write", "done");
+  if (!result.status.success) { err << "analysis failed: " << result.status.message << '\n'; return 1; }
+  return 0;
+}
+
 // inspect (2026-11-23): model -> kopruq-model-view v1 for viewers. Reads like `solve` (same exit
 // codes: 2 usage, 3 invalid model, 4 I/O) but runs no analysis; for a MIDAS model the structured import
 // report is included in the document instead of only being printed on stderr.
@@ -238,6 +263,7 @@ inline int runCli(const std::vector<std::string>& args, std::ostream& out, std::
   if (command == "--version" || command == "version") { out << "KOPRUQ-SOLVER " << version << '\n'; return 0; }
   if (command == "--help" || command == "help") { out << cli_usage; return 0; }
   if (command == "solve") rc = detail::runSolve(args, out, err);
+  else if (command == "stations") rc = detail::runStations(args, out, err);
   else if (command == "inspect") rc = detail::runInspect(args, out, err);
   else if (command == "spectrum") rc = detail::runSpectrum(args, out, err);
   else if (command == "modal") rc = detail::runModal(args, out, err);

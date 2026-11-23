@@ -1,6 +1,6 @@
 // The only seam between the reusable components and the outside world (solver process, files).
 // `noHost` is used in a plain browser; `tauriHost` (TauriHost.ts) in the desktop app.
-export type Command = 'inspect' | 'solve' | 'modal' | 'spectrum';
+export type Command = 'inspect' | 'solve' | 'stations' | 'modal' | 'spectrum';
 export type SourceFormat = 'native' | 'midas-nx-json';
 export interface RunRequest { command: Command; modelPath: string; format: SourceFormat; numModes?: number; massType?: 'consistent' | 'lumped' }
 export interface SolverInfo { path: string; version: string }

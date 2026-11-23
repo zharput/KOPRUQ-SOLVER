@@ -4,6 +4,7 @@ import { COMPONENTS, FORCE_COLS } from '../../results/parse';
 import type { ModeRow, NodeValues, ResultCase } from '../../results/types';
 import { type BottomTab, useUi } from '../../state/store';
 import { DataTable, fmt } from './DataTable';
+import { ForceDiagram } from './ForceDiagram';
 
 const num = <T,>(key: string, get: (r: T) => number): ColumnDef<T, number> => ({ id: key, header: key, accessorFn: get, cell: (c) => fmt(c.getValue()) });
 
@@ -57,8 +58,8 @@ function Summary() {
 
 export function ResultsViewer({ tab }: { tab: Exclude<BottomTab, 'Verification' | 'Log'> }) {
   const { results, resultView } = useUi();
+  if (tab === 'Diagrams') return <ForceDiagram />;
   if (!results) return <div className="empty" data-testid="results-empty">{tab}: no results. Run an analysis in the desktop app; the values of the last successful run appear here.</div>;
-  if (tab === 'Diagrams') return <div className="empty" data-testid="diagrams-na">Force diagrams along the members need the station results (next step); they are not available yet.</div>;
   if (!results.cases.length) return <div className="empty">The analysis produced no usable case.{results.failed.map((f) => ` ${f.name}: ${f.message}`)}</div>;
   const c = results.cases[Math.min(resultView.caseIndex, results.cases.length - 1)];
   return <div className="resbox"><CaseBar />

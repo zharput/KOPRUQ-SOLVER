@@ -1,4 +1,4 @@
-# Element station results (diagrams): technical design -- DESIGN ONLY, not implemented
+# Element station results (diagrams): technical design -- IMPLEMENTED 2026-11-23 (CLI `stations`, kopruq-element-stations v1)
 
 **Problem.** `results.json` has only the two end forces per element, but the diagrams need N, Vy, Vz, T,
 My, Mz along each member. Moments between the ends depend on the member loads, which the results file
@@ -30,3 +30,12 @@ by cutting. (4) MIDAS beam-force export parts (I/J) on models 05, 06, 100.
 
 **Decisions needed.** Station count default (11?); whether combinations are produced by superposing case
 stations (exact, linear) -- proposed yes; output size (100 000 stations x 6 x cases: stream, don't hold in memory).
+
+## Implementation notes (2026-11-23)
+- `include/kopruq/results/ElementStations.hpp` (method), `io/ElementStationsJson.hpp` (document), CLI `stations <model> [-o] [--stations n] [--format]`,
+  schema `schemas/element_stations.schema.json`. Default 11 uniform stations plus load-segment ends; a point load inside a member gives a before/after pair.
+- Decisions taken: default 11 stations; combinations use the combined load case and recovered end forces of the combination itself (exactly linear);
+  response-spectrum peaks and truss/spring elements are not produced; output is built in memory (model 100: 7 cases, 94 members).
+- Each element carries `closure_force` / `closure_moment` = |R(L; all loads) - f2|, |M(L; all loads) - m2|: equilibrium of the solver's recovered end forces with
+  the member loads (independent of the station integration). Model 100: max 9.1e-13 kN / 1.4e-9 kNm.
+- Not done: MIDAS beam-force export comparison (the sign flip is a verification-layer concern; no station data is converted).

@@ -64,7 +64,9 @@ kopruq-response-spectrum-results; failed cases are listed, never shown as number
 and a case selector. The viewer's **Deformed** button draws the case's displaced shape (cubic Hermite along every member,
 section rotation about the axis, rigid offsets; first-order, scale factor editable) and a colour contour (|U|, UX, UY, UZ)
 with legend. Modal shapes are mass-normalised (arbitrary amplitude); spectrum values are peak magnitudes.
-Not yet: force diagrams along members (needs the station results), load arrows, local axes.
+**Diagrams** tab (Phase 5c): after a successful *Linear Static* run the app runs `kopruq_solver_cli stations` on the same model and plots N, Vy, Vz, T, My, Mz
+along the selected member (ECharts) for the selected case; the values are the solver's local convention, unconverted (`docs/station-results-design.md`).
+Not yet: load arrows, local axes, element ID labels.
 Checked in headless Edge with the real model-100 result file (`spikes/cdp_results.mjs`, images `docs/results-*.png`);
 the desktop-shell path was not re-run after Phase 5.
 

@@ -1,4 +1,5 @@
 import type { Finished, SourceFormat } from '../platform/SolverHost';
+import { parseStations } from '../results/stations';
 import { idleRun, useUi } from './store';
 
 // Orchestration between the store and the SolverHost. Nothing here reports success on its own: a run is
@@ -61,7 +62,20 @@ export async function startAnalysis(): Promise<void> {
     let text: string | null = null, err: string | null = null;
     if (!f.cancelled && f.exit === 0) { try { text = await s.host.readText(f.outputPath); } catch (e) { err = `The result file could not be read: ${errText(e)}`; } }
     useUi.getState().finishRun(f, text, err);
+    if (command === 'solve') await runStations(s.source.path, s.source.format);
   } catch (e) { useUi.getState().set({ run: { ...useUi.getState().run, state: 'failed', message: errText(e) } }); }
 }
 
 export const cancelAnalysis = () => useUi.getState().host.cancel();
+
+/** After a successful static run: `stations` (same model, own CLI process) for the force diagrams. Failure only disables the diagrams. */
+async function runStations(path: string, format: SourceFormat): Promise<void> {
+  const st = useUi.getState(); if (st.run.state !== 'done') return;
+  try {
+    const id = await st.host.run({ command: 'stations', modelPath: path, format });
+    const f = await waitFinished(id);
+    if (f.cancelled) { useUi.setState({ stationsNote: 'Station results were cancelled.' }); return; }
+    if (f.exit !== 0) throw new Error(`the solver exited with code ${f.exit}`);
+    useUi.setState({ stations: parseStations(await st.host.readText(f.outputPath)), stationsNote: null });
+  } catch (e) { useUi.setState({ stations: null, stationsNote: `Station results could not be computed: ${errText(e)}` }); }
+}

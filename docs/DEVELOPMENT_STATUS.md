@@ -3152,3 +3152,17 @@ ui/: result parsing (3 existing result schemas, no schema change), TanStack Tabl
 cantilever checks: tip w = -PL^3/3EI = -1.066667 m, elastic curve exact at 6 stations, theta_y = -dw/dx), typecheck and
 production build OK. Verified visually in headless Edge with the real model-100 result file; desktop shell not re-run.
 Next: 5c station results (C++ `kopruq-element-stations`) and ECharts diagrams.
+
+## React GUI Phase 5c -- element station results (2026-11-23, user-approved, additive C++)
+
+New CLI command `stations` (`kopruq-element-stations` v1, `schemas/element_stations.schema.json`; method in
+`include/kopruq/results/ElementStations.hpp`, design `ui/docs/station-results-design.md`): internal forces N, Vy, Vz, T, My, Mz
+along Beam3D members from free-body equilibrium of the recovered end forces and the member loads (distributed/point forces and
+moments, projected and global loads, self-weight; thermal acts via end forces only). Solver core, existing schemas and commands untouched.
+New file `tests/unit/element_stations_tests.cpp` (6 tests): closed forms -- simply supported UDL (M = qx(L-x)/2, V), fixed-fixed UDL
+(qL^2/12 ends, qL^2/24 mid), cantilever point load with before/after stations, combination = linear superposition of case stations,
+skew 3D member with offsets + release + Timoshenko + every load kind (stations at L reproduce the recovered end forces, closure 1e-8), usage errors.
+Real model 100 (7 cases/combinations, 94 members): max equilibrium closure 9.1e-13 kN, 1.4e-9 kNm.
+Evidence: C++ Debug 391/391, Release 391/391, gui-release 430/430 (+6 new). `npm test` 42/42. UI: ECharts force diagrams (Diagrams tab) fed by an automatic
+`stations` run after a successful Linear Static run. Not done: comparison with MIDAS beam-force exports (sign flip belongs to the verification layer);
+desktop-shell end-to-end of the stations run (verified in headless Edge with the real model-100 stations file).

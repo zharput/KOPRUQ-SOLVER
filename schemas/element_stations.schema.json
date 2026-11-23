@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kopruq.local/schemas/element-stations/1",
+  "title": "KOPRUQ-SOLVER element stations, format version 1",
+  "description": "Internal forces along Beam3D members from free-body equilibrium (include/kopruq/results/ElementStations.hpp). f = [N, Vy, Vz, T, My, Mz] in member-local axes: force/moment that the part beyond x exerts on the piece [0,x] (tension positive). Units m, kN, kNm. No MIDAS sign flip.",
+  "type": "object",
+  "required": [
+    "schema",
+    "schema_version",
+    "metadata",
+    "status",
+    "load_cases",
+    "combinations"
+  ],
+  "properties": {
+    "schema": {
+      "const": "kopruq-element-stations"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "metadata": {
+      "type": "object",
+      "required": [
+        "solver",
+        "solver_version",
+        "model_sha256",
+        "units",
+        "convention",
+        "uniform_stations"
+      ],
+      "properties": {
+        "solver": {
+          "type": "string"
+        },
+        "solver_version": {
+          "type": "string"
+        },
+        "model_sha256": {
+          "type": "string"
+        },
+        "units": {
+          "type": "object"
+        },
+        "convention": {
+          "type": "string"
+        },
+        "uniform_stations": {
+          "type": "integer",
+          "minimum": 2
+        }
+      }
+    },
+    "status": {
+      "$ref": "#/$defs/status"
+    },
+    "load_cases": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/case"
+      }
+    },
+    "combinations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/case"
+      }
+    }
+  },
+  "$defs": {
+    "status": {
+      "type": "object",
+      "required": [
+        "success",
+        "code",
+        "message"
+      ],
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "case": {
+      "type": "object",
+      "required": [
+        "name",
+        "status"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/status"
+        },
+        "elements": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "length",
+              "closure_force",
+              "closure_moment",
+              "stations"
+            ],
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "length": {
+                "type": "number"
+              },
+              "closure_force": {
+                "type": "number",
+                "description": "|R(L; all loads) - f2| : equilibrium of recovered end forces and member loads"
+              },
+              "closure_moment": {
+                "type": "number"
+              },
+              "stations": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "x",
+                    "f"
+                  ],
+                  "properties": {
+                    "x": {
+                      "type": "number"
+                    },
+                    "f": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      },
+                      "minItems": 6,
+                      "maxItems": 6
+                    },
+                    "side": {
+                      "enum": [
+                        "before",
+                        "after"
+                      ],
+                      "description": "present only at the two stations of a point load inside the member"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

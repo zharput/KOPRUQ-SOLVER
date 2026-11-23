@@ -87,7 +87,7 @@ fn read_text_file(path: String) -> Result<String, String> {
 }
 
 fn validate(req: &RunRequest) -> Result<(), String> {
-    if !["inspect", "solve", "modal", "spectrum"].contains(&req.command.as_str()) { return Err(format!("unsupported command '{}'", req.command)); }
+    if !["inspect", "solve", "stations", "modal", "spectrum"].contains(&req.command.as_str()) { return Err(format!("unsupported command '{}'", req.command)); }
     if !["native", "midas-nx-json"].contains(&req.format.as_str()) { return Err(format!("unsupported format '{}'", req.format)); }
     if let Some(m) = &req.mass_type { if !["consistent", "lumped"].contains(&m.as_str()) { return Err(format!("unsupported mass type '{m}'")); } }
     if let Some(n) = req.num_modes { if n == 0 || n > 10_000 { return Err("number of modes must be 1..10000".into()); } }

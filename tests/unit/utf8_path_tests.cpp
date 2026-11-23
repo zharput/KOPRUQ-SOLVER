@@ -5,6 +5,7 @@
 // (ö ü ş ğ ı -- the last three are not in code page 1252).
 #include <gtest/gtest.h>
 #include <filesystem>
+#include <random>
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -26,7 +27,7 @@ struct TempDir {
   std::filesystem::path path;
   TempDir() {
     const auto base = std::filesystem::temp_directory_path();
-    path = base / kopruq::io::utf8Path(kDirUtf8);
+    path = base / kopruq::io::utf8Path(kDirUtf8 + "_" + std::to_string(std::random_device{}()));
     std::filesystem::create_directories(path);
     const auto u8 = path.u8string();
     utf8.assign(u8.begin(), u8.end());

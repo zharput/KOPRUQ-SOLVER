@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "kopruq-model-view v1",
+  "description": "Everything a viewer needs about a model, written by the CLI command `inspect`. The `model` object is exactly a kopruq-model v1 document (schemas/model.schema.json); section_outlines are display data only.",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "const": "kopruq-model-view"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "solver": {
+          "type": "string"
+        },
+        "solver_version": {
+          "type": "string"
+        },
+        "source_format": {
+          "enum": [
+            "native",
+            "midas-nx-json"
+          ]
+        },
+        "model_sha256": {
+          "type": "string"
+        },
+        "units": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "solver",
+        "solver_version",
+        "source_format",
+        "model_sha256",
+        "units"
+      ],
+      "additionalProperties": false
+    },
+    "model": {
+      "type": "object",
+      "description": "kopruq-model v1 (schemas/model.schema.json)"
+    },
+    "section_outlines": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "section": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "contours": {
+            "type": "array",
+            "minItems": 1,
+            "description": "first = outer boundary (counter-clockwise), others = holes (clockwise); points [y, z] in metres, centroid at the origin",
+            "items": {
+              "type": "array",
+              "minItems": 3,
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              }
+            }
+          }
+        },
+        "required": [
+          "section",
+          "contours"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "bounds": {
+      "type": "object",
+      "properties": {
+        "min": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "max": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        }
+      },
+      "required": [
+        "min",
+        "max"
+      ],
+      "additionalProperties": false
+    },
+    "import": {
+      "type": "object",
+      "properties": {
+        "assumptions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "rejected": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "counts": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "required": [
+        "assumptions",
+        "rejected"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "metadata",
+    "model",
+    "section_outlines",
+    "import"
+  ],
+  "additionalProperties": false
+}

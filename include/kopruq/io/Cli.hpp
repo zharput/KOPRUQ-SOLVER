@@ -1,6 +1,7 @@
 #pragma once
 // Command-line front end, kept separate from main() so it can be tested in-process.
 #include "ModalResultsJson.hpp"
+#include "ModelViewJson.hpp"
 #include "ResponseSpectrumResultsJson.hpp"
 #include "ResultsJson.hpp"
 #include "Sha256.hpp"
@@ -20,6 +21,8 @@ inline constexpr const char* cli_usage =
   "       kopruq_solver_cli modal <model.json> [-o <results.json>] [-n <num-modes>] [--format <native|midas-nx-json>] [--mass-type <consistent|lumped>]\n"
   "       kopruq_solver_cli spectrum <model.json> [-o <results.json>] [--format <native|midas-nx-json>] [--mass-type <consistent|lumped>]\n"
   "                         (runs every \"response_spectra\" entry defined in the model)\n"
+  "       kopruq_solver_cli inspect <model.json> [-o <view.json>] [--format <native|midas-nx-json>]\n"
+  "                         (writes the kopruq-model-view document for viewers; no analysis is run)\n"
   "\n"
   "--format midas-nx-json reads a MIDAS Civil NX JSON export instead of the native model\n"
   "schema (Phase 7B/7C importer; only the subset documented in\n"
@@ -137,6 +140,27 @@ inline int runSolve(const std::vector<std::string>& args, std::ostream& out, std
   return 0;
 }
 
+// inspect (2026-11-23): model -> kopruq-model-view v1 for viewers. Reads like `solve` (same exit
+// codes: 2 usage, 3 invalid model, 4 I/O) but runs no analysis; for a MIDAS model the structured import
+// report is included in the document instead of only being printed on stderr.
+inline int runInspect(const std::vector<std::string>& args, std::ostream& out, std::ostream& err) {
+  CommonArgs a; if (!parseArgs("inspect", args, err, a)) return 2;
+  std::ifstream in(utf8Path(a.modelPath), std::ios::binary);
+  if (!in) { err << "cannot open model file: " << a.modelPath << '\n'; return 4; }
+  const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  ModelInput model; midas::MidasImportResult imported; const bool isMidas = a.format == "midas-nx-json";
+  try {
+    if (isMidas) { imported = midas::importMidasJson(nlohmann::json::parse(text)); model = imported.input; }
+    else model = readModelText(text);
+  } catch (const ModelInputError& e) {
+    err << "invalid model " << a.modelPath << " (" << e.issues.size() << " issue" << (e.issues.size() == 1 ? "" : "s") << "):\n";
+    for (const auto& i : e.issues) err << "  " << i.path << ": " << i.message << '\n';
+    return 3;
+  } catch (const std::exception& e) { err << "invalid model " << a.modelPath << ": " << e.what() << '\n'; return 3; }
+  const std::string document = modelViewJson(model, isMidas ? &imported.report : nullptr, a.format, sha256Hex(text)).dump(2) + "\n";
+  return writeDocument(a.outputPath, document, out, err);
+}
+
 inline int runModal(const std::vector<std::string>& args, std::ostream& out, std::ostream& err) {
   CommonArgs a; if (!parseArgs("modal", args, err, a)) return 2;
   if (a.haveNumModes && a.numModes <= 0) { err << "modal: -n must be a positive integer\n"; return 2; }
@@ -175,6 +199,7 @@ inline int runCli(const std::vector<std::string>& args, std::ostream& out, std::
   if (command == "--version" || command == "version") { out << "KOPRUQ-SOLVER " << version << '\n'; return 0; }
   if (command == "--help" || command == "help") { out << cli_usage; return 0; }
   if (command == "solve") return detail::runSolve(args, out, err);
+  if (command == "inspect") return detail::runInspect(args, out, err);
   if (command == "spectrum") return detail::runSpectrum(args, out, err);
   if (command == "modal") return detail::runModal(args, out, err);
   err << "Unknown command: " << command << '\n'; return 2;

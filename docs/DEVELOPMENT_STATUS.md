@@ -3104,3 +3104,21 @@ User request (with a reference image): show the model with its section shapes.
 Tests: Debug 377/377, Release 377/377, gui-release 416/416.
 Known (Task 2): load arrows ignore the load sign (downward loads drawn upward); STYP=1 models show a
 support symbol at every node (plane restraint flags).
+
+## CLI `inspect` command (2026-11-23, branch feature/react-gui, user-approved)
+
+New additive command for the React GUI (design: ui/docs/cli-commands-design.md): `kopruq_solver_cli
+inspect <model> [-o view.json] [--format native|midas-nx-json]` writes a new document `kopruq-model-view`
+v1 (schemas/model_view.schema.json; include/kopruq/io/ModelViewJson.hpp): the model exactly as
+io::writeModel writes it, the section outlines (display data), the node bounding box, and the structured
+import report (assumptions, rejected records, counts -- previously only free text on stderr). No analysis
+is run; exit codes as `solve` (2/3/4). Existing commands, schemas, solver and importer behaviour are
+unchanged (the --help text gained two lines).
+Verified on the real model 100: 5 section outlines, 94 beams, bounds X[0,100] Y[-5,5] Z[-20,0],
+30 disclosed assumptions. Tests: tests/unit/inspect_command_tests.cpp (4): native round trip equals the
+existing writer, MIDAS outlines + structured report, document keys vs the schema file, exit codes and
+`solve` unaffected.
+Found and fixed on the way: the UTF-8 path tests (new file inspect tests and the two earlier ones) used one
+shared temp folder name, so ctest running their tests as parallel processes could delete each other's
+folder (seen once in Debug); each test now uses a unique folder. Re-run with ctest -j 4.
+Tests: Debug 381/381, Release 381/381, gui-release 420/420.

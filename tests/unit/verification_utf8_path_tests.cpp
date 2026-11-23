@@ -4,6 +4,7 @@
 // stream (independent of the code under test).
 #include <gtest/gtest.h>
 #include <filesystem>
+#include <random>
 #include <fstream>
 #include <string>
 #include "ExcelReferenceReader.h"
@@ -17,7 +18,7 @@ const std::string kDirUtf8 = "kopruq_xlsx_\xC3\xB6\xC3\xBC_\xC5\x9F\xC4\x9F\xC4\
 struct TempDir {
   std::filesystem::path path; std::string utf8;
   TempDir() {
-    path = std::filesystem::temp_directory_path() / std::filesystem::path(std::u8string(kDirUtf8.begin(), kDirUtf8.end()));
+    { const std::string u = kDirUtf8 + "_" + std::to_string(std::random_device{}()); path = std::filesystem::temp_directory_path() / std::filesystem::path(std::u8string(u.begin(), u.end())); }
     std::filesystem::create_directories(path);
     const auto u8 = path.u8string(); utf8.assign(u8.begin(), u8.end());
   }

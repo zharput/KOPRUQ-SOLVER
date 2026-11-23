@@ -54,43 +54,65 @@ export interface SolidMesh {
   triangles: Uint32Array;   // vertex indices, 3 per triangle
   triElement: Int32Array;   // element id of each triangle
   skipped: number[];        // element ids that could not be extruded (no outline for the section, degenerate axes)
+  // per-vertex data for deformation: which beam (index into model.beams), position along it, section offset from the axis
+  vBeam: Int32Array; vXi: Float32Array; vR: Float32Array;
 }
 
 export const SECTION_PALETTE: [number, number, number][] = [[96, 165, 250], [183, 189, 199], [135, 209, 148], [250, 189, 102], [204, 153, 242], [242, 140, 153]];
 
-/** Extrudes every beam with an outline along its own axes between node + offset1 and node + offset2. */
-export function buildSolids(view: ModelView): SolidMesh {
+/** Extrudes every beam with an outline along its own axes between node + offset1 and node + offset2,
+ *  in `segments` pieces along the length (more pieces follow a deformed shape better). */
+export function buildSolids(view: ModelView, segments = 1): SolidMesh {
   const nodes = new Map(view.model.nodes.map((n) => [n.id, [n.x, n.y, n.z] as Vec3]));
   const outlines = new Map(view.section_outlines.map((o) => [o.section, o.contours]));
   const colorOf = new Map<number, [number, number, number]>();
   [...outlines.keys()].sort((a, b) => a - b).forEach((s, i) => colorOf.set(s, SECTION_PALETTE[i % SECTION_PALETTE.length]));
-  const pos: number[] = [], col: number[] = [], tri: number[] = [], te: number[] = []; const skipped: number[] = [];
+  const pos: number[] = [], col: number[] = [], tri: number[] = [], te: number[] = [], vb: number[] = [], vx: number[] = [], vr: number[] = []; const skipped: number[] = [];
   let nv = 0;
-  const vert = (p: Vec3, c: [number, number, number]) => { pos.push(p[0], p[1], p[2]); col.push(c[0], c[1], c[2]); return nv++; };
-  for (const b of view.model.beams) {
+  view.model.beams.forEach((b, bi) => {
     const contours = outlines.get(b.section);
     const p1 = nodes.get(b.nodes[0])!, p2 = nodes.get(b.nodes[1])!;
     const A = add(p1, b.offset1 ?? [0, 0, 0]), B = add(p2, b.offset2 ?? [0, 0, 0]);
     const ax = contours ? memberAxes(A, B, b.reference_y ?? [0, 1, 0]) : null;
-    if (!contours || !ax) { skipped.push(b.id); continue; }
+    if (!contours || !ax) { skipped.push(b.id); return; }
     const c = colorOf.get(b.section)!;
-    const at = (o: Vec3, q: [number, number]): Vec3 => add(o, add(scale(ax.y, q[0]), scale(ax.z, q[1])));
+    const centre = (xi: number): Vec3 => add(A, scale(sub(B, A), xi));
+    const rOf = (q: [number, number]): Vec3 => add(scale(ax.y, q[0]), scale(ax.z, q[1]));
+    const vert = (xi: number, q: [number, number]) => { const r = rOf(q), p = add(centre(xi), r); pos.push(p[0], p[1], p[2]); col.push(c[0], c[1], c[2]); vb.push(bi); vx.push(xi); vr.push(r[0], r[1], r[2]); return nv++; };
     for (const ring of contours) {
       for (let i = 0; i < ring.length; i++) {
         const q0 = ring[i], q1 = ring[(i + 1) % ring.length];
-        const a = vert(at(A, q0), c), bb = vert(at(A, q1), c), cc = vert(at(B, q1), c), d = vert(at(B, q0), c);
-        tri.push(a, bb, cc, a, cc, d); te.push(b.id, b.id);
+        for (let k = 0; k < segments; k++) {
+          const x0 = k / segments, x1 = (k + 1) / segments;
+          const a = vert(x0, q0), bb = vert(x0, q1), cc = vert(x1, q1), d = vert(x1, q0);
+          tri.push(a, bb, cc, a, cc, d); te.push(b.id, b.id);
+        }
       }
     }
     if (contours.length === 1) { // solid section: close both ends (sections with a cell stay open, the cell is visible)
       const t = triangulate(contours[0]);
-      for (const end of [A, B]) {
-        const base = nv; contours[0].forEach((q) => vert(at(end, q), c));
+      for (const xi of [0, 1]) {
+        const base = nv; contours[0].forEach((q) => vert(xi, q));
         for (const [i, j, k] of t) { tri.push(base + i, base + j, base + k); te.push(b.id); }
       }
     }
-  }
-  return { positions: new Float32Array(pos), colors: new Uint8Array(col), triangles: new Uint32Array(tri), triElement: new Int32Array(te), skipped };
+  });
+  return { positions: new Float32Array(pos), colors: new Uint8Array(col), triangles: new Uint32Array(tri), triElement: new Int32Array(te), skipped,
+           vBeam: new Int32Array(vb), vXi: new Float32Array(vx), vR: new Float32Array(vr) };
+}
+
+export interface LineMesh { positions: Float32Array; segments: Uint32Array; vBeam: Int32Array; vXi: Float32Array; beamIds: number[]; segBeam: Int32Array }
+/** Member axes as polylines of `pieces` segments (centroidal axis, offsets applied). segBeam maps a line cell to its beam index. */
+export function buildLines(view: ModelView, pieces = 1): LineMesh {
+  const nodes = new Map(view.model.nodes.map((n) => [n.id, [n.x, n.y, n.z] as Vec3]));
+  const pos: number[] = [], cells: number[] = [], vb: number[] = [], vx: number[] = [], sb: number[] = []; let nv = 0;
+  view.model.beams.forEach((b, bi) => {
+    const A = add(nodes.get(b.nodes[0])!, b.offset1 ?? [0, 0, 0]), B = add(nodes.get(b.nodes[1])!, b.offset2 ?? [0, 0, 0]);
+    for (let k = 0; k <= pieces; k++) { const xi = k / pieces, p = add(A, scale(sub(B, A), xi)); pos.push(p[0], p[1], p[2]); vb.push(bi); vx.push(xi); }
+    for (let k = 0; k < pieces; k++) { cells.push(2, nv + k, nv + k + 1); sb.push(bi); }
+    nv += pieces + 1;
+  });
+  return { positions: new Float32Array(pos), segments: new Uint32Array(cells), vBeam: new Int32Array(vb), vXi: new Float32Array(vx), beamIds: view.model.beams.map((b) => b.id), segBeam: new Int32Array(sb) };
 }
 
 /** Octahedron-free support glyph: a cube for a fully fixed node, a pyramid for any other restraint pattern. */

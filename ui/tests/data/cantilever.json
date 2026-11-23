@@ -1,0 +1,7 @@
+{"schema":"kopruq-model","schema_version":1,
+ "nodes":[{"id":1,"x":0,"y":0,"z":0},{"id":2,"x":4,"y":0,"z":0}],
+ "materials":[{"id":1,"elastic_modulus":2e8,"poisson_ratio":0.3}],
+ "sections":[{"id":1,"area":0.02,"Iy":1e-4,"Iz":2e-4,"J":3e-4}],
+ "beams":[{"id":7,"nodes":[1,2],"material":1,"section":1}],
+ "supports":[{"node":1,"restraints":[true,true,true,true,true,true]}],
+ "load_cases":[{"name":"tip","nodal":[{"node":2,"values":[0,0,-1000,0,0,0]}]}]}

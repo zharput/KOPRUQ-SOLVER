@@ -1,3 +1,5 @@
+import { maxTranslation, suggestScale } from '../model/displaced';
+import { modelBounds } from '../model/geometry';
 import { useUi, type ShowFlags } from '../state/store';
 
 // Working tools are enabled; everything else is disabled with the phase that will provide it.
@@ -6,7 +8,13 @@ function B({ label, onClick, on, disabled, title }: { label: string; onClick?: (
 }
 
 export function Toolbar() {
-  const { view, show, toggle, setCamera, requestOpen, loadSample } = useUi();
+  const { view, show, toggle, setCamera, requestOpen, loadSample, results, resultView, setResultView } = useUi();
+  const hasCase = !!results && results.cases.length > 0;
+  const toggleDeformed = () => {
+    if (resultView.deformed || !view || !results) { setResultView({ deformed: !resultView.deformed }); return; }
+    const c = results.cases[Math.min(resultView.caseIndex, results.cases.length - 1)];
+    setResultView({ deformed: true, scale: suggestScale(modelBounds(view).size, maxTranslation(c.nodes)) });
+  };
   const t = (k: keyof ShowFlags, label: string) => <B label={label} on={show[k]} onClick={() => toggle(k)} disabled={!view} title={`Show/hide ${label.toLowerCase()}`} />;
   const sep = <span className="sep" />;
   return (
@@ -21,7 +29,7 @@ export function Toolbar() {
       <B label="Top" onClick={() => setCamera('top')} disabled={!view} /><B label="Side" onClick={() => setCamera('side')} disabled={!view} />
       {sep}{t('solid', 'Solid')}{t('nodes', 'Nodes')}{t('elements', 'Elements')}{t('supports', 'Supports')}{t('links', 'Links')}
       <B label="Loads" disabled title="Phase 5" /><B label="Axes" disabled title="later" />
-      {sep}<B label="Deformed" disabled title="Phase 5" />
+      {sep}<B label="Deformed" on={resultView.deformed} onClick={toggleDeformed} disabled={!view || !hasCase} title="Show the deformed shape of the selected result case" />
     </div>
   );
 }

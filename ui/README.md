@@ -49,11 +49,24 @@ Flow: **Open** picks a MIDAS NX JSON / kopruq-model / kopruq-model-view file; MI
 go through `kopruq_solver_cli inspect` and appear in the viewer; **Run Analysis** runs Linear Static
 (`solve`), Modal or Response Spectrum on the opened model. Status shows what the CLI reports (read /
 solve / write). "Completed" appears only when the CLI exited 0 *and* its result file says
-`status.success`; otherwise the failure reason is shown. Result values are not displayed yet (Phase 5).
+`status.success`; otherwise the failure reason is shown.
 In a plain browser the analysis controls stay disabled ("Desktop app required").
 
 Security: the window can only call four app commands (solver_info, read_text_file for `.json` files,
 run_solver with a fixed command set, cancel_solver) and the open-file dialog; no fs/shell/http access.
+
+## Phase 5a/5b status: results
+
+After a successful run the result document is parsed (`src/results/parse.ts`: kopruq-results, kopruq-modal-results,
+kopruq-response-spectrum-results; failed cases are listed, never shown as numbers). Bottom tabs: **Displacements**,
+**Reactions** (restrained nodes), **Element Forces** (12 local end forces exactly as the solver reports them),
+**Tables** (modal frequencies / spectrum mass participation), **Results** summary; sortable windowed TanStack tables
+and a case selector. The viewer's **Deformed** button draws the case's displaced shape (cubic Hermite along every member,
+section rotation about the axis, rigid offsets; first-order, scale factor editable) and a colour contour (|U|, UX, UY, UZ)
+with legend. Modal shapes are mass-normalised (arbitrary amplitude); spectrum values are peak magnitudes.
+Not yet: force diagrams along members (needs the station results), load arrows, local axes.
+Checked in headless Edge with the real model-100 result file (`spikes/cdp_results.mjs`, images `docs/results-*.png`);
+the desktop-shell path was not re-run after Phase 5.
 
 ## Layout
 

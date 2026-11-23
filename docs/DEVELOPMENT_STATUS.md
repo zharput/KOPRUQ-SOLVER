@@ -3144,3 +3144,11 @@ Phase 4: Tauri 2 desktop shell (ui/src-tauri) around the unchanged C++ CLI.
 - Tests: UI vitest 24/24 (geometry, shell, scripted-host integration incl. "exit 0 but result says
   failure is FAILED", cancel, string rejection); C++ Debug 385/385, Release 385/385, gui-release 424/424.
 Not done: production `tauri build` / packaging (Phase 7), result display (Phase 5), Linux check.
+
+## React GUI Phase 5a/5b -- results (branch feature/react-gui, 2026-11-23, user-approved)
+
+ui/: result parsing (3 existing result schemas, no schema change), TanStack Table v8 result tables, deformed shape
+(Hermite along members, first-order) and colour contour in the vtk.js viewer. No C++ change. `npm test` 39/39 (closed-form
+cantilever checks: tip w = -PL^3/3EI = -1.066667 m, elastic curve exact at 6 stations, theta_y = -dw/dx), typecheck and
+production build OK. Verified visually in headless Edge with the real model-100 result file; desktop shell not re-run.
+Next: 5c station results (C++ `kopruq-element-stations`) and ECharts diagrams.

@@ -1,0 +1,155 @@
+{
+  "bounds": {
+    "max": [
+      4.0,
+      0.0,
+      0.0
+    ],
+    "min": [
+      0.0,
+      0.0,
+      0.0
+    ]
+  },
+  "import": {
+    "assumptions": [],
+    "rejected": []
+  },
+  "metadata": {
+    "model_sha256": "76febc4b0b482096c59ed67565a1461219e0d664d90ef334e9d4198af97ee9a8",
+    "solver": "KOPRUQ-SOLVER",
+    "solver_version": "0.1.0",
+    "source_format": "native",
+    "units": {
+      "angle": "rad",
+      "force": "kN",
+      "length": "m",
+      "moment": "kNm"
+    }
+  },
+  "model": {
+    "beams": [
+      {
+        "id": 7,
+        "material": 1,
+        "nodes": [
+          1,
+          2
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 1
+      }
+    ],
+    "combinations": [],
+    "joint_springs": [],
+    "load_cases": [
+      {
+        "member": [],
+        "name": "tip",
+        "nodal": [
+          {
+            "node": 2,
+            "values": [
+              0.0,
+              0.0,
+              -1000.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          }
+        ],
+        "point": [],
+        "self_weight": 0.0,
+        "thermal": []
+      }
+    ],
+    "materials": [
+      {
+        "elastic_modulus": 200000000.0,
+        "id": 1,
+        "poisson_ratio": 0.3,
+        "thermal_expansion": 0.0,
+        "unit_weight": 0.0
+      }
+    ],
+    "nodes": [
+      {
+        "id": 1,
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      {
+        "id": 2,
+        "x": 4.0,
+        "y": 0.0,
+        "z": 0.0
+      }
+    ],
+    "response_spectra": [],
+    "rigid_links": [],
+    "schema": "kopruq-model",
+    "schema_version": 1,
+    "sections": [
+      {
+        "Asy": 0.0,
+        "Asz": 0.0,
+        "Iy": 0.0001,
+        "Iz": 0.0002,
+        "J": 0.0003,
+        "area": 0.02,
+        "id": 1
+      }
+    ],
+    "springs": [],
+    "supports": [
+      {
+        "node": 1,
+        "restraints": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ]
+      }
+    ]
+  },
+  "schema": "kopruq-model-view",
+  "schema_version": 1,
+  "section_outlines": []
+}

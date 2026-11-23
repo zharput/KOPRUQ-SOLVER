@@ -4,10 +4,13 @@ import vtkDataArray from '@kitware/vtk.js/Common/Core/DataArray';
 import vtkGenericRenderWindow from '@kitware/vtk.js/Rendering/Misc/GenericRenderWindow';
 import vtkMapper from '@kitware/vtk.js/Rendering/Core/Mapper';
 import vtkPolyData from '@kitware/vtk.js/Common/DataModel/PolyData';
-import { useEffect, useRef } from 'react';
-import { buildSolids, memberAxesOfBeam, modelBounds, supportGlyphs } from '../../model/geometry';
+import { useEffect, useRef, useState } from 'react';
+import { buildLines, buildSolids, modelBounds, supportGlyphs, type LineMesh } from '../../model/geometry';
+import { beamStates, displace, rampColor } from '../../model/displaced';
 import type { ModelView } from '../../model/types';
-import { type CameraPreset, useUi } from '../../state/store';
+import type { ResultCase } from '../../results/types';
+import { type CameraPreset, type ResultView, useUi } from '../../state/store';
+import { ResultOverlay, type Legend } from './ResultOverlay';
 
 type Actor = ReturnType<typeof vtkActor.newInstance>;
 const rgb = (hex: string): [number, number, number] => /^#[0-9a-f]{6}$/i.test(hex) ? [parseInt(hex.slice(1, 3), 16) / 255, parseInt(hex.slice(3, 5), 16) / 255, parseInt(hex.slice(5, 7), 16) / 255] : (() => { throw new Error(`colour must be #rrggbb: ${hex}`); })();
@@ -21,17 +24,17 @@ const actorOf = (pd: ReturnType<typeof poly>, color: string, setup?: (a: Actor) 
 };
 const withCounts = (idx: ArrayLike<number>, n: number) => { const o = new Uint32Array(idx.length / n * (n + 1)); for (let i = 0, k = 0; i < idx.length; i += n) { o[k++] = n; for (let j = 0; j < n; j++) o[k++] = idx[i + j]; } return o; };
 
-interface Scene { grw: ReturnType<typeof vtkGenericRenderWindow.newInstance>; actors: Record<string, Actor>; view: ModelView; nodeIds: number[]; beamIds: number[]; solidMesh: ReturnType<typeof buildSolids>; triElement: Int32Array; supportNode: Int32Array; size: number; hi: Actor; hiPd: ReturnType<typeof poly> }
+interface Scene { grw: ReturnType<typeof vtkGenericRenderWindow.newInstance>; actors: Record<string, Actor>; view: ModelView; nodeIds: number[]; beamIds: number[]; solidMesh: ReturnType<typeof buildSolids>; triElement: Int32Array; supportNode: Int32Array; size: number; hi: Actor; hiPd: ReturnType<typeof poly>;
+  lineMesh: LineMesh; seg: number; shownLines: Float32Array; nodeXYZ: Map<number, [number, number, number]>; baseSolid: ReturnType<typeof buildSolids> | null }
 
 function buildScene(container: HTMLElement, view: ModelView): Scene {
   const grw = vtkGenericRenderWindow.newInstance({ background: [0.043, 0.082, 0.145] }); grw.setContainer(container); grw.resize();
   const renderer = grw.getRenderer();
   const b = modelBounds(view); const size = b.size;
   const nodePos = new Map(view.model.nodes.map((n) => [n.id, [n.x, n.y, n.z] as [number, number, number]]));
-  // element axes (centroidal line, offsets applied)
-  const beamIds = view.model.beams.map((e) => e.id); const lp = new Float32Array(view.model.beams.length * 6), lc: number[] = [];
-  view.model.beams.forEach((e, i) => { const ax = memberAxesOfBeam(e, nodePos); const A = ax.a, B = ax.b; lp.set([...A, ...B], i * 6); lc.push(2, i * 2, i * 2 + 1); });
-  const lines = actorOf(poly(lp, { lines: new Uint32Array(lc) }), '#38bdf8');
+  // element axes (centroidal line, offsets applied); `seg` pieces per member so that a deformed member is a curve
+  const lineMesh = buildLines(view, 1); const beamIds = lineMesh.beamIds;
+  const lines = actorOf(poly(lineMesh.positions, { lines: lineMesh.segments }), '#38bdf8');
   // nodes as verts (cell id = node index)
   const nodeIds = view.model.nodes.map((n) => n.id); const np = new Float32Array(nodeIds.length * 3), nc: number[] = [];
   view.model.nodes.forEach((n, i) => { np.set([n.x, n.y, n.z], i * 3); nc.push(1, i); });
@@ -59,7 +62,45 @@ function buildScene(container: HTMLElement, view: ModelView): Scene {
   hi.getMapper()!.setResolveCoincidentTopologyToPolygonOffset?.();
   const actors = { lines, nodes, solids, supports, elastic, rigid };
   Object.values(actors).forEach((a) => renderer.addActor(a)); renderer.addActor(hi);
-  return { grw, actors, view, nodeIds, beamIds, solidMesh: solid, triElement: solid.triElement, supportNode: sg.supportNode, size, hi, hiPd };
+  return { grw, actors, view, nodeIds, beamIds, solidMesh: solid, triElement: solid.triElement, supportNode: sg.supportNode, size, hi, hiPd, lineMesh, seg: 1, shownLines: lineMesh.positions, nodeXYZ: new Map(nodePos), baseSolid: null };
+}
+
+const SEG = 8; // pieces per member while a deformed shape or a contour is shown (a cubic member is drawn as a curve)
+type PD = ReturnType<typeof poly>;
+const inputOf = (a: Actor) => a.getMapper()!.getInputData() as PD;
+
+/** Shows a result case on the scene: displaced geometry (scale from the user), colour contour, legend range. Returns the legend or null. */
+function applyResult(s: Scene, c: ResultCase | null, rv: ResultView): Legend | null {
+  const { view } = s; const active = !!c && (rv.deformed || rv.contour !== 'none'); const seg = active ? SEG : 1;
+  if (seg !== s.seg) {
+    s.lineMesh = buildLines(view, seg); s.solidMesh = buildSolids(view, seg); s.triElement = s.solidMesh.triElement; s.seg = seg;
+    const lp = inputOf(s.actors.lines); lp.getPoints().setData(s.lineMesh.positions, 3); lp.getLines().setData(s.lineMesh.segments);
+    const sp = inputOf(s.actors.solids); sp.getPoints().setData(s.solidMesh.positions, 3); sp.getPolys().setData(withCounts(s.solidMesh.triangles, 3));
+  }
+  const disp = new Map((c?.nodes ?? []).map((n) => [n.id, n.disp])); const st = beamStates(view, disp); const scale = c && rv.deformed ? rv.scale : 0;
+  const dl = displace(s.lineMesh, st, scale), ds = displace(s.solidMesh, st, scale); s.shownLines = dl.positions;
+  const field = (d: typeof dl) => (rv.contour === 'UX' ? d.ux : rv.contour === 'UY' ? d.uy : rv.contour === 'UZ' ? d.uz : d.u);
+  let legend: Legend | null = null; let lo = 0, hi = 1;
+  if (c && rv.contour !== 'none') {
+    lo = Infinity; hi = -Infinity; for (const f of [field(dl), field(ds)]) for (const v of f) { if (v < lo) lo = v; if (v > hi) hi = v; }
+    if (!Number.isFinite(lo)) { lo = 0; hi = 0; } legend = { label: `${rv.contour === 'U' ? '|U|' : rv.contour} (m)`, min: lo, max: hi };
+  }
+  const span = hi - lo || 1; const colorize = (f: Float32Array, base: Uint8Array | null) => {
+    const n = f.length, o = new Uint8Array(n * 4);
+    for (let i = 0; i < n; i++) { const k = rv.contour === 'none' && base ? [base[i * 3], base[i * 3 + 1], base[i * 3 + 2]] : rampColor((f[i] - lo) / span); o.set([k[0], k[1], k[2], 255], i * 4); }
+    return vtkDataArray.newInstance({ name: 'rgba', numberOfComponents: 4, values: o, dataType: 'Uint8Array' });
+  };
+  const sp = inputOf(s.actors.solids); sp.getPoints().setData(ds.positions, 3); sp.getPointData().setScalars(colorize(field(ds), s.solidMesh.colors)); sp.modified();
+  const lp = inputOf(s.actors.lines); lp.getPoints().setData(dl.positions, 3); lp.getPointData().setScalars(colorize(field(dl), null)); lp.modified();
+  const lm = s.actors.lines.getMapper()!; lm.setColorModeToDirectScalars(); lm.setScalarVisibility(rv.contour !== 'none');
+  // nodes and links follow the nodes' own displacement
+  const at = (id: number): [number, number, number] => { const n = s.view.model.nodes.find((q) => q.id === id)!; const d = disp.get(id); return [n.x + scale * (d?.[0] ?? 0), n.y + scale * (d?.[1] ?? 0), n.z + scale * (d?.[2] ?? 0)]; };
+  const np = new Float32Array(s.nodeIds.length * 3); s.nodeIds.forEach((id, i) => { const p = at(id); np.set(p, i * 3); s.nodeXYZ.set(id, p); });
+  const npd = inputOf(s.actors.nodes); npd.getPoints().setData(np, 3); npd.modified();
+  const moveLinks = (a: Actor, pairs: [number, number][]) => { const p = new Float32Array(pairs.length * 6); pairs.forEach(([x, y], i) => p.set([...at(x), ...at(y)], i * 6)); const pd = inputOf(a); pd.getPoints().setData(p, 3); pd.modified(); };
+  moveLinks(s.actors.elastic, (view.model.springs ?? []).map((q) => q.nodes)); moveLinks(s.actors.rigid, (view.model.rigid_links ?? []).map((l) => [l.master, l.slave]));
+  s.grw.getRenderer().resetCameraClippingRange(); s.grw.getRenderWindow().render();
+  return legend;
 }
 
 function applyCamera(s: Scene, preset: CameraPreset) {
@@ -77,7 +118,7 @@ function applyCamera(s: Scene, preset: CameraPreset) {
 }
 
 function updateHighlight(s: Scene, sel: ReturnType<typeof useUi.getState>['selection'], solid: boolean) {
-  const { view } = s; const nodePos = new Map(view.model.nodes.map((n) => [n.id, [n.x, n.y, n.z] as [number, number, number]]));
+  const { view } = s; const nodePos = s.nodeXYZ;
   s.hi.setVisibility(!!sel);
   if (!sel) return;
   const pd = s.hiPd;
@@ -98,8 +139,9 @@ function updateHighlight(s: Scene, sel: ReturnType<typeof useUi.getState>['selec
       });
       pd.getPoints().setData(new Float32Array(pts), 3); pd.getVerts().setData(new Uint32Array([])); pd.getLines().setData(new Uint32Array([])); pd.getPolys().setData(new Uint32Array(cells));
     } else {
-      const ax = memberAxesOfBeam(e, nodePos); pd.getVerts().setData(new Uint32Array([])); pd.getPolys().setData(new Uint32Array([]));
-      pd.getPoints().setData(new Float32Array([...ax.a, ...ax.b]), 3); pd.getLines().setData(new Uint32Array([2, 0, 1]));
+      const bi = view.model.beams.indexOf(e), pc = s.seg; const q = s.shownLines.slice(bi * (pc + 1) * 3, (bi + 1) * (pc + 1) * 3); const cells: number[] = [];
+      for (let k = 0; k < pc; k++) cells.push(2, k, k + 1);
+      pd.getVerts().setData(new Uint32Array([])); pd.getPolys().setData(new Uint32Array([])); pd.getPoints().setData(q, 3); pd.getLines().setData(new Uint32Array(cells));
     }
   }
   pd.modified();
@@ -107,7 +149,7 @@ function updateHighlight(s: Scene, sel: ReturnType<typeof useUi.getState>['selec
 
 export function FEMViewer() {
   const ref = useRef<HTMLDivElement>(null); const sceneRef = useRef<Scene | null>(null);
-  const { view, show, selection, camera, select } = useUi();
+  const { view, show, selection, camera, select, results, resultView } = useUi(); const [legend, setLegend] = useState<Legend | null>(null);
 
   useEffect(() => {  // (re)build the scene when a model is loaded
     const el = ref.current; if (!el || !view) return;
@@ -115,7 +157,7 @@ export function FEMViewer() {
     const raf = requestAnimationFrame(() => { s.grw.resize(); applyCamera(s, 'iso'); }); // once more after the layout settled
     const ro = new ResizeObserver(() => { s.grw.resize(); s.grw.getRenderWindow().render(); }); ro.observe(el);
     // click = pick (drag = rotate, ignored)
-    const nodePosById = new Map(view.model.nodes.map((n) => [n.id, [n.x, n.y, n.z] as [number, number, number]]));
+    const nodePosById = s.nodeXYZ;
     let down: { x: number; y: number } | null = null;
     const onDown = (e: PointerEvent) => { down = { x: e.clientX, y: e.clientY }; };
     const onUp = async (e: PointerEvent) => {
@@ -138,8 +180,8 @@ export function FEMViewer() {
           const p = r.getProperties(); const a = p.attributeID as number;
           if (a < 0) continue;
           if (p.prop === s.actors.supports) { node = s.supportNode[a]; break; } // a support glyph selects its node
-          if (p.prop === s.actors.solids) { elem = s.triElement[a]; break; }
-          if (p.prop === s.actors.lines) { elem = s.beamIds[a]; break; }
+          if (p.prop === s.actors.solids) { elem = s.solidMesh.triElement[a]; break; }
+          if (p.prop === s.actors.lines) { elem = s.beamIds[s.lineMesh.segBeam[a]]; break; }
         }
       }
       select(node >= 0 ? { kind: 'node', id: node } : elem >= 0 ? { kind: 'element', id: elem } : null);
@@ -156,9 +198,14 @@ export function FEMViewer() {
     s.grw.getRenderWindow().render();
   }, [show, view]);
   useEffect(() => { const s = sceneRef.current; if (s) { updateHighlight(s, selection, show.solid); s.grw.getRenderWindow().render(); } }, [selection, show.solid, view]);
+  useEffect(() => {  // result display: deformed shape / contour (undone when there are no results)
+    const s = sceneRef.current; if (!s) return;
+    const c = results ? (results.cases[Math.min(resultView.caseIndex, results.cases.length - 1)] ?? null) : null;
+    setLegend(applyResult(s, c, resultView)); updateHighlight(s, useUi.getState().selection, show.solid); s.grw.getRenderWindow().render();
+  }, [results, resultView, view, show.solid]);
   useEffect(() => { const s = sceneRef.current; if (s && camera.n > 0) applyCamera(s, camera.preset); }, [camera]);
 
   if (!view) return (<div className="viewer" data-testid="fem-viewer"><div className="note"><div style={{ fontSize: 15, color: 'var(--text)', marginBottom: 6 }}>3D FEM Viewer</div>
     No model loaded. Use <b>Open</b> to read a model-view JSON (<code>kopruq_solver_cli inspect model.json -o view.json</code>) or <b>Sample</b>.</div></div>);
-  return <div className="viewer" data-testid="fem-viewer" ref={ref} style={{ display: 'block' }} />;
+  return <div className="viewer" data-testid="fem-viewer" style={{ display: 'block' }}><div ref={ref} className="vtkhost" /><ResultOverlay legend={legend} /></div>;
 }

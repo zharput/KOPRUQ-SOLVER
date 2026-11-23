@@ -2958,3 +2958,26 @@ export in the model folder). Every other model unchanged.
 New tests: tests/unit/midas_psc_i_tests.cpp (5): both girders' geometry vs exact rational integration
 and MIDAS, mesh-dependent properties within 0.3% of MIDAS, invalid joints, importer mapping/rejections.
 Regression: Debug 358/358 (28.8 s), Release 358/358, gui-release 393/393.
+
+## Model 100 ("Basit köprü", first full bridge model): first test (2026-11-23, no code change)
+
+Model: 3D bridge, 106 nodes, 94 beams (SB/B/SR sections, C35/45 and C45/55), 9 fixed supports,
+7 rigid links (all six DOF), 4 elastic links (bearings), cases SW (BODF), SDL-1..3 (BMLD), TU (ETMP),
+combinations C1/C2 (static) and EQX/EQY/SXY (static + response spectrum), EIGV 20 modes (Lanczos),
+SPLC SPX/SPY (EURO2004 elastic, CQC). MIDAS exports: displacements, reactions, beam forces, eigen
+modes (no Elastic Link export). Workspace build/gui-release/m100r1.
+Results (GUI comparison path, production CLI):
+- Static, all 7 static cases/combinations (SW, SDL-1, SDL-2, SDL-3, TU, C1, C2): Displacements
+  4452/4452, Reaction 378/378, Beam Force 7896/7896 -- 100%.
+- Modal: lumped mass is rejected with rigid links (known limitation, Phase 7H.1). Consistent mass:
+  17 of 20 frequencies within 0.22% of MIDAS; mode 11 +1.13%, mode 18 -5.52%, mode 20 -3.04%.
+- Response spectrum (consistent mass): displacements SPX 636/636, SPY 636/636; reactions SPX 31/54,
+  SPY 52/54; beam forces SPX 388/1128, SPY 861/1128 -- KOPRUQ forces 2-7% below MIDAS (e.g. node 1
+  FX 4839.9 vs 4921.1). Same signature as models 13-17 before lumped mass: MIDAS's eigen/spectrum use
+  lumped mass, which KOPRUQ cannot yet combine with rigid links.
+- EQX/EQY/SXY rejected at import (LCOM-GEN terms with ANAL='RS'). MIDAS's rule, read from its own
+  results (nodes 3/40/60, every component exact): EQX = SW + SDL-1 + SDL-2 + |SPX| (spectrum peak
+  magnitude added linearly; only this row is exported), SXY = 0.5 |SPX| + 0.3 |SPY|.
+Open (awaiting user approval): (1) lumped mass together with rigid links (MIDAS: slave masses
+transferred to the master, i.e. T^T M T in the reduced space, with massless DOFs condensed);
+(2) static + response-spectrum combinations with the rule above.

@@ -3078,3 +3078,29 @@ verification_utf8_path_tests (2, GUI build) through a folder named with ö ü ş
 Tests: Debug 372/372, Release 372/372, gui-release 411/411.
 Found while reading the viewer (not yet changed): load arrows ignore the load's sign, so a downward
 (negative GZ) load is drawn pointing up.
+
+## GUI: members drawn with their section shapes (2026-11-23, Task 1 of the view plan)
+
+User request (with a reference image): show the model with its section shapes.
+- New include/kopruq/io/midas/MidasSectionOutline.hpp: section outlines in section coordinates
+  (y = member local y / MIDAS B, z = member local z / MIDAS H, z up), outer boundary
+  counter-clockwise, holes clockwise, shifted so the centroid (member axis) is at the origin. DB/User
+  SB, SR (48-gon), B, T, H (fillets not drawn), C, L, STRK, SOCT; PSC 1CEL and PSC-I use the solver's
+  own contours (psc1CellContours / pscIContours, extracted from psc1CellSection / pscISection --
+  their numbers unchanged, all PSC tests pass). Unverified orientation of open C/L sections is stated.
+- ModelInput::section_outlines (display only; not in the native JSON, never used by the solver),
+  filled by the MIDAS importer.
+- ModelViewerWidget::drawSectionSolids: each member extruded between node + offset1 and node + offset2
+  along kopruq::Beam3D::axes (the solver's own local y/z incl. beta angle, so a "CT" offset puts the
+  node at the section top); translucent Lambert-shaded faces, end outlines and corner edges, colour
+  per section; members without an outline stay lines. New toggle "Kesit Görünümü" (default on).
+- Verified: off-screen renders (scratch harness grabbing the widget's framebuffer) of model 100
+  (slab deck, rectangular / box / circular piers, cap beam), model 24 (PSC-I girders with CT offset)
+  and model 23 (PSC 1CEL box with its cell).
+- Tests: tests/unit/midas_section_outline_tests.cpp (5): outline area == section area (polygonal
+  shapes exactly; circular parts within the 48-gon error; H fillets: exactly (4 - pi) r1^2 less),
+  centroid at the origin, top fiber == topFiber (the CT offset value), PSC outlines = solver
+  geometry, importer fills section_outlines and the native JSON does not carry them.
+Tests: Debug 377/377, Release 377/377, gui-release 416/416.
+Known (Task 2): load arrows ignore the load sign (downward loads drawn upward); STYP=1 models show a
+support symbol at every node (plane restraint flags).

@@ -55,7 +55,21 @@ void ModelViewerWidget::setModel(const kopruq::io::ModelInput& model) {
   for (const auto& b : model_.model.beams) {
     const QVector3D* p1 = findPos(b.node1);
     const QVector3D* p2 = findPos(b.node2);
-    if (p1 && p2) beams_.push_back({b.id, b.node1, b.node2, b.material, b.section, *p1, *p2, b.reference_y});
+    if (p1 && p2) {
+      BeamEntry e{b.id, b.node1, b.node2, b.material, b.section, *p1, *p2, b.reference_y};
+      e.offset1 = QVector3D(static_cast<float>(b.offset1.x()), static_cast<float>(b.offset1.y()), static_cast<float>(b.offset1.z()));
+      e.offset2 = QVector3D(static_cast<float>(b.offset2.x()), static_cast<float>(b.offset2.y()), static_cast<float>(b.offset2.z()));
+      beams_.push_back(e);
+    }
+  }
+  sectionOutlines_.clear();
+  for (const auto& [sid, contours] : model_.section_outlines) {
+    auto& dst = sectionOutlines_[sid];
+    for (const auto& c : contours) {
+      std::vector<QVector2D> poly; poly.reserve(c.size());
+      for (const auto& q : c) poly.emplace_back(static_cast<float>(q.x()), static_cast<float>(q.y()));
+      if (poly.size() >= 3) dst.push_back(std::move(poly));
+    }
   }
   links_.clear();
   links_.reserve(model_.model.springs.size());
@@ -77,6 +91,7 @@ void ModelViewerWidget::clearModel() {
   model_ = kopruq::io::ModelInput{};
   nodes_.clear();
   beams_.clear();
+  sectionOutlines_.clear();
   links_.clear();
   loadArrows_.clear();
   activeLoadCase_ = -1;
@@ -98,6 +113,11 @@ QStringList ModelViewerWidget::loadCaseNames() const {
 void ModelViewerWidget::setActiveLoadCase(int index) {
   activeLoadCase_ = index;
   rebuildLoadArrows();
+  update();
+}
+
+void ModelViewerWidget::setShowSections(bool on) {
+  showSections_ = on;
   update();
 }
 
@@ -322,11 +342,84 @@ void ModelViewerWidget::paintGL() {
 
   const QVector3D extent = boundsMax_ - boundsMin_;
   const float symbolSize = std::max(std::max({extent.x(), extent.y(), extent.z()}) * 0.035f, 0.05f);
+  if (showSections_ && !sectionOutlines_.empty()) drawSectionSolids(); // translucent: after the opaque lines/points
   if (showElasticLinks_) drawElasticLinks();
   if (showSupports_) drawSupports(symbolSize);
   if (showLocalAxes_) drawLocalAxes(symbolSize);
   if (showLoads_) drawLoads(symbolSize);
   drawAxisGizmo();
+}
+
+// 2026-11-23: members as solids with their section shapes. Each member is extruded along its own
+// axis between node + offset1 and node + offset2 (the centroidal axis; e.g. MIDAS "CT" puts the node at
+// the section top), using kopruq::Beam3D::axes -- the solver's own member orientation (local y/z,
+// beta angle) -- so the drawn section is exactly as the solver sees it. Faces: Lambert shading with
+// a fixed light direction, translucent (depth writes off) so the member lines, supports and loads
+// stay visible; edges: the end outlines and the longitudinal edges at the polygon's corners.
+void ModelViewerWidget::drawSectionSolids() {
+  static const float kPalette[][3] = {{0.38f, 0.65f, 0.98f}, {0.72f, 0.74f, 0.78f}, {0.53f, 0.82f, 0.58f},
+                                      {0.98f, 0.74f, 0.40f}, {0.80f, 0.60f, 0.95f}, {0.95f, 0.55f, 0.60f}};
+  constexpr int kPaletteSize = static_cast<int>(sizeof(kPalette) / sizeof(kPalette[0]));
+  std::map<kopruq::Id, int> colorIndex;
+  for (const auto& [sid, _] : sectionOutlines_) { (void)_; colorIndex[sid] = static_cast<int>(colorIndex.size()) % kPaletteSize; }
+  const QVector3D light = QVector3D(0.35f, -0.55f, 0.75f).normalized();
+
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  glDepthMask(GL_FALSE);
+  struct Edge { QVector3D p, q; };
+  std::vector<Edge> edges;
+  for (const auto& b : beams_) {
+    auto it = sectionOutlines_.find(b.section);
+    if (it == sectionOutlines_.end()) continue;
+    const QVector3D A = b.a + b.offset1, B = b.b + b.offset2;
+    kopruq::Beam3DGeometry g{Eigen::Vector3d(A.x(), A.y(), A.z()), Eigen::Vector3d(B.x(), B.y(), B.z()), b.referenceY};
+    kopruq::Beam3DAxes ax;
+    try { ax = kopruq::Beam3D::axes(g); } catch (const std::exception&) { continue; }
+    const QVector3D ey(static_cast<float>(ax.y.x()), static_cast<float>(ax.y.y()), static_cast<float>(ax.y.z()));
+    const QVector3D ez(static_cast<float>(ax.z.x()), static_cast<float>(ax.z.y()), static_cast<float>(ax.z.z()));
+    const float* base = kPalette[colorIndex[b.section]];
+    const bool selected = selectedElementId_ && *selectedElementId_ == b.id;
+    for (const auto& poly : it->second) {
+      const std::size_t n = poly.size();
+      glBegin(GL_TRIANGLES);
+      for (std::size_t i = 0; i < n; ++i) {
+        const QVector2D& p = poly[i];
+        const QVector2D& q = poly[(i + 1) % n];
+        const QVector3D op = ey * p.x() + ez * p.y(), oq = ey * q.x() + ez * q.y();
+        // Face normal: the in-plane edge normal (outer boundary counter-clockwise, holes clockwise,
+        // so (dz, -dy) points out of the material in both cases) mapped to 3D.
+        const QVector2D d = q - p;
+        QVector3D nrm = (ey * d.y() - ez * d.x());
+        if (nrm.lengthSquared() < 1e-20f) continue;
+        nrm.normalize();
+        const float shade = 0.38f + 0.62f * std::abs(QVector3D::dotProduct(nrm, light));
+        if (selected) glColor4f(0xF5 / 255.0f * shade, 0x9E / 255.0f * shade, 0x0B / 255.0f * shade, 0.75f);
+        else glColor4f(base[0] * shade, base[1] * shade, base[2] * shade, 0.55f);
+        const QVector3D a0 = A + op, a1 = A + oq, b0 = B + op, b1 = B + oq;
+        glVertex3f(a0.x(), a0.y(), a0.z()); glVertex3f(a1.x(), a1.y(), a1.z()); glVertex3f(b1.x(), b1.y(), b1.z());
+        glVertex3f(a0.x(), a0.y(), a0.z()); glVertex3f(b1.x(), b1.y(), b1.z()); glVertex3f(b0.x(), b0.y(), b0.z());
+      }
+      glEnd();
+      for (std::size_t i = 0; i < n; ++i) {
+        const QVector2D& prev = poly[(i + n - 1) % n];
+        const QVector2D& p = poly[i];
+        const QVector2D& next = poly[(i + 1) % n];
+        const QVector3D op = ey * p.x() + ez * p.y(), on = ey * next.x() + ez * next.y();
+        edges.push_back({A + op, A + on});
+        edges.push_back({B + op, B + on});
+        // longitudinal edge only at a real corner (not along a polygonised circle)
+        const QVector2D d1 = (p - prev).normalized(), d2 = (next - p).normalized();
+        if (QVector2D::dotProduct(d1, d2) < 0.94f) edges.push_back({A + op, B + op});
+      }
+    }
+  }
+  glDepthMask(GL_TRUE);
+  glColor4f(0.85f, 0.90f, 0.97f, 0.55f);
+  glBegin(GL_LINES);
+  for (const auto& e : edges) { glVertex3f(e.p.x(), e.p.y(), e.p.z()); glVertex3f(e.q.x(), e.q.y(), e.q.z()); }
+  glEnd();
+  glDisable(GL_BLEND);
 }
 
 void ModelViewerWidget::drawElasticLinks() {

@@ -233,6 +233,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
   addToggle(tr("Mesnetler"), true, &ModelViewerWidget::setShowSupports);
   addToggle(tr("Elastik Bağlantılar"), true, &ModelViewerWidget::setShowElasticLinks);
   addToggle(tr("Lokal Eksenler"), false, &ModelViewerWidget::setShowLocalAxes);
+  addToggle(tr("Kesit Görünümü"), true, &ModelViewerWidget::setShowSections);
   // V2.2 Stage D: default OFF -- only meaningful once a load case is picked from the toolbar.
   addToggle(tr("Yükler"), false, &ModelViewerWidget::setShowLoads);
   optionsLayout->addStretch(1);

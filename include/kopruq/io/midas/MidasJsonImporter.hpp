@@ -79,6 +79,7 @@
 #include "MidasMaterialLibrary.hpp"
 #include "MidasOrientation.hpp"
 #include "MidasSectionLibrary.hpp"
+#include "MidasSectionOutline.hpp"
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -206,6 +207,7 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
       try {
         const auto& sectI = before.at("SECT_I");
         ResolvedSectionProperties p;
+        SectionOutline outline; // model view only (MidasSectionOutline.hpp)
         if (sectType == "PSC") {
           // PSC: only the single-cell symmetric box with every joint off (MidasSectionLibrary.hpp,
           // psc1CellSection); anything else is rejected, not approximated.
@@ -220,7 +222,9 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
           if (shape == "1CEL") {
             for (bool j : joints) if (j) throw std::invalid_argument("PSC 1CEL with a joint (JO1..JO3/JI1..JI5) switched on is not supported");
             if (A.size() < 6 || B.size() < 6 || C.size() < 10 || D.size() < 5) throw std::invalid_argument("PSC 1CEL: vSIZE_PSC_A/B/C/D arrays are too short");
-            p = psc1CellSection(Psc1CellDims{A[0], A[1], A[4], B[0], B[3], B[5], C[0], C[1], C[4], C[6], C[9], D[0], D[4]});
+            const Psc1CellDims dims{A[0], A[1], A[4], B[0], B[3], B[5], C[0], C[1], C[4], C[6], C[9], D[0], D[4]};
+            p = psc1CellSection(dims);
+            outline = psc1CellContours(dims);
           } else { // PSCI (MidasSectionLibrary.hpp, pscISection): symmetric; joints JL1/JL4 (= JR1/JR4) supported
             if (A.size() < 10 || B.size() < 7) throw std::invalid_argument("PSC PSCI: vSIZE_PSC_A/B arrays are too short (10 / 7 values)");
             if (joints.size() != 9) throw std::invalid_argument("PSC PSCI: JOINT must have 9 flags [J1, JL1..JL4, JR1..JR4]");
@@ -228,7 +232,9 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
               throw std::invalid_argument("PSC PSCI with joint J1, JL2/JR2 or JL3/JR3 switched on is not supported (geometry not verified)");
             if (joints[1] != joints[5] || joints[4] != joints[8]) throw std::invalid_argument("PSC PSCI: symmetric section with different left/right joints");
             if (A[0] != 0) throw std::invalid_argument("PSC PSCI with H1 != 0 is not supported (meaning not verified)");
-            p = pscISection(PscIDims{A[1], A[2], A[3], A[5], A[6], A[7], A[9], B[0], B[1], B[2], B[4], B[5], joints[1], joints[4]});
+            const PscIDims dims{A[1], A[2], A[3], A[5], A[6], A[7], A[9], B[0], B[1], B[2], B[4], B[5], joints[1], joints[4]};
+            p = pscISection(dims);
+            outline = pscIContours(dims);
           }
           out.report.assumptions.push_back("section " + it.key() + ": PSC " + shape + " J and shear areas from KOPRUQ's converged 2D FE section analysis (SectionFE.hpp); MIDAS evaluates them on its own coarser section mesh, so they can differ from MIDAS's by a fraction of a percent");
         } else {
@@ -238,7 +244,9 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
           if (sectI.contains("DB_NAME"))
             throw std::invalid_argument("catalog/database section (DB_NAME '" + sectI.at("DB_NAME").get<std::string>() + "', SECT_NAME '" +
                                         sectI.value("SECT_NAME", std::string()) + "') is not supported; define it as a user (DB/User 'User') section");
-          p = resolveDbUserSection(shape, detail::toRealVector(sectI.at("vSIZE")));
+          const auto vSize = detail::toRealVector(sectI.at("vSIZE"));
+          p = resolveDbUserSection(shape, vSize);
+          try { outline = dbUserSectionOutline(shape, vSize); } catch (const std::exception&) { outline.clear(); } // display only
         }
         // Section offset (OFFSET_PT; 2026-11-20). MIDAS places the node at the named point of the
         // section ("CC" centre-centre = centroid, "CT" centre-top = top fiber above the centroid)
@@ -274,6 +282,7 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
         const Real Asy = useShear ? p.AsB : Real(0);
         const Real Asz = useShear ? p.AsH : Real(0);
         out.input.model.sections.push_back(Section{id, p.area, /*Iy=*/p.IH, /*Iz=*/p.IB, p.J, Asy, Asz});
+        if (!outline.empty()) out.input.section_outlines[id] = centroidalOutline(outline); // model view only (2026-11-23)
         if (useShear && sectType != "PSC") // PSC shear areas come from the section FE (reported above)
           out.report.assumptions.push_back("section " + it.key() + ": USE_SHEAR_DEFORM is set in the source; shear areas computed from the shape's classical Timoshenko shear correction factor (see MidasSectionLibrary.hpp), not read from MIDAS directly (MIDAS does not export an effective shear area for a DBUSER section)");
       } catch (const std::exception& e) {

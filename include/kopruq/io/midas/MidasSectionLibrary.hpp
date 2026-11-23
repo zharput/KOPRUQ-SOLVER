@@ -733,7 +733,9 @@ inline ResolvedSectionProperties resolveDbUserSection(const std::string& shape, 
 // Asy 5.422 vs 5.435 (-0.25%), Asz 3.654 vs 3.681 (-0.75%).
 struct Psc1CellDims { Real HO1, HO2, HO3, BO1, BO2, BO3, HI1, HI2, HI3, HI4, HI5, BI1, BI3; };
 
-inline ResolvedSectionProperties psc1CellSection(const Psc1CellDims& d) {
+// Outline of the PSC 1CEL section, {outer (counter-clockwise), cell (clockwise)}, y horizontal, z up,
+// top at z = 0 -- shared by psc1CellSection (properties) and the model view (2026-11-23).
+inline std::vector<sections::Contour> psc1CellContours(const Psc1CellDims& d) {
   const Real H = d.HO1 + d.HO2 + d.HO3, W = d.BO1 + d.BO2 + d.BO3;
   if (!(d.HO1 > 0) || !(d.HO2 >= 0) || !(d.HO3 > 0) || !(d.BO1 >= 0) || !(d.BO2 >= 0) || !(d.BO3 > 0))
     throw std::invalid_argument("PSC 1CEL: outer dimensions must be HO1, HO3, BO3 > 0 and HO2, BO1, BO2 >= 0");
@@ -756,6 +758,17 @@ inline ResolvedSectionProperties psc1CellSection(const Psc1CellDims& d) {
   for (const auto& p : hole)
     if (!sections::detail_fe::pointInContour(outer, p) || std::abs(p.x()) >= W)
       throw std::invalid_argument("PSC 1CEL: the inner cell is not strictly inside the outer boundary (check BI1/BI3 against BO2+BO3/BO3)");
+  return {outer, hole};
+}
+
+inline ResolvedSectionProperties psc1CellSection(const Psc1CellDims& d) {
+  const Real H = d.HO1 + d.HO2 + d.HO3, W = d.BO1 + d.BO2 + d.BO3;
+  using sections::Contour;
+  using sections::Point2;
+  const auto contours = psc1CellContours(d);
+  const Contour& outer = contours[0];
+  const Contour& hole = contours[1];
+  const Real zWebTop = -(d.HI1 + d.HI2), zWebBot = -(H - d.HI5 - d.HI4);
   const auto geo = sections::computePolygonSection({outer, hole});
   ResolvedSectionProperties p;
   p.area = geo.area;
@@ -804,7 +817,9 @@ inline ResolvedSectionProperties psc1CellSection(const Psc1CellDims& d) {
 // J and shear areas: SectionFE as for PSC 1CEL (same mesh rule).
 struct PscIDims { Real HL1, HL2, HL21, HL3, HL4, HL41, HL5, BL1, BL2, BL21, BL4, BL41; bool JL1{false}, JL4{false}; };
 
-inline ResolvedSectionProperties pscISection(const PscIDims& d) {
+// Outline of the PSC-I section, {outer (counter-clockwise)}, y horizontal, z up, top at z = 0 --
+// shared by pscISection (properties) and the model view (2026-11-23).
+inline std::vector<sections::Contour> pscIContours(const PscIDims& d) {
   if (!(d.HL1 > 0) || !(d.HL2 >= 0) || !(d.HL3 > 0) || !(d.HL4 >= 0) || !(d.HL5 > 0))
     throw std::invalid_argument("PSC-I: heights must be HL1, HL3, HL5 > 0 and HL2, HL4 >= 0");
   if (!(d.BL1 > 0) || !(d.BL2 >= d.BL1) || !(d.BL4 >= d.BL1))
@@ -836,6 +851,12 @@ inline ResolvedSectionProperties pscISection(const PscIDims& d) {
   for (const auto& q : left) push(q.x(), q.y());
   for (auto it = left.rbegin(); it != left.rend(); ++it) push(-it->x(), it->y());
   if ((outer.front() - outer.back()).norm() <= 1e-12) outer.pop_back();
+  return {outer};
+}
+
+inline ResolvedSectionProperties pscISection(const PscIDims& d) {
+  const Real H = d.HL1 + d.HL2 + d.HL3 + d.HL4 + d.HL5;
+  const sections::Contour outer = pscIContours(d).front();
   const auto geo = sections::computePolygonSection({outer});
   if (!(geo.area > 0)) throw std::invalid_argument("PSC-I: the outline has non-positive area");
   ResolvedSectionProperties p;

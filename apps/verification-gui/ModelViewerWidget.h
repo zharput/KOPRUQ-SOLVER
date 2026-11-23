@@ -26,8 +26,10 @@
 #include <QPoint>
 #include <QString>
 #include <QStringList>
+#include <QVector2D>
 #include <QVector3D>
 #include <array>
+#include <map>
 #include <optional>
 #include <vector>
 
@@ -69,6 +71,9 @@ public slots:
   void setShowSupports(bool on);
   void setShowElasticLinks(bool on);
   void setShowLocalAxes(bool on);
+  // 2026-11-23: members drawn as solids with their section shapes (outlines from the importer,
+  // ModelInput::section_outlines); members without an outline stay lines.
+  void setShowSections(bool on);
   // Stage D: -1 = no load case selected (no arrows drawn regardless of setShowLoads).
   void setActiveLoadCase(int index);
   void setShowLoads(bool on);
@@ -85,7 +90,7 @@ protected:
 
 private:
   struct NodeEntry { kopruq::Id id; QVector3D pos; };
-  struct BeamEntry { kopruq::Id id, node1, node2, material, section; QVector3D a, b; Eigen::Vector3d referenceY; };
+  struct BeamEntry { kopruq::Id id, node1, node2, material, section; QVector3D a, b; Eigen::Vector3d referenceY; QVector3D offset1{0, 0, 0}, offset2{0, 0, 0}; };
   struct LinkEntry { kopruq::Id id; QVector3D a, b; };
   enum class SupportKind { Fixed, Pinned, Roller, Custom };
   // Stage D: one arrow glyph. `magnitude` is the real force [kN] or moment [kN*m] value (never
@@ -101,6 +106,7 @@ private:
   void drawElasticLinks();
   void drawLocalAxes(float symbolSize);
   void drawLoads(float symbolSize);
+  void drawSectionSolids();
   void drawAxisGizmo();
   QPointF projectToScreen(const QVector3D& worldPos, bool* visible) const;
   void pickAt(const QPoint& pos);
@@ -120,6 +126,9 @@ private:
   bool showSupports_{true};
   bool showElasticLinks_{true};
   bool showLocalAxes_{false};
+  bool showSections_{true};
+  // Section outlines (centroid at the origin, y = member local y, z = member local z), by section id.
+  std::map<kopruq::Id, std::vector<std::vector<QVector2D>>> sectionOutlines_;
   bool showLoads_{false};
   int activeLoadCase_{-1};
   std::vector<LoadArrowEntry> loadArrows_;

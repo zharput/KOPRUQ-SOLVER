@@ -100,6 +100,11 @@ struct ModelInput {
   std::vector<ResponseSpectrumCase> response_spectra;
   ModalRequest modal_request;
   std::vector<SpectrumCombination> spectrum_combinations;
+  // Display only (2026-11-23, model view): section outlines by section id, in section coordinates
+  // (y horizontal = member local y, z up = member local z) with the centroid at the origin; the first
+  // polygon is the outer boundary, any further ones are holes. Filled by the MIDAS importer
+  // (MidasSectionOutline.hpp); not part of the native model JSON and never used by the solver.
+  std::map<Id, std::vector<std::vector<Eigen::Vector2d>>> section_outlines;
 };
 
 namespace detail {

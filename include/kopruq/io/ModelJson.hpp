@@ -53,7 +53,7 @@ inline const KeySpec point_load{{"element","axes","direction","value","position"
 inline const KeySpec member_thermal_load{{"element"},{"uniform_delta_t","gradient_y_delta_t","gradient_y_depth","gradient_z_delta_t","gradient_z_depth"}};
 inline const KeySpec combination{{"name","terms"},{}};
 inline const KeySpec combination_term{{"case","factor"},{}};
-inline const KeySpec response_spectrum_case{{"name","direction","spectrum"},{"num_modes"}};
+inline const KeySpec response_spectrum_case{{"name","direction","spectrum"},{"num_modes","interpolation"}};
 inline const KeySpec spectrum_combination{{"name"},{"static_terms","spectrum_terms"}};
 inline const KeySpec spectrum_term{{"spectrum","factor"},{}};
 inline const KeySpec spectrum_point{{"period","sa"},{}};
@@ -826,6 +826,14 @@ class ModelReader {
           else rc.input.num_modes = static_cast<int>(nm);
         } else ok = false;
       }
+      if (field(c, "interpolation")) {
+        std::string ip;
+        if (string(c, p, "interpolation", ip)) {
+          if (ip == "linear") rc.input.interpolation = SpectrumInterpolation::Linear;
+          else if (ip == "loglog") rc.input.interpolation = SpectrumInterpolation::LogLog;
+          else { issue(key(p, "interpolation"), "must be \"linear\" or \"loglog\""); ok = false; }
+        } else ok = false;
+      }
       if (const json* sp = field(c, "spectrum")) {
         if (!sp->is_array() || sp->size() < 2) { issue(key(p, "spectrum"), "must be an array of at least 2 points"); ok = false; }
         else {
@@ -953,6 +961,7 @@ inline json writeModel(const ModelInput& in) {
   for (const auto& rc : in.response_spectra) {
     json c = {{"name", rc.name}, {"direction", detail::axisName(rc.input.direction)}, {"num_modes", rc.input.num_modes}, {"spectrum", json::array()}};
     for (const auto& pt : rc.input.spectrum) c["spectrum"].push_back({{"period", pt.period_s}, {"sa", pt.spectral_acceleration}});
+    if (rc.input.interpolation == SpectrumInterpolation::LogLog) c["interpolation"] = "loglog"; // omitted for the linear default
     j["response_spectra"].push_back(c);
   }
   if (!in.spectrum_combinations.empty()) j["spectrum_combinations"] = spectrumCombinationsJson(in); // omitted when empty

@@ -987,6 +987,20 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
         continue;
       }
 
+      // INTERP (2026-11-23, user decision option a): "LOG" -> log-log interpolation, identified from
+      // MIDAS's own results (model 100: SPY median ratio 0.99996 = the gravity ratio, all SPX/SPY
+      // rows; model 16: its 2 long-standing rows). The table's T = 0 point stays at the 1e-6 s
+      // stand-in above: MIDAS evidently uses a tiny positive period there (models 100 and 16 need an
+      // equivalent stand-in between ~1e-11 and ~4e-5 s), whose exact value is not determinable --
+      // 1e-6 s lies inside that band and is reported as an assumption, not as a MIDAS value.
+      const std::string interp = splc.value("INTERP", std::string("LINEAR"));
+      if (interp == "LOG") {
+        input.interpolation = SpectrumInterpolation::LogLog;
+        out.report.assumptions.push_back("SPLC " + caseName + ": INTERP=LOG -> log-log spectrum interpolation; the table's T=0 point is used at T=1e-6 s (MIDAS's own stand-in period is not documented; 1e-6 s reproduces MIDAS on verification models 16 and 100)");
+      } else if (interp != "LINEAR" && !interp.empty()) {
+        out.report.rejected.push_back("SPLC " + caseName + ": unsupported INTERP '" + interp + "' (only LINEAR and LOG are implemented)");
+        continue;
+      }
       input.direction = direction;
       input.num_modes = out.input.modal_request.present ? out.input.modal_request.num_modes : 6;
       input.combination = combo;

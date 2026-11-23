@@ -11,8 +11,8 @@ Build a standalone, production-grade C++20 three-dimensional finite-element stru
 - No unapproved edits to the separate KOPRUQ frontend project.
 
 ## Current capability summary — 2026-11-23 (verified state)
-What the solver does today. Everything listed is implemented and covered by tests (Debug 364/364,
-Release 364/364, gui-release 401/401) and, where noted, verified against MIDAS NX reference models.
+What the solver does today. Everything listed is implemented and covered by tests (Debug 369/369,
+Release 369/369, gui-release 406/406) and, where noted, verified against MIDAS NX reference models.
 Anything not listed is not supported; the MIDAS importer rejects unsupported records explicitly
 (never approximates them silently) and reports every disclosed assumption.
 
@@ -23,8 +23,8 @@ Anything not listed is not supported; the MIDAS importer rejects unsupported rec
   mass-normalised modes; both also with rigid links / node local axes (slave mass moved to the
   master, T^T M T).
 - Response spectrum: single direction (global X/Y/Z), SRSS or CQC modal combination,
-  caller-supplied spectrum points (linear interpolation; MIDAS's LOG = log-log interpolation is
-  identified but awaiting a user decision on the T = 0 point).
+  caller-supplied spectrum points, linear or log-log interpolation (MIDAS INTERP "LOG"; the
+  table's T = 0 point is used at 1e-6 s, an assumption consistent with MIDAS's results).
 - Static + response-spectrum combinations (MIDAS LCOM-GEN with RS terms): static terms + factor x
   |spectrum peak|; definitions in the model/results, evaluated by the verification layer.
 - Not available: buckling / P-Delta / nonlinear / time history / construction stages (cancelled);
@@ -82,14 +82,12 @@ Anything not listed is not supported; the MIDAS importer rejects unsupported rec
   forces, eigenvalues, response-spectrum results -- with Excel report export.
 
 **MIDAS verification status (reference models in `verification/models`)**
-- 100%: models 01-12, 13-15 (eigen), 17, 18, 19, 20, 21, 24.
-- Model 16 (spectrum): 2 zero-crossing rows. Model 22: 4 zero-crossing rows (TU). Model 23: 1
-  zero-crossing row. The 5 rows of models 22/23 trace to the PSC section J/As mesh dependence
-  above (diagnostic: with MIDAS's own section values both are 100%); model 16's 2 rows are the
-  CQC residue at a pier moment zero crossing (15.97 vs 16.60 kNm next to ~1450 kNm values).
-- Model 100 ("Basit köprü", first full bridge model): static 100%, eigen 20/20; spectrum and
-  static + spectrum combinations 100% once log-log spectrum interpolation is adopted (diagnostic),
-  partly failing with the current linear interpolation (2026-11-23).
+- 100%: models 01-12, 13-15 (eigen), 16, 17, 18, 19, 20, 21, 24, 100.
+- Model 22: 4 zero-crossing rows (TU). Model 23: 1 zero-crossing row. Both trace to the PSC
+  section J/As mesh dependence above (diagnostic: with MIDAS's own section values both are 100%).
+  (Model 16's former 2 rows were the spectrum interpolation, resolved 2026-11-23.)
+- Model 100 ("Basit köprü", first full bridge model): 100% in all 12 static, spectrum and
+  static + spectrum cases; eigen 20/20 (2026-11-23).
 
 ## Scope change — 2026-10-17 (user decision)
 Phase 6.3 (linear buckling / P-Delta), Phase 7 (time-dependent and nonlinear

@@ -58,18 +58,25 @@ namespace kopruq {
 
 struct ResponseSpectrumPoint { Real period_s{}, spectral_acceleration{}; }; // period [s], Sa [m/s^2]
 enum class ModalCombination { SRSS, CQC };
+// Spectrum table interpolation between tabulated points (2026-11-23): Linear (Sa linear in T,
+// the default) or LogLog (ln Sa linear in ln T -- MIDAS NX SPLC INTERP "LOG", identified from
+// MIDAS's own results of verification models 100 and 16, see docs/DEVELOPMENT_STATUS.md).
+enum class SpectrumInterpolation { Linear, LogLog };
 struct ResponseSpectrumInput {
   std::vector<ResponseSpectrumPoint> spectrum;
   int direction{};
   int num_modes{6};
   ModalCombination combination{ModalCombination::SRSS};
   Real damping_ratio{0.05}; // only used when combination == CQC
+  SpectrumInterpolation interpolation{SpectrumInterpolation::Linear};
 };
 
-// Piecewise-linear interpolation; throws std::invalid_argument if period_s is outside [spectrum.front(), spectrum.back()]
-// or the spectrum itself is malformed (fewer than 2 points, non-finite/non-positive period, non-finite/negative Sa,
-// or periods not strictly increasing).
-inline Real interpolateSpectrum(const std::vector<ResponseSpectrumPoint>& spectrum, Real period_s) {
+// Piecewise interpolation (linear, or log-log); throws std::invalid_argument if period_s is outside
+// [spectrum.front(), spectrum.back()] or the spectrum itself is malformed (fewer than 2 points,
+// non-finite/non-positive period, non-finite/negative Sa, or periods not strictly increasing).
+// LogLog additionally needs Sa > 0 at both ends of the segment used (a zero Sa has no logarithm).
+inline Real interpolateSpectrum(const std::vector<ResponseSpectrumPoint>& spectrum, Real period_s,
+                                SpectrumInterpolation mode = SpectrumInterpolation::Linear) {
   if (spectrum.size() < 2) throw std::invalid_argument("response spectrum must have at least 2 points");
   for (std::size_t i = 0; i < spectrum.size(); ++i) {
     const auto& p = spectrum[i];
@@ -83,6 +90,10 @@ inline Real interpolateSpectrum(const std::vector<ResponseSpectrumPoint>& spectr
     if (period_s > spectrum[i].period_s) continue;
     const Real t0 = spectrum[i - 1].period_s, t1 = spectrum[i].period_s;
     const Real a0 = spectrum[i - 1].spectral_acceleration, a1 = spectrum[i].spectral_acceleration;
+    if (mode == SpectrumInterpolation::LogLog) {
+      if (!(a0 > 0) || !(a1 > 0)) throw std::invalid_argument("log-log spectrum interpolation needs Sa > 0 at both ends of the segment");
+      return std::exp(std::log(a0) + (std::log(period_s) - std::log(t0)) / (std::log(t1) - std::log(t0)) * (std::log(a1) - std::log(a0)));
+    }
     return a0 + (period_s - t0) / (t1 - t0) * (a1 - a0);
   }
   return spectrum.back().spectral_acceleration;
@@ -166,7 +177,7 @@ class ResponseSpectrumSolver { public:
         if (!(omega2 > 0)) throw std::invalid_argument("a mode has zero or near-zero frequency (an insufficiently restrained model / mechanism); response spectrum analysis requires strictly positive frequencies");
         const Real Gamma = mode.shape.dot(Miota);
         const Real T = 1.0 / mode.frequency_hz;
-        const Real Sa = interpolateSpectrum(input.spectrum, T);
+        const Real Sa = interpolateSpectrum(input.spectrum, T, input.interpolation);
         Eigen::VectorXd U = (Gamma * Sa / omega2) * mode.shape;
         Eigen::VectorXd F = Gamma * Sa * (Mfull * mode.shape);
         std::vector<NodalLoad> loads; loads.reserve(m.nodes.size());

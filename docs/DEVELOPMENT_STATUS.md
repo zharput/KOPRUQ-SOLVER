@@ -3038,3 +3038,24 @@ model 100 is 100% in all 12 cases/combinations and model 16 is 100%.
 Regression: every static model unchanged; models 13-17 eigen max rel 3.55e-5 (unchanged); model 16/17
 spectrum unchanged (16: 454/456 pending the interpolation decision; 17: 100%).
 Tests: Debug 364/364, Release 364/364, gui-release 401/401 (before: 358 / 358 / 393).
+
+## Log-log response-spectrum interpolation (user decision, option a) -- models 100 and 16 at 100% (2026-11-23)
+
+Implemented: SpectrumInterpolation {Linear, LogLog} in ResponseSpectrumInput (default Linear,
+unchanged for existing callers); interpolateSpectrum evaluates ln Sa linearly in ln T for LogLog
+(rejects a zero Sa ordinate in the segment used). MIDAS importer: SPLC INTERP "LOG" -> LogLog,
+"LINEAR" -> Linear, anything else rejected; the table's T = 0 point keeps the existing 1e-6 s
+stand-in, reported as an assumption (MIDAS's own value is not documented; the data of models 100 and
+16 allow ~1e-11 .. 4e-5 s). Native model JSON: optional response_spectra[].interpolation
+("linear" | "loglog", written only for loglog); schema updated.
+Tests: tests/unit/spectrum_loglog_tests.cpp (5): power-law spectrum reproduced exactly, zero ordinate
+rejected, single-mode response ratio = hand-computed Sa ratio, importer mapping/rejection, native
+round trip.
+Results (production, GUI comparison path):
+- Model 100 ("Basit köprü"): 100% in all 12 cases/combinations -- Displacements 7632/7632, Reaction
+  648/648, Beam Force 13536/13536 (static SW, SDL-1..3, TU, C1, C2; spectrum SPX, SPY; static +
+  spectrum EQX, EQY, SXY); eigen 20/20 within 0.0036%.
+- Model 16: Beam Force 454 -> 456/456 (the 2 rows formerly attributed to a CQC residue at a zero
+  crossing were this interpolation difference) -- model 16 now 100%.
+- Model 17: unchanged 100%.
+Tests: Debug 369/369, Release 369/369, gui-release 406/406 (before: 364 / 364 / 401). Every static model unchanged (static path untouched).

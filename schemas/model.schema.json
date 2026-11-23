@@ -901,6 +901,15 @@
           "items": {
             "$ref": "#/$defs/spectrum_point"
           }
+        },
+        "interpolation": {
+          "type": "string",
+          "enum": [
+            "linear",
+            "loglog"
+          ],
+          "default": "linear",
+          "description": "Spectrum table interpolation: linear (Sa linear in T) or loglog (ln Sa linear in ln T; MIDAS INTERP LOG)."
         }
       },
       "required": [

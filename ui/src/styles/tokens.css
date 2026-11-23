@@ -1,0 +1,8 @@
+:root {
+  --bg-0: #0b1220; --bg-1: #0f1828; --bg-2: #142033; --bg-3: #1a2a42;
+  --line: #243653; --line-soft: #1b2a44;
+  --text: #d7e0ee; --text-dim: #8798b3; --text-faint: #5d6f8d;
+  --accent: #3b82c4; --accent-soft: #1d3a5c; --ok: #3fb97a; --warn: #e0a43a; --bad: #e5594f;
+  --radius: 3px; --font: "Segoe UI", system-ui, sans-serif; --mono: "Cascadia Mono", Consolas, monospace;
+  --fs: 12px; --row: 24px;
+}

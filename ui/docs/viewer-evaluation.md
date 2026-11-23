@@ -43,3 +43,7 @@ scalar mapping and a hardware picker whose cost does not grow with model size. K
 thin `FEMViewer` interface so Three.js remains a drop-in alternative if the size or GPU-selector
 behaviour turns out to be a problem on real hardware. **Before Phase 3 is closed, repeat the timing on a
 machine with a real GPU** (not possible in this headless run).
+
+## Decision (2026-11-23)
+vtk.js approved by the user as the 3D viewer library. Three.js stays only as a fallback behind the
+`FEMViewer` interface. Still open: timing on a machine with a real GPU (to be repeated in Phase 3).

@@ -4,7 +4,7 @@ import { ModelExplorer } from '../components/model-explorer/ModelExplorer';
 import { PropertiesInspector } from '../components/properties-inspector/PropertiesInspector';
 import { ResultsViewer } from '../components/results-viewer/ResultsViewer';
 import { VerificationPanel } from '../components/verification-panel/VerificationPanel';
-import { mockElements, mockNodes } from '../mock/demoModel';
+import { useEffect, useRef } from 'react';
 import { type BottomTab, useUi } from '../state/store';
 import { MenuBar } from './MenuBar';
 import { Toolbar } from './Toolbar';
@@ -21,11 +21,16 @@ export function Shell() {
   const right = useSplit(280, 200, 480, 'x', true);
   const bottom = useSplit(230, 90, 520, 'y', true);
   const leftSplit = useSplit(300, 120, 700, 'y');
-  const { bottomTab, setBottomTab } = useUi();
+  const { bottomTab, setBottomTab, view, fileName, loadError, loadText, openRequest } = useUi();
+  const fileInput = useRef<HTMLInputElement>(null);
+  useEffect(() => { if (openRequest > 0) fileInput.current?.click(); }, [openRequest]);
+  const onFile = async (f?: File) => { if (f) loadText(await f.text(), f.name); if (fileInput.current) fileInput.current.value = ''; };
   return (
     <div className="shell">
       <MenuBar />
       <Toolbar />
+      <input ref={fileInput} type="file" accept=".json,application/json" hidden aria-label="Open model view file" onChange={(e) => void onFile(e.target.files?.[0])} />
+      {loadError ? <div className="errbar" role="alert"><span>{loadError}</span><button className="tbtn" onClick={() => useUi.setState({ loadError: null })}>Dismiss</button></div> : <div />}
       <div className="workspace" style={{ gridTemplateColumns: `${left.size}px 5px 1fr 5px ${right.size}px` }}>
         <div style={{ display: 'grid', gridTemplateRows: `${leftSplit.size}px 5px 1fr`, minHeight: 0 }}>
           <Panel title="Model Explorer"><ModelExplorer /></Panel>
@@ -48,7 +53,7 @@ export function Shell() {
       </div>
       <footer className="statusbar">
         <span><span className="dot" style={{ background: 'var(--warn)' }} />No solver connected</span>
-        <span>Model: MOCK demo (not real)</span><span>Nodes: {mockNodes.length}</span><span>Elements: {mockElements.length}</span><span>Analysis: none</span>
+        <span>Model: {view ? fileName : 'none'}</span><span>Nodes: {view?.model.nodes.length ?? 0}</span><span>Elements: {view?.model.beams.length ?? 0}</span><span>Analysis: none</span>
       </footer>
     </div>
   );

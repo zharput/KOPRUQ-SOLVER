@@ -11,12 +11,14 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@kitware/vtk.js": "^38.1.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "zustand": "^5.1.0"
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.3",
+    "@types/node": "^26.6.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.3.0",

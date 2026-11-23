@@ -1,0 +1,7379 @@
+{
+  "bounds": {
+    "max": [
+      100.0,
+      5.0,
+      0.0
+    ],
+    "min": [
+      0.0,
+      -5.0,
+      -20.0
+    ]
+  },
+  "import": {
+    "assumptions": [
+      "material 1 (elastic_modulus): 34077146.199189 kN/m^2 -- grade 'C35/45': derived from fck=35.000000 MPa via EN1992-1-1:2004 Table 3.1 Ecm=22*(fcm/10)^0.3 GPa, fcm=fck+8 (formula, not the table's rounded value; see MidasMaterialLibrary.hpp header)",
+      "material 1 (poisson_ratio): 0.2 -- not present in the MIDAS export for a grade-named material; EN1992-1-1 S3.1.3 standard value for concrete",
+      "material 1 (unit_weight): 25 kN/m^3 -- not present in the MIDAS export for a grade-named material; EN1991-1-1 standard value for normal-weight reinforced concrete",
+      "material 1 (thermal_expansion): 1.0e-5 /K -- not present in the MIDAS export for a grade-named material; EN1992-1-1 S3.1.3(5) standard value for normal-weight concrete",
+      "material 2 (elastic_modulus): 36283188.218914 kN/m^2 -- grade 'C45/55': derived from fck=45.000000 MPa via EN1992-1-1:2004 Table 3.1 Ecm=22*(fcm/10)^0.3 GPa, fcm=fck+8 (formula, not the table's rounded value; see MidasMaterialLibrary.hpp header)",
+      "material 2 (poisson_ratio): 0.2 -- not present in the MIDAS export for a grade-named material; EN1992-1-1 S3.1.3 standard value for concrete",
+      "material 2 (unit_weight): 25 kN/m^3 -- not present in the MIDAS export for a grade-named material; EN1991-1-1 standard value for normal-weight reinforced concrete",
+      "material 2 (thermal_expansion): 1.0e-5 /K -- not present in the MIDAS export for a grade-named material; EN1992-1-1 S3.1.3(5) standard value for normal-weight concrete",
+      "section 1: USE_SHEAR_DEFORM is set in the source; shear areas computed from the shape's classical Timoshenko shear correction factor (see MidasSectionLibrary.hpp), not read from MIDAS directly (MIDAS does not export an effective shear area for a DBUSER section)",
+      "section 2: USE_SHEAR_DEFORM is set in the source; shear areas computed from the shape's classical Timoshenko shear correction factor (see MidasSectionLibrary.hpp), not read from MIDAS directly (MIDAS does not export an effective shear area for a DBUSER section)",
+      "section 3: USE_SHEAR_DEFORM is set in the source; shear areas computed from the shape's classical Timoshenko shear correction factor (see MidasSectionLibrary.hpp), not read from MIDAS directly (MIDAS does not export an effective shear area for a DBUSER section)",
+      "section 4: USE_SHEAR_DEFORM is set in the source; shear areas computed from the shape's classical Timoshenko shear correction factor (see MidasSectionLibrary.hpp), not read from MIDAS directly (MIDAS does not export an effective shear area for a DBUSER section)",
+      "section 5: USE_SHEAR_DEFORM is set in the source; shear areas computed from the shape's classical Timoshenko shear correction factor (see MidasSectionLibrary.hpp), not read from MIDAS directly (MIDAS does not export an effective shear area for a DBUSER section)",
+      "support at node 1: CONSTRAINT string has 7 characters, not 6; extra character(s) ignored (meaning unconfirmed, see docs/MIDAS_JSON_DATA_AUDIT.md 4.4)",
+      "support at node 22: CONSTRAINT string has 7 characters, not 6; extra character(s) ignored (meaning unconfirmed, see docs/MIDAS_JSON_DATA_AUDIT.md 4.4)",
+      "support at node 23: CONSTRAINT string has 7 characters, not 6; extra character(s) ignored (meaning unconfirmed, see docs/MIDAS_JSON_DATA_AUDIT.md 4.4)",
+      "support at node 26: CONSTRAINT string has 7 characters, not 6; extra character(s) ignored (meaning unconfirmed, see docs/MIDAS_JSON_DATA_AUDIT.md 4.4)",
+      "support at node 27: CONSTRAINT string has 7 characters, not 6; extra character(s) ignored (meaning unconfirmed, see docs/MIDAS_JSON_DATA_AUDIT.md 4.4)",
+      "support at node 28: CONSTRAINT string has 7 characters, not 6; extra character(s) ignored (meaning unconfirmed, see docs/MIDAS_JSON_DATA_AUDIT.md 4.4)",
+      "support at node 29: CONSTRAINT string has 7 characters, not 6; extra character(s) ignored (meaning unconfirmed, see docs/MIDAS_JSON_DATA_AUDIT.md 4.4)",
+      "support at node 6: CONSTRAINT string has 7 characters, not 6; extra character(s) ignored (meaning unconfirmed, see docs/MIDAS_JSON_DATA_AUDIT.md 4.4)",
+      "support at node 7: CONSTRAINT string has 7 characters, not 6; extra character(s) ignored (meaning unconfirmed, see docs/MIDAS_JSON_DATA_AUDIT.md 4.4)",
+      "EIGV: modal analysis requested, 20 modes (iFREQ) -- solver algorithm/options (TYPE/bMINMAX/bSTRUM) are not translated, ModalSolver always uses its own single, independently-verified dense eigensolve",
+      "SPLC SPX: DIR='XY' ANGLE=0.000000 -- direction taken as axis 'X' (0 deg = DIR's first letter, 90 deg = second, mod 180)",
+      "SPLC SPX: INTERP=LOG -> log-log spectrum interpolation; the table's T=0 point is used at T=1e-6 s (MIDAS's own stand-in period is not documented; 1e-6 s reproduces MIDAS on verification models 16 and 100)",
+      "SPLC SPX: response spectrum imported from SPFC 'EURO2004 H-ELASTIC' (direction=X, CQC combination, damping ratio 0.050000 from SPFC DRATIO -- SPLC's own CQCRATIO is not used, its exact meaning is unconfirmed); values converted from g to m/s^2 using this SPFC's own GRAV (9.806000)",
+      "SPLC SPY: DIR='XY' ANGLE=90.000000 -- direction taken as axis 'Y' (0 deg = DIR's first letter, 90 deg = second, mod 180)",
+      "SPLC SPY: INTERP=LOG -> log-log spectrum interpolation; the table's T=0 point is used at T=1e-6 s (MIDAS's own stand-in period is not documented; 1e-6 s reproduces MIDAS on verification models 16 and 100)",
+      "SPLC SPY: response spectrum imported from SPFC 'EURO2004 H-ELASTIC' (direction=Y, CQC combination, damping ratio 0.050000 from SPFC DRATIO -- SPLC's own CQCRATIO is not used, its exact meaning is unconfirmed); values converted from g to m/s^2 using this SPFC's own GRAV (9.806000)",
+      "3 static + response-spectrum combination(s) (LCOM-GEN with RS terms) imported as definitions: value = sum(static) + sum(factor * |spectrum peak|), the rule read from MIDAS's own results (verification model 100); evaluated by the verification layer"
+    ],
+    "counts": {
+      "beams": 94,
+      "combinations": 2,
+      "elastic_links": 4,
+      "elastic_links_rejected": 0,
+      "joint_springs": 0,
+      "load_cases": 5,
+      "materials": 2,
+      "member_loads": 70,
+      "nodal_loads": 0,
+      "nodes": 106,
+      "rigid_links": 7,
+      "sections": 5,
+      "spectrum_combinations": 3,
+      "supports": 9,
+      "thermal_loads": 40
+    },
+    "rejected": []
+  },
+  "metadata": {
+    "model_sha256": "4c56098f6ee863626874827621ff60951d11df08bb82cc505d52e445db5d97cc",
+    "solver": "KOPRUQ-SOLVER",
+    "solver_version": "0.1.0",
+    "source_format": "midas-nx-json",
+    "units": {
+      "angle": "rad",
+      "force": "kN",
+      "length": "m",
+      "moment": "kNm"
+    }
+  },
+  "model": {
+    "beams": [
+      {
+        "id": 1,
+        "material": 2,
+        "nodes": [
+          1,
+          74
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 1
+      },
+      {
+        "id": 10,
+        "material": 1,
+        "nodes": [
+          24,
+          38
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          1.0,
+          0.0,
+          -0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 5
+      },
+      {
+        "id": 11,
+        "material": 1,
+        "nodes": [
+          17,
+          40
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          1.0,
+          0.0,
+          -0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 5
+      },
+      {
+        "id": 12,
+        "material": 1,
+        "nodes": [
+          25,
+          42
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          1.0,
+          0.0,
+          -0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 5
+      },
+      {
+        "id": 13,
+        "material": 1,
+        "nodes": [
+          18,
+          30
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          1.0,
+          0.0,
+          -0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 5
+      },
+      {
+        "id": 14,
+        "material": 1,
+        "nodes": [
+          15,
+          33
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          1.0,
+          0.0,
+          -0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 5
+      },
+      {
+        "id": 15,
+        "material": 1,
+        "nodes": [
+          30,
+          31
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          1.0,
+          0.0,
+          -0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 5
+      },
+      {
+        "id": 16,
+        "material": 1,
+        "nodes": [
+          31,
+          32
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          1.0,
+          0.0,
+          -0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 5
+      },
+      {
+        "id": 17,
+        "material": 1,
+        "nodes": [
+          32,
+          15
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          1.0,
+          0.0,
+          -0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 5
+      },
+      {
+        "id": 18,
+        "material": 1,
+        "nodes": [
+          33,
+          34
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          1.0,
+          0.0,
+          -0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 5
+      },
+      {
+        "id": 19,
+        "material": 1,
+        "nodes": [
+          34,
+          35
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          1.0,
+          0.0,
+          -0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 5
+      },
+      {
+        "id": 2,
+        "material": 2,
+        "nodes": [
+          2,
+          83
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 1
+      },
+      {
+        "id": 20,
+        "material": 1,
+        "nodes": [
+          35,
+          19
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          1.0,
+          0.0,
+          -0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 5
+      },
+      {
+        "id": 21,
+        "material": 1,
+        "nodes": [
+          36,
+          37
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          1.0,
+          0.0,
+          -0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 5
+      },
+      {
+        "id": 22,
+        "material": 1,
+        "nodes": [
+          37,
+          24
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          1.0,
+          0.0,
+          -0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 5
+      },
+      {
+        "id": 23,
+        "material": 1,
+        "nodes": [
+          38,
+          39
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          1.0,
+          0.0,
+          -0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 5
+      },
+      {
+        "id": 24,
+        "material": 1,
+        "nodes": [
+          39,
+          17
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          1.0,
+          0.0,
+          -0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 5
+      },
+      {
+        "id": 25,
+        "material": 1,
+        "nodes": [
+          40,
+          41
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          1.0,
+          0.0,
+          -0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 5
+      },
+      {
+        "id": 26,
+        "material": 1,
+        "nodes": [
+          41,
+          25
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          1.0,
+          0.0,
+          -0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 5
+      },
+      {
+        "id": 27,
+        "material": 1,
+        "nodes": [
+          42,
+          43
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          1.0,
+          0.0,
+          -0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 5
+      },
+      {
+        "id": 28,
+        "material": 1,
+        "nodes": [
+          43,
+          20
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          1.0,
+          0.0,
+          -0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 5
+      },
+      {
+        "id": 29,
+        "material": 1,
+        "nodes": [
+          44,
+          45
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 2
+      },
+      {
+        "id": 3,
+        "material": 2,
+        "nodes": [
+          3,
+          92
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 1
+      },
+      {
+        "id": 30,
+        "material": 1,
+        "nodes": [
+          45,
+          46
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 2
+      },
+      {
+        "id": 31,
+        "material": 1,
+        "nodes": [
+          46,
+          47
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 2
+      },
+      {
+        "id": 32,
+        "material": 1,
+        "nodes": [
+          47,
+          48
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 2
+      },
+      {
+        "id": 33,
+        "material": 1,
+        "nodes": [
+          48,
+          15
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 2
+      },
+      {
+        "id": 34,
+        "material": 1,
+        "nodes": [
+          49,
+          50
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 3
+      },
+      {
+        "id": 35,
+        "material": 1,
+        "nodes": [
+          50,
+          51
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 3
+      },
+      {
+        "id": 36,
+        "material": 1,
+        "nodes": [
+          51,
+          52
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 3
+      },
+      {
+        "id": 37,
+        "material": 1,
+        "nodes": [
+          52,
+          53
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 3
+      },
+      {
+        "id": 38,
+        "material": 1,
+        "nodes": [
+          53,
+          54
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 3
+      },
+      {
+        "id": 39,
+        "material": 1,
+        "nodes": [
+          54,
+          55
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 3
+      },
+      {
+        "id": 4,
+        "material": 2,
+        "nodes": [
+          4,
+          101
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 1
+      },
+      {
+        "id": 40,
+        "material": 1,
+        "nodes": [
+          55,
+          56
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 3
+      },
+      {
+        "id": 41,
+        "material": 1,
+        "nodes": [
+          56,
+          57
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 3
+      },
+      {
+        "id": 42,
+        "material": 1,
+        "nodes": [
+          57,
+          58
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 3
+      },
+      {
+        "id": 43,
+        "material": 1,
+        "nodes": [
+          58,
+          59
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 3
+      },
+      {
+        "id": 44,
+        "material": 1,
+        "nodes": [
+          59,
+          16
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 3
+      },
+      {
+        "id": 45,
+        "material": 1,
+        "nodes": [
+          60,
+          61
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 4
+      },
+      {
+        "id": 46,
+        "material": 1,
+        "nodes": [
+          61,
+          62
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 4
+      },
+      {
+        "id": 47,
+        "material": 1,
+        "nodes": [
+          62,
+          63
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 4
+      },
+      {
+        "id": 48,
+        "material": 1,
+        "nodes": [
+          63,
+          64
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 4
+      },
+      {
+        "id": 49,
+        "material": 1,
+        "nodes": [
+          64,
+          65
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 4
+      },
+      {
+        "id": 5,
+        "material": 1,
+        "nodes": [
+          7,
+          49
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 3
+      },
+      {
+        "id": 50,
+        "material": 1,
+        "nodes": [
+          65,
+          66
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 4
+      },
+      {
+        "id": 51,
+        "material": 1,
+        "nodes": [
+          66,
+          24
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 4
+      },
+      {
+        "id": 52,
+        "material": 1,
+        "nodes": [
+          67,
+          68
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 4
+      },
+      {
+        "id": 53,
+        "material": 1,
+        "nodes": [
+          68,
+          69
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 4
+      },
+      {
+        "id": 54,
+        "material": 1,
+        "nodes": [
+          69,
+          70
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 4
+      },
+      {
+        "id": 55,
+        "material": 1,
+        "nodes": [
+          70,
+          71
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 4
+      },
+      {
+        "id": 56,
+        "material": 1,
+        "nodes": [
+          71,
+          72
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 4
+      },
+      {
+        "id": 57,
+        "material": 1,
+        "nodes": [
+          72,
+          73
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 4
+      },
+      {
+        "id": 58,
+        "material": 1,
+        "nodes": [
+          73,
+          25
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 4
+      },
+      {
+        "id": 59,
+        "material": 2,
+        "nodes": [
+          74,
+          75
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 1
+      },
+      {
+        "id": 6,
+        "material": 1,
+        "nodes": [
+          6,
+          44
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 2
+      },
+      {
+        "id": 60,
+        "material": 2,
+        "nodes": [
+          75,
+          76
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 1
+      },
+      {
+        "id": 61,
+        "material": 2,
+        "nodes": [
+          76,
+          77
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 1
+      },
+      {
+        "id": 62,
+        "material": 2,
+        "nodes": [
+          77,
+          78
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 1
+      },
+      {
+        "id": 63,
+        "material": 2,
+        "nodes": [
+          78,
+          79
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 1
+      },
+      {
+        "id": 64,
+        "material": 2,
+        "nodes": [
+          79,
+          80
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 1
+      },
+      {
+        "id": 65,
+        "material": 2,
+        "nodes": [
+          80,
+          81
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 1
+      },
+      {
+        "id": 66,
+        "material": 2,
+        "nodes": [
+          81,
+          82
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 1
+      },
+      {
+        "id": 67,
+        "material": 2,
+        "nodes": [
+          82,
+          2
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 1
+      },
+      {
+        "id": 68,
+        "material": 2,
+        "nodes": [
+          83,
+          84
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 1
+      },
+      {
+        "id": 69,
+        "material": 2,
+        "nodes": [
+          84,
+          85
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 1
+      },
+      {
+        "id": 7,
+        "material": 1,
+        "nodes": [
+          22,
+          60
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 4
+      },
+      {
+        "id": 70,
+        "material": 2,
+        "nodes": [
+          85,
+          86
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 1
+      },
+      {
+        "id": 71,
+        "material": 2,
+        "nodes": [
+          86,
+          87
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 1
+      },
+      {
+        "id": 72,
+        "material": 2,
+        "nodes": [
+          87,
+          88
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 1
+      },
+      {
+        "id": 73,
+        "material": 2,
+        "nodes": [
+          88,
+          89
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 1
+      },
+      {
+        "id": 74,
+        "material": 2,
+        "nodes": [
+          89,
+          90
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 1
+      },
+      {
+        "id": 75,
+        "material": 2,
+        "nodes": [
+          90,
+          91
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 1
+      },
+      {
+        "id": 76,
+        "material": 2,
+        "nodes": [
+          91,
+          3
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 1
+      },
+      {
+        "id": 77,
+        "material": 2,
+        "nodes": [
+          92,
+          93
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 1
+      },
+      {
+        "id": 78,
+        "material": 2,
+        "nodes": [
+          93,
+          94
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 1
+      },
+      {
+        "id": 79,
+        "material": 2,
+        "nodes": [
+          94,
+          95
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 1
+      },
+      {
+        "id": 8,
+        "material": 1,
+        "nodes": [
+          23,
+          67
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 4
+      },
+      {
+        "id": 80,
+        "material": 2,
+        "nodes": [
+          95,
+          96
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 1
+      },
+      {
+        "id": 81,
+        "material": 2,
+        "nodes": [
+          96,
+          97
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 1
+      },
+      {
+        "id": 82,
+        "material": 2,
+        "nodes": [
+          97,
+          98
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 1
+      },
+      {
+        "id": 83,
+        "material": 2,
+        "nodes": [
+          98,
+          99
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 1
+      },
+      {
+        "id": 84,
+        "material": 2,
+        "nodes": [
+          99,
+          100
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 1
+      },
+      {
+        "id": 85,
+        "material": 2,
+        "nodes": [
+          100,
+          4
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 1
+      },
+      {
+        "id": 86,
+        "material": 2,
+        "nodes": [
+          101,
+          102
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 1
+      },
+      {
+        "id": 87,
+        "material": 2,
+        "nodes": [
+          102,
+          103
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 1
+      },
+      {
+        "id": 88,
+        "material": 2,
+        "nodes": [
+          103,
+          104
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 1
+      },
+      {
+        "id": 89,
+        "material": 2,
+        "nodes": [
+          104,
+          105
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 1
+      },
+      {
+        "id": 9,
+        "material": 1,
+        "nodes": [
+          21,
+          36
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          1.0,
+          0.0,
+          -0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 5
+      },
+      {
+        "id": 90,
+        "material": 2,
+        "nodes": [
+          105,
+          106
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 1
+      },
+      {
+        "id": 91,
+        "material": 2,
+        "nodes": [
+          106,
+          107
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 1
+      },
+      {
+        "id": 92,
+        "material": 2,
+        "nodes": [
+          107,
+          108
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 1
+      },
+      {
+        "id": 93,
+        "material": 2,
+        "nodes": [
+          108,
+          109
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 1
+      },
+      {
+        "id": 94,
+        "material": 2,
+        "nodes": [
+          109,
+          5
+        ],
+        "offset1": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "offset2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reference_y": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "releases": {
+          "end": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "start": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ]
+        },
+        "section": 1
+      }
+    ],
+    "combinations": [
+      {
+        "name": "C1",
+        "terms": [
+          {
+            "case": "SDL-1",
+            "factor": 0.5
+          },
+          {
+            "case": "SDL-2",
+            "factor": 0.7
+          },
+          {
+            "case": "SW",
+            "factor": 1.0
+          }
+        ]
+      },
+      {
+        "name": "C2",
+        "terms": [
+          {
+            "case": "SDL-1",
+            "factor": 2.0
+          },
+          {
+            "case": "SW",
+            "factor": 1.0
+          },
+          {
+            "case": "TU",
+            "factor": 1.0
+          }
+        ]
+      }
+    ],
+    "joint_springs": [],
+    "load_cases": [
+      {
+        "member": [],
+        "name": "SW",
+        "nodal": [],
+        "point": [],
+        "self_weight": 1.0,
+        "thermal": []
+      },
+      {
+        "member": [
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 1,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -50.0,
+            "w2": -50.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 2,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -50.0,
+            "w2": -50.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 3,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -50.0,
+            "w2": -50.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 4,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -50.0,
+            "w2": -50.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 59,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -50.0,
+            "w2": -50.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 60,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -50.0,
+            "w2": -50.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 61,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -50.0,
+            "w2": -50.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 62,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -50.0,
+            "w2": -50.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 63,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -50.0,
+            "w2": -50.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 64,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -50.0,
+            "w2": -50.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 65,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -50.0,
+            "w2": -50.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 66,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -50.0,
+            "w2": -50.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 67,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -50.0,
+            "w2": -50.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 68,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -50.0,
+            "w2": -50.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 69,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -50.0,
+            "w2": -50.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 70,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -50.0,
+            "w2": -50.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 71,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -50.0,
+            "w2": -50.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 72,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -50.0,
+            "w2": -50.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 73,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -50.0,
+            "w2": -50.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 74,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -50.0,
+            "w2": -50.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 75,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -50.0,
+            "w2": -50.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 76,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -50.0,
+            "w2": -50.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 77,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -50.0,
+            "w2": -50.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 78,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -50.0,
+            "w2": -50.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 79,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -50.0,
+            "w2": -50.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 80,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -50.0,
+            "w2": -50.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 81,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -50.0,
+            "w2": -50.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 82,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -50.0,
+            "w2": -50.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 83,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -50.0,
+            "w2": -50.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 84,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -50.0,
+            "w2": -50.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 85,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -50.0,
+            "w2": -50.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 86,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -50.0,
+            "w2": -50.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 87,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -50.0,
+            "w2": -50.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 88,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -50.0,
+            "w2": -50.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 89,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -50.0,
+            "w2": -50.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 90,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -50.0,
+            "w2": -50.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 91,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -50.0,
+            "w2": -50.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 92,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -50.0,
+            "w2": -50.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 93,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -50.0,
+            "w2": -50.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 94,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -50.0,
+            "w2": -50.0
+          }
+        ],
+        "name": "SDL-1",
+        "nodal": [],
+        "point": [],
+        "self_weight": 0.0,
+        "thermal": []
+      },
+      {
+        "member": [
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 1,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -45.0,
+            "w2": -45.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 4,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -45.0,
+            "w2": -45.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 59,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -45.0,
+            "w2": -45.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 60,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -45.0,
+            "w2": -45.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 61,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -45.0,
+            "w2": -45.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 62,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -45.0,
+            "w2": -45.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 63,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -45.0,
+            "w2": -45.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 64,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -45.0,
+            "w2": -45.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 65,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -45.0,
+            "w2": -45.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 66,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -45.0,
+            "w2": -45.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 67,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -45.0,
+            "w2": -45.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 86,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -45.0,
+            "w2": -45.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 87,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -45.0,
+            "w2": -45.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 88,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -45.0,
+            "w2": -45.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 89,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -45.0,
+            "w2": -45.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 90,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -45.0,
+            "w2": -45.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 91,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -45.0,
+            "w2": -45.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 92,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -45.0,
+            "w2": -45.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 93,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -45.0,
+            "w2": -45.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 94,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -45.0,
+            "w2": -45.0
+          }
+        ],
+        "name": "SDL-3",
+        "nodal": [],
+        "point": [],
+        "self_weight": 0.0,
+        "thermal": []
+      },
+      {
+        "member": [
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 2,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -100.0,
+            "w2": -100.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 68,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -100.0,
+            "w2": -100.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 69,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -100.0,
+            "w2": -100.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 70,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -100.0,
+            "w2": -100.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 71,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -100.0,
+            "w2": -100.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 72,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -100.0,
+            "w2": -100.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 73,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -100.0,
+            "w2": -100.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 74,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -100.0,
+            "w2": -100.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 75,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -100.0,
+            "w2": -100.0
+          },
+          {
+            "axes": "global",
+            "direction": "z",
+            "element": 76,
+            "end": 1.0,
+            "kind": "force",
+            "projected": false,
+            "start": 0.0,
+            "w1": -100.0,
+            "w2": -100.0
+          }
+        ],
+        "name": "SDL-2",
+        "nodal": [],
+        "point": [],
+        "self_weight": 0.0,
+        "thermal": []
+      },
+      {
+        "member": [],
+        "name": "TU",
+        "nodal": [],
+        "point": [],
+        "self_weight": 0.0,
+        "thermal": [
+          {
+            "element": 1,
+            "gradient_y_delta_t": 0.0,
+            "gradient_y_depth": 0.0,
+            "gradient_z_delta_t": 0.0,
+            "gradient_z_depth": 0.0,
+            "uniform_delta_t": 40.0
+          },
+          {
+            "element": 2,
+            "gradient_y_delta_t": 0.0,
+            "gradient_y_depth": 0.0,
+            "gradient_z_delta_t": 0.0,
+            "gradient_z_depth": 0.0,
+            "uniform_delta_t": 40.0
+          },
+          {
+            "element": 3,
+            "gradient_y_delta_t": 0.0,
+            "gradient_y_depth": 0.0,
+            "gradient_z_delta_t": 0.0,
+            "gradient_z_depth": 0.0,
+            "uniform_delta_t": 40.0
+          },
+          {
+            "element": 4,
+            "gradient_y_delta_t": 0.0,
+            "gradient_y_depth": 0.0,
+            "gradient_z_delta_t": 0.0,
+            "gradient_z_depth": 0.0,
+            "uniform_delta_t": 40.0
+          },
+          {
+            "element": 59,
+            "gradient_y_delta_t": 0.0,
+            "gradient_y_depth": 0.0,
+            "gradient_z_delta_t": 0.0,
+            "gradient_z_depth": 0.0,
+            "uniform_delta_t": 40.0
+          },
+          {
+            "element": 60,
+            "gradient_y_delta_t": 0.0,
+            "gradient_y_depth": 0.0,
+            "gradient_z_delta_t": 0.0,
+            "gradient_z_depth": 0.0,
+            "uniform_delta_t": 40.0
+          },
+          {
+            "element": 61,
+            "gradient_y_delta_t": 0.0,
+            "gradient_y_depth": 0.0,
+            "gradient_z_delta_t": 0.0,
+            "gradient_z_depth": 0.0,
+            "uniform_delta_t": 40.0
+          },
+          {
+            "element": 62,
+            "gradient_y_delta_t": 0.0,
+            "gradient_y_depth": 0.0,
+            "gradient_z_delta_t": 0.0,
+            "gradient_z_depth": 0.0,
+            "uniform_delta_t": 40.0
+          },
+          {
+            "element": 63,
+            "gradient_y_delta_t": 0.0,
+            "gradient_y_depth": 0.0,
+            "gradient_z_delta_t": 0.0,
+            "gradient_z_depth": 0.0,
+            "uniform_delta_t": 40.0
+          },
+          {
+            "element": 64,
+            "gradient_y_delta_t": 0.0,
+            "gradient_y_depth": 0.0,
+            "gradient_z_delta_t": 0.0,
+            "gradient_z_depth": 0.0,
+            "uniform_delta_t": 40.0
+          },
+          {
+            "element": 65,
+            "gradient_y_delta_t": 0.0,
+            "gradient_y_depth": 0.0,
+            "gradient_z_delta_t": 0.0,
+            "gradient_z_depth": 0.0,
+            "uniform_delta_t": 40.0
+          },
+          {
+            "element": 66,
+            "gradient_y_delta_t": 0.0,
+            "gradient_y_depth": 0.0,
+            "gradient_z_delta_t": 0.0,
+            "gradient_z_depth": 0.0,
+            "uniform_delta_t": 40.0
+          },
+          {
+            "element": 67,
+            "gradient_y_delta_t": 0.0,
+            "gradient_y_depth": 0.0,
+            "gradient_z_delta_t": 0.0,
+            "gradient_z_depth": 0.0,
+            "uniform_delta_t": 40.0
+          },
+          {
+            "element": 68,
+            "gradient_y_delta_t": 0.0,
+            "gradient_y_depth": 0.0,
+            "gradient_z_delta_t": 0.0,
+            "gradient_z_depth": 0.0,
+            "uniform_delta_t": 40.0
+          },
+          {
+            "element": 69,
+            "gradient_y_delta_t": 0.0,
+            "gradient_y_depth": 0.0,
+            "gradient_z_delta_t": 0.0,
+            "gradient_z_depth": 0.0,
+            "uniform_delta_t": 40.0
+          },
+          {
+            "element": 70,
+            "gradient_y_delta_t": 0.0,
+            "gradient_y_depth": 0.0,
+            "gradient_z_delta_t": 0.0,
+            "gradient_z_depth": 0.0,
+            "uniform_delta_t": 40.0
+          },
+          {
+            "element": 71,
+            "gradient_y_delta_t": 0.0,
+            "gradient_y_depth": 0.0,
+            "gradient_z_delta_t": 0.0,
+            "gradient_z_depth": 0.0,
+            "uniform_delta_t": 40.0
+          },
+          {
+            "element": 72,
+            "gradient_y_delta_t": 0.0,
+            "gradient_y_depth": 0.0,
+            "gradient_z_delta_t": 0.0,
+            "gradient_z_depth": 0.0,
+            "uniform_delta_t": 40.0
+          },
+          {
+            "element": 73,
+            "gradient_y_delta_t": 0.0,
+            "gradient_y_depth": 0.0,
+            "gradient_z_delta_t": 0.0,
+            "gradient_z_depth": 0.0,
+            "uniform_delta_t": 40.0
+          },
+          {
+            "element": 74,
+            "gradient_y_delta_t": 0.0,
+            "gradient_y_depth": 0.0,
+            "gradient_z_delta_t": 0.0,
+            "gradient_z_depth": 0.0,
+            "uniform_delta_t": 40.0
+          },
+          {
+            "element": 75,
+            "gradient_y_delta_t": 0.0,
+            "gradient_y_depth": 0.0,
+            "gradient_z_delta_t": 0.0,
+            "gradient_z_depth": 0.0,
+            "uniform_delta_t": 40.0
+          },
+          {
+            "element": 76,
+            "gradient_y_delta_t": 0.0,
+            "gradient_y_depth": 0.0,
+            "gradient_z_delta_t": 0.0,
+            "gradient_z_depth": 0.0,
+            "uniform_delta_t": 40.0
+          },
+          {
+            "element": 77,
+            "gradient_y_delta_t": 0.0,
+            "gradient_y_depth": 0.0,
+            "gradient_z_delta_t": 0.0,
+            "gradient_z_depth": 0.0,
+            "uniform_delta_t": 40.0
+          },
+          {
+            "element": 78,
+            "gradient_y_delta_t": 0.0,
+            "gradient_y_depth": 0.0,
+            "gradient_z_delta_t": 0.0,
+            "gradient_z_depth": 0.0,
+            "uniform_delta_t": 40.0
+          },
+          {
+            "element": 79,
+            "gradient_y_delta_t": 0.0,
+            "gradient_y_depth": 0.0,
+            "gradient_z_delta_t": 0.0,
+            "gradient_z_depth": 0.0,
+            "uniform_delta_t": 40.0
+          },
+          {
+            "element": 80,
+            "gradient_y_delta_t": 0.0,
+            "gradient_y_depth": 0.0,
+            "gradient_z_delta_t": 0.0,
+            "gradient_z_depth": 0.0,
+            "uniform_delta_t": 40.0
+          },
+          {
+            "element": 81,
+            "gradient_y_delta_t": 0.0,
+            "gradient_y_depth": 0.0,
+            "gradient_z_delta_t": 0.0,
+            "gradient_z_depth": 0.0,
+            "uniform_delta_t": 40.0
+          },
+          {
+            "element": 82,
+            "gradient_y_delta_t": 0.0,
+            "gradient_y_depth": 0.0,
+            "gradient_z_delta_t": 0.0,
+            "gradient_z_depth": 0.0,
+            "uniform_delta_t": 40.0
+          },
+          {
+            "element": 83,
+            "gradient_y_delta_t": 0.0,
+            "gradient_y_depth": 0.0,
+            "gradient_z_delta_t": 0.0,
+            "gradient_z_depth": 0.0,
+            "uniform_delta_t": 40.0
+          },
+          {
+            "element": 84,
+            "gradient_y_delta_t": 0.0,
+            "gradient_y_depth": 0.0,
+            "gradient_z_delta_t": 0.0,
+            "gradient_z_depth": 0.0,
+            "uniform_delta_t": 40.0
+          },
+          {
+            "element": 85,
+            "gradient_y_delta_t": 0.0,
+            "gradient_y_depth": 0.0,
+            "gradient_z_delta_t": 0.0,
+            "gradient_z_depth": 0.0,
+            "uniform_delta_t": 40.0
+          },
+          {
+            "element": 86,
+            "gradient_y_delta_t": 0.0,
+            "gradient_y_depth": 0.0,
+            "gradient_z_delta_t": 0.0,
+            "gradient_z_depth": 0.0,
+            "uniform_delta_t": 40.0
+          },
+          {
+            "element": 87,
+            "gradient_y_delta_t": 0.0,
+            "gradient_y_depth": 0.0,
+            "gradient_z_delta_t": 0.0,
+            "gradient_z_depth": 0.0,
+            "uniform_delta_t": 40.0
+          },
+          {
+            "element": 88,
+            "gradient_y_delta_t": 0.0,
+            "gradient_y_depth": 0.0,
+            "gradient_z_delta_t": 0.0,
+            "gradient_z_depth": 0.0,
+            "uniform_delta_t": 40.0
+          },
+          {
+            "element": 89,
+            "gradient_y_delta_t": 0.0,
+            "gradient_y_depth": 0.0,
+            "gradient_z_delta_t": 0.0,
+            "gradient_z_depth": 0.0,
+            "uniform_delta_t": 40.0
+          },
+          {
+            "element": 90,
+            "gradient_y_delta_t": 0.0,
+            "gradient_y_depth": 0.0,
+            "gradient_z_delta_t": 0.0,
+            "gradient_z_depth": 0.0,
+            "uniform_delta_t": 40.0
+          },
+          {
+            "element": 91,
+            "gradient_y_delta_t": 0.0,
+            "gradient_y_depth": 0.0,
+            "gradient_z_delta_t": 0.0,
+            "gradient_z_depth": 0.0,
+            "uniform_delta_t": 40.0
+          },
+          {
+            "element": 92,
+            "gradient_y_delta_t": 0.0,
+            "gradient_y_depth": 0.0,
+            "gradient_z_delta_t": 0.0,
+            "gradient_z_depth": 0.0,
+            "uniform_delta_t": 40.0
+          },
+          {
+            "element": 93,
+            "gradient_y_delta_t": 0.0,
+            "gradient_y_depth": 0.0,
+            "gradient_z_delta_t": 0.0,
+            "gradient_z_depth": 0.0,
+            "uniform_delta_t": 40.0
+          },
+          {
+            "element": 94,
+            "gradient_y_delta_t": 0.0,
+            "gradient_y_depth": 0.0,
+            "gradient_z_delta_t": 0.0,
+            "gradient_z_depth": 0.0,
+            "uniform_delta_t": 40.0
+          }
+        ]
+      }
+    ],
+    "materials": [
+      {
+        "elastic_modulus": 34077146.19918933,
+        "id": 1,
+        "poisson_ratio": 0.2,
+        "thermal_expansion": 1e-05,
+        "unit_weight": 25.0
+      },
+      {
+        "elastic_modulus": 36283188.21891413,
+        "id": 2,
+        "poisson_ratio": 0.2,
+        "thermal_expansion": 1e-05,
+        "unit_weight": 25.0
+      }
+    ],
+    "nodes": [
+      {
+        "id": 1,
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      {
+        "id": 100,
+        "x": 81.5,
+        "y": 0.0,
+        "z": 0.0
+      },
+      {
+        "id": 101,
+        "x": 86.5,
+        "y": 0.0,
+        "z": 0.0
+      },
+      {
+        "id": 102,
+        "x": 88.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      {
+        "id": 103,
+        "x": 89.5,
+        "y": 0.0,
+        "z": 0.0
+      },
+      {
+        "id": 104,
+        "x": 91.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      {
+        "id": 105,
+        "x": 92.5,
+        "y": 0.0,
+        "z": 0.0
+      },
+      {
+        "id": 106,
+        "x": 94.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      {
+        "id": 107,
+        "x": 95.5,
+        "y": 0.0,
+        "z": 0.0
+      },
+      {
+        "id": 108,
+        "x": 97.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      {
+        "id": 109,
+        "x": 98.5,
+        "y": 0.0,
+        "z": 0.0
+      },
+      {
+        "id": 11,
+        "x": 0.0,
+        "y": 2.0,
+        "z": -2.0
+      },
+      {
+        "id": 12,
+        "x": 100.0,
+        "y": 2.0,
+        "z": -2.0
+      },
+      {
+        "id": 13,
+        "x": 0.0,
+        "y": -2.0,
+        "z": -2.0
+      },
+      {
+        "id": 14,
+        "x": 100.0,
+        "y": -2.0,
+        "z": -2.0
+      },
+      {
+        "id": 15,
+        "x": 20.0,
+        "y": 0.0,
+        "z": -2.0
+      },
+      {
+        "id": 16,
+        "x": 50.0,
+        "y": 0.0,
+        "z": -2.0
+      },
+      {
+        "id": 17,
+        "x": 85.0,
+        "y": 0.0,
+        "z": -2.0
+      },
+      {
+        "id": 18,
+        "x": 20.0,
+        "y": 5.0,
+        "z": -2.0
+      },
+      {
+        "id": 19,
+        "x": 20.0,
+        "y": -5.0,
+        "z": -2.0
+      },
+      {
+        "id": 2,
+        "x": 20.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      {
+        "id": 20,
+        "x": 85.0,
+        "y": -5.0,
+        "z": -2.0
+      },
+      {
+        "id": 21,
+        "x": 85.0,
+        "y": 5.0,
+        "z": -2.0
+      },
+      {
+        "id": 22,
+        "x": 85.0,
+        "y": 3.0,
+        "z": -12.0
+      },
+      {
+        "id": 23,
+        "x": 85.0,
+        "y": -3.0,
+        "z": -12.0
+      },
+      {
+        "id": 24,
+        "x": 85.0,
+        "y": 3.0,
+        "z": -2.0
+      },
+      {
+        "id": 25,
+        "x": 85.0,
+        "y": -3.0,
+        "z": -2.0
+      },
+      {
+        "id": 26,
+        "x": 0.0,
+        "y": 2.0,
+        "z": -2.5
+      },
+      {
+        "id": 27,
+        "x": 0.0,
+        "y": -2.0,
+        "z": -2.5
+      },
+      {
+        "id": 28,
+        "x": 100.0,
+        "y": 2.0,
+        "z": -2.5
+      },
+      {
+        "id": 29,
+        "x": 100.0,
+        "y": -2.0,
+        "z": -2.5
+      },
+      {
+        "id": 3,
+        "x": 50.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      {
+        "id": 30,
+        "x": 20.0,
+        "y": 3.75,
+        "z": -2.0
+      },
+      {
+        "id": 31,
+        "x": 20.0,
+        "y": 2.5,
+        "z": -2.0
+      },
+      {
+        "id": 32,
+        "x": 20.0,
+        "y": 1.25,
+        "z": -2.0
+      },
+      {
+        "id": 33,
+        "x": 20.0,
+        "y": -1.25,
+        "z": -2.0
+      },
+      {
+        "id": 34,
+        "x": 20.0,
+        "y": -2.5,
+        "z": -2.0
+      },
+      {
+        "id": 35,
+        "x": 20.0,
+        "y": -3.75,
+        "z": -2.0
+      },
+      {
+        "id": 36,
+        "x": 85.0,
+        "y": 4.333333333333333,
+        "z": -2.0
+      },
+      {
+        "id": 37,
+        "x": 85.0,
+        "y": 3.666666666666667,
+        "z": -2.0
+      },
+      {
+        "id": 38,
+        "x": 85.0,
+        "y": 2.0,
+        "z": -2.0
+      },
+      {
+        "id": 39,
+        "x": 85.0,
+        "y": 1.0,
+        "z": -2.0
+      },
+      {
+        "id": 4,
+        "x": 85.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      {
+        "id": 40,
+        "x": 85.0,
+        "y": -1.0,
+        "z": -2.0
+      },
+      {
+        "id": 41,
+        "x": 85.0,
+        "y": -2.0,
+        "z": -2.0
+      },
+      {
+        "id": 42,
+        "x": 85.0,
+        "y": -3.6666666666666665,
+        "z": -2.0
+      },
+      {
+        "id": 43,
+        "x": 85.0,
+        "y": -4.333333333333333,
+        "z": -2.0
+      },
+      {
+        "id": 44,
+        "x": 20.0,
+        "y": 0.0,
+        "z": -8.666666666666666
+      },
+      {
+        "id": 45,
+        "x": 20.0,
+        "y": 0.0,
+        "z": -7.333333333333334
+      },
+      {
+        "id": 46,
+        "x": 20.0,
+        "y": 0.0,
+        "z": -6.0
+      },
+      {
+        "id": 47,
+        "x": 20.0,
+        "y": 0.0,
+        "z": -4.666666666666667
+      },
+      {
+        "id": 48,
+        "x": 20.0,
+        "y": 0.0,
+        "z": -3.333333333333333
+      },
+      {
+        "id": 49,
+        "x": 50.0,
+        "y": 0.0,
+        "z": -18.5
+      },
+      {
+        "id": 5,
+        "x": 100.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      {
+        "id": 50,
+        "x": 50.0,
+        "y": 0.0,
+        "z": -17.0
+      },
+      {
+        "id": 51,
+        "x": 50.0,
+        "y": 0.0,
+        "z": -15.5
+      },
+      {
+        "id": 52,
+        "x": 50.0,
+        "y": 0.0,
+        "z": -14.0
+      },
+      {
+        "id": 53,
+        "x": 50.0,
+        "y": 0.0,
+        "z": -12.5
+      },
+      {
+        "id": 54,
+        "x": 50.0,
+        "y": 0.0,
+        "z": -11.0
+      },
+      {
+        "id": 55,
+        "x": 50.0,
+        "y": 0.0,
+        "z": -9.5
+      },
+      {
+        "id": 56,
+        "x": 50.0,
+        "y": 0.0,
+        "z": -8.0
+      },
+      {
+        "id": 57,
+        "x": 50.0,
+        "y": 0.0,
+        "z": -6.5
+      },
+      {
+        "id": 58,
+        "x": 50.0,
+        "y": 0.0,
+        "z": -5.0
+      },
+      {
+        "id": 59,
+        "x": 50.0,
+        "y": 0.0,
+        "z": -3.5
+      },
+      {
+        "id": 6,
+        "x": 20.0,
+        "y": 0.0,
+        "z": -10.0
+      },
+      {
+        "id": 60,
+        "x": 85.0,
+        "y": 3.0,
+        "z": -10.75
+      },
+      {
+        "id": 61,
+        "x": 85.0,
+        "y": 3.0,
+        "z": -9.5
+      },
+      {
+        "id": 62,
+        "x": 85.0,
+        "y": 3.0,
+        "z": -8.25
+      },
+      {
+        "id": 63,
+        "x": 85.0,
+        "y": 3.0,
+        "z": -7.0
+      },
+      {
+        "id": 64,
+        "x": 85.0,
+        "y": 3.0,
+        "z": -5.75
+      },
+      {
+        "id": 65,
+        "x": 85.0,
+        "y": 3.0,
+        "z": -4.5
+      },
+      {
+        "id": 66,
+        "x": 85.0,
+        "y": 3.0,
+        "z": -3.25
+      },
+      {
+        "id": 67,
+        "x": 85.0,
+        "y": -3.0,
+        "z": -10.75
+      },
+      {
+        "id": 68,
+        "x": 85.0,
+        "y": -3.0,
+        "z": -9.5
+      },
+      {
+        "id": 69,
+        "x": 85.0,
+        "y": -3.0,
+        "z": -8.25
+      },
+      {
+        "id": 7,
+        "x": 50.0,
+        "y": 0.0,
+        "z": -20.0
+      },
+      {
+        "id": 70,
+        "x": 85.0,
+        "y": -3.0,
+        "z": -7.0
+      },
+      {
+        "id": 71,
+        "x": 85.0,
+        "y": -3.0,
+        "z": -5.75
+      },
+      {
+        "id": 72,
+        "x": 85.0,
+        "y": -3.0,
+        "z": -4.5
+      },
+      {
+        "id": 73,
+        "x": 85.0,
+        "y": -3.0,
+        "z": -3.25
+      },
+      {
+        "id": 74,
+        "x": 2.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      {
+        "id": 75,
+        "x": 4.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      {
+        "id": 76,
+        "x": 6.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      {
+        "id": 77,
+        "x": 8.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      {
+        "id": 78,
+        "x": 10.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      {
+        "id": 79,
+        "x": 12.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      {
+        "id": 80,
+        "x": 14.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      {
+        "id": 81,
+        "x": 16.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      {
+        "id": 82,
+        "x": 18.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      {
+        "id": 83,
+        "x": 23.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      {
+        "id": 84,
+        "x": 26.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      {
+        "id": 85,
+        "x": 29.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      {
+        "id": 86,
+        "x": 32.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      {
+        "id": 87,
+        "x": 35.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      {
+        "id": 88,
+        "x": 38.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      {
+        "id": 89,
+        "x": 41.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      {
+        "id": 90,
+        "x": 44.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      {
+        "id": 91,
+        "x": 47.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      {
+        "id": 92,
+        "x": 53.5,
+        "y": 0.0,
+        "z": 0.0
+      },
+      {
+        "id": 93,
+        "x": 57.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      {
+        "id": 94,
+        "x": 60.5,
+        "y": 0.0,
+        "z": 0.0
+      },
+      {
+        "id": 95,
+        "x": 64.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      {
+        "id": 96,
+        "x": 67.5,
+        "y": 0.0,
+        "z": 0.0
+      },
+      {
+        "id": 97,
+        "x": 71.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      {
+        "id": 98,
+        "x": 74.5,
+        "y": 0.0,
+        "z": 0.0
+      },
+      {
+        "id": 99,
+        "x": 78.0,
+        "y": 0.0,
+        "z": 0.0
+      }
+    ],
+    "response_spectra": [
+      {
+        "direction": "x",
+        "interpolation": "loglog",
+        "name": "SPX",
+        "num_modes": 20,
+        "spectrum": [
+          {
+            "period": 1e-06,
+            "sa": 0.941376
+          },
+          {
+            "period": 0.06,
+            "sa": 1.5062015999999998
+          },
+          {
+            "period": 0.12,
+            "sa": 2.0710272
+          },
+          {
+            "period": 0.15,
+            "sa": 2.3534399999999995
+          },
+          {
+            "period": 0.18,
+            "sa": 2.3534399999999995
+          },
+          {
+            "period": 0.24,
+            "sa": 2.3534399999999995
+          },
+          {
+            "period": 0.3,
+            "sa": 2.3534399999999995
+          },
+          {
+            "period": 0.36,
+            "sa": 2.3534399999999995
+          },
+          {
+            "period": 0.42,
+            "sa": 2.3534399999999995
+          },
+          {
+            "period": 0.48,
+            "sa": 2.3534399999999995
+          },
+          {
+            "period": 0.5,
+            "sa": 2.3534399999999995
+          },
+          {
+            "period": 0.54,
+            "sa": 2.1791111111111103
+          },
+          {
+            "period": 0.6,
+            "sa": 1.9611999999999998
+          },
+          {
+            "period": 0.6599999999999999,
+            "sa": 1.782909090909091
+          },
+          {
+            "period": 0.72,
+            "sa": 1.6343333333333332
+          },
+          {
+            "period": 0.78,
+            "sa": 1.5086153846153842
+          },
+          {
+            "period": 0.84,
+            "sa": 1.4008571428571426
+          },
+          {
+            "period": 0.8999999999999999,
+            "sa": 1.3074666666666666
+          },
+          {
+            "period": 0.96,
+            "sa": 1.22575
+          },
+          {
+            "period": 1.02,
+            "sa": 1.1536470588235292
+          },
+          {
+            "period": 1.08,
+            "sa": 1.0895555555555552
+          },
+          {
+            "period": 1.14,
+            "sa": 1.0322105263157892
+          },
+          {
+            "period": 1.2,
+            "sa": 0.9805999999999999
+          },
+          {
+            "period": 1.26,
+            "sa": 0.9339047619047619
+          },
+          {
+            "period": 1.3199999999999998,
+            "sa": 0.8914545454545455
+          },
+          {
+            "period": 1.38,
+            "sa": 0.8526956521739131
+          },
+          {
+            "period": 1.44,
+            "sa": 0.8171666666666666
+          },
+          {
+            "period": 1.5,
+            "sa": 0.7844799999999998
+          },
+          {
+            "period": 1.56,
+            "sa": 0.7543076923076921
+          },
+          {
+            "period": 1.62,
+            "sa": 0.7263703703703704
+          },
+          {
+            "period": 1.68,
+            "sa": 0.7004285714285713
+          },
+          {
+            "period": 1.74,
+            "sa": 0.6762758620689655
+          },
+          {
+            "period": 1.7999999999999998,
+            "sa": 0.6537333333333333
+          },
+          {
+            "period": 1.86,
+            "sa": 0.6326451612903227
+          },
+          {
+            "period": 1.92,
+            "sa": 0.612875
+          },
+          {
+            "period": 1.98,
+            "sa": 0.5943030303030302
+          },
+          {
+            "period": 2.0,
+            "sa": 0.5883599999999999
+          },
+          {
+            "period": 2.04,
+            "sa": 0.565513264129181
+          },
+          {
+            "period": 2.1,
+            "sa": 0.5336598639455782
+          },
+          {
+            "period": 2.16,
+            "sa": 0.5044238683127571
+          },
+          {
+            "period": 2.22,
+            "sa": 0.47752617482347215
+          },
+          {
+            "period": 2.28,
+            "sa": 0.4527239150507849
+          },
+          {
+            "period": 2.34,
+            "sa": 0.429804952881876
+          },
+          {
+            "period": 2.4,
+            "sa": 0.4085833333333333
+          },
+          {
+            "period": 2.46,
+            "sa": 0.3888954987110846
+          },
+          {
+            "period": 2.52,
+            "sa": 0.3705971277399848
+          },
+          {
+            "period": 2.58,
+            "sa": 0.35356048314404176
+          },
+          {
+            "period": 2.6399999999999997,
+            "sa": 0.33767217630854
+          },
+          {
+            "period": 2.6999999999999997,
+            "sa": 0.3228312757201647
+          },
+          {
+            "period": 2.76,
+            "sa": 0.308947700063012
+          },
+          {
+            "period": 2.82,
+            "sa": 0.29594084804587295
+          },
+          {
+            "period": 2.88,
+            "sa": 0.2837384259259259
+          },
+          {
+            "period": 2.94,
+            "sa": 0.2722754407885603
+          },
+          {
+            "period": 3.0,
+            "sa": 0.2614933333333333
+          },
+          {
+            "period": 3.06,
+            "sa": 0.25133922850185825
+          },
+          {
+            "period": 3.12,
+            "sa": 0.24176528599605518
+          },
+          {
+            "period": 3.1799999999999997,
+            "sa": 0.23272813575412368
+          },
+          {
+            "period": 3.24,
+            "sa": 0.22418838591678097
+          },
+          {
+            "period": 3.3,
+            "sa": 0.21611019283746555
+          },
+          {
+            "period": 3.36,
+            "sa": 0.2084608843537415
+          },
+          {
+            "period": 3.42,
+            "sa": 0.20121062891145994
+          },
+          {
+            "period": 3.48,
+            "sa": 0.19433214427269122
+          },
+          {
+            "period": 3.54,
+            "sa": 0.18780044048645023
+          },
+          {
+            "period": 3.5999999999999996,
+            "sa": 0.1815925925925926
+          },
+          {
+            "period": 3.66,
+            "sa": 0.17568753919197347
+          },
+          {
+            "period": 3.72,
+            "sa": 0.17006590357266738
+          },
+          {
+            "period": 3.78,
+            "sa": 0.16470983455110438
+          },
+          {
+            "period": 3.84,
+            "sa": 0.15960286458333334
+          },
+          {
+            "period": 3.9,
+            "sa": 0.15472978303747534
+          },
+          {
+            "period": 3.96,
+            "sa": 0.15007652280379552
+          },
+          {
+            "period": 4.0,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 4.02,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 4.08,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 4.14,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 4.2,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 4.26,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 4.32,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 4.38,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 4.4399999999999995,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 4.5,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 4.56,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 4.62,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 4.68,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 4.74,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 4.8,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 4.859999999999999,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 4.92,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 4.9799999999999995,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 5.04,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 5.1,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 5.16,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 5.22,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 5.279999999999999,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 5.34,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 5.3999999999999995,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 5.46,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 5.52,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 5.58,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 5.64,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 5.7,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 5.76,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 5.819999999999999,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 5.88,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 5.9399999999999995,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 6.0,
+            "sa": 0.14708999999999997
+          }
+        ]
+      },
+      {
+        "direction": "y",
+        "interpolation": "loglog",
+        "name": "SPY",
+        "num_modes": 20,
+        "spectrum": [
+          {
+            "period": 1e-06,
+            "sa": 0.941376
+          },
+          {
+            "period": 0.06,
+            "sa": 1.5062015999999998
+          },
+          {
+            "period": 0.12,
+            "sa": 2.0710272
+          },
+          {
+            "period": 0.15,
+            "sa": 2.3534399999999995
+          },
+          {
+            "period": 0.18,
+            "sa": 2.3534399999999995
+          },
+          {
+            "period": 0.24,
+            "sa": 2.3534399999999995
+          },
+          {
+            "period": 0.3,
+            "sa": 2.3534399999999995
+          },
+          {
+            "period": 0.36,
+            "sa": 2.3534399999999995
+          },
+          {
+            "period": 0.42,
+            "sa": 2.3534399999999995
+          },
+          {
+            "period": 0.48,
+            "sa": 2.3534399999999995
+          },
+          {
+            "period": 0.5,
+            "sa": 2.3534399999999995
+          },
+          {
+            "period": 0.54,
+            "sa": 2.1791111111111103
+          },
+          {
+            "period": 0.6,
+            "sa": 1.9611999999999998
+          },
+          {
+            "period": 0.6599999999999999,
+            "sa": 1.782909090909091
+          },
+          {
+            "period": 0.72,
+            "sa": 1.6343333333333332
+          },
+          {
+            "period": 0.78,
+            "sa": 1.5086153846153842
+          },
+          {
+            "period": 0.84,
+            "sa": 1.4008571428571426
+          },
+          {
+            "period": 0.8999999999999999,
+            "sa": 1.3074666666666666
+          },
+          {
+            "period": 0.96,
+            "sa": 1.22575
+          },
+          {
+            "period": 1.02,
+            "sa": 1.1536470588235292
+          },
+          {
+            "period": 1.08,
+            "sa": 1.0895555555555552
+          },
+          {
+            "period": 1.14,
+            "sa": 1.0322105263157892
+          },
+          {
+            "period": 1.2,
+            "sa": 0.9805999999999999
+          },
+          {
+            "period": 1.26,
+            "sa": 0.9339047619047619
+          },
+          {
+            "period": 1.3199999999999998,
+            "sa": 0.8914545454545455
+          },
+          {
+            "period": 1.38,
+            "sa": 0.8526956521739131
+          },
+          {
+            "period": 1.44,
+            "sa": 0.8171666666666666
+          },
+          {
+            "period": 1.5,
+            "sa": 0.7844799999999998
+          },
+          {
+            "period": 1.56,
+            "sa": 0.7543076923076921
+          },
+          {
+            "period": 1.62,
+            "sa": 0.7263703703703704
+          },
+          {
+            "period": 1.68,
+            "sa": 0.7004285714285713
+          },
+          {
+            "period": 1.74,
+            "sa": 0.6762758620689655
+          },
+          {
+            "period": 1.7999999999999998,
+            "sa": 0.6537333333333333
+          },
+          {
+            "period": 1.86,
+            "sa": 0.6326451612903227
+          },
+          {
+            "period": 1.92,
+            "sa": 0.612875
+          },
+          {
+            "period": 1.98,
+            "sa": 0.5943030303030302
+          },
+          {
+            "period": 2.0,
+            "sa": 0.5883599999999999
+          },
+          {
+            "period": 2.04,
+            "sa": 0.565513264129181
+          },
+          {
+            "period": 2.1,
+            "sa": 0.5336598639455782
+          },
+          {
+            "period": 2.16,
+            "sa": 0.5044238683127571
+          },
+          {
+            "period": 2.22,
+            "sa": 0.47752617482347215
+          },
+          {
+            "period": 2.28,
+            "sa": 0.4527239150507849
+          },
+          {
+            "period": 2.34,
+            "sa": 0.429804952881876
+          },
+          {
+            "period": 2.4,
+            "sa": 0.4085833333333333
+          },
+          {
+            "period": 2.46,
+            "sa": 0.3888954987110846
+          },
+          {
+            "period": 2.52,
+            "sa": 0.3705971277399848
+          },
+          {
+            "period": 2.58,
+            "sa": 0.35356048314404176
+          },
+          {
+            "period": 2.6399999999999997,
+            "sa": 0.33767217630854
+          },
+          {
+            "period": 2.6999999999999997,
+            "sa": 0.3228312757201647
+          },
+          {
+            "period": 2.76,
+            "sa": 0.308947700063012
+          },
+          {
+            "period": 2.82,
+            "sa": 0.29594084804587295
+          },
+          {
+            "period": 2.88,
+            "sa": 0.2837384259259259
+          },
+          {
+            "period": 2.94,
+            "sa": 0.2722754407885603
+          },
+          {
+            "period": 3.0,
+            "sa": 0.2614933333333333
+          },
+          {
+            "period": 3.06,
+            "sa": 0.25133922850185825
+          },
+          {
+            "period": 3.12,
+            "sa": 0.24176528599605518
+          },
+          {
+            "period": 3.1799999999999997,
+            "sa": 0.23272813575412368
+          },
+          {
+            "period": 3.24,
+            "sa": 0.22418838591678097
+          },
+          {
+            "period": 3.3,
+            "sa": 0.21611019283746555
+          },
+          {
+            "period": 3.36,
+            "sa": 0.2084608843537415
+          },
+          {
+            "period": 3.42,
+            "sa": 0.20121062891145994
+          },
+          {
+            "period": 3.48,
+            "sa": 0.19433214427269122
+          },
+          {
+            "period": 3.54,
+            "sa": 0.18780044048645023
+          },
+          {
+            "period": 3.5999999999999996,
+            "sa": 0.1815925925925926
+          },
+          {
+            "period": 3.66,
+            "sa": 0.17568753919197347
+          },
+          {
+            "period": 3.72,
+            "sa": 0.17006590357266738
+          },
+          {
+            "period": 3.78,
+            "sa": 0.16470983455110438
+          },
+          {
+            "period": 3.84,
+            "sa": 0.15960286458333334
+          },
+          {
+            "period": 3.9,
+            "sa": 0.15472978303747534
+          },
+          {
+            "period": 3.96,
+            "sa": 0.15007652280379552
+          },
+          {
+            "period": 4.0,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 4.02,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 4.08,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 4.14,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 4.2,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 4.26,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 4.32,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 4.38,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 4.4399999999999995,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 4.5,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 4.56,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 4.62,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 4.68,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 4.74,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 4.8,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 4.859999999999999,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 4.92,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 4.9799999999999995,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 5.04,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 5.1,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 5.16,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 5.22,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 5.279999999999999,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 5.34,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 5.3999999999999995,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 5.46,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 5.52,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 5.58,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 5.64,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 5.7,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 5.76,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 5.819999999999999,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 5.88,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 5.9399999999999995,
+            "sa": 0.14708999999999997
+          },
+          {
+            "period": 6.0,
+            "sa": 0.14708999999999997
+          }
+        ]
+      }
+    ],
+    "rigid_links": [
+      {
+        "id": 1,
+        "master": 1,
+        "slave": 11
+      },
+      {
+        "id": 2,
+        "master": 1,
+        "slave": 13
+      },
+      {
+        "id": 3,
+        "master": 2,
+        "slave": 15
+      },
+      {
+        "id": 4,
+        "master": 3,
+        "slave": 16
+      },
+      {
+        "id": 5,
+        "master": 4,
+        "slave": 17
+      },
+      {
+        "id": 6,
+        "master": 5,
+        "slave": 12
+      },
+      {
+        "id": 7,
+        "master": 5,
+        "slave": 14
+      }
+    ],
+    "schema": "kopruq-model",
+    "schema_version": 1,
+    "sections": [
+      {
+        "Asy": 10.0,
+        "Asz": 10.0,
+        "Iy": 1.0,
+        "Iz": 144.0,
+        "J": 3.7900008439429014,
+        "area": 12.0,
+        "id": 1
+      },
+      {
+        "Asy": 5.0,
+        "Asz": 5.0,
+        "Iy": 2.0,
+        "Iz": 4.5,
+        "J": 4.695308641975308,
+        "area": 6.0,
+        "id": 2
+      },
+      {
+        "Asy": 5.0,
+        "Asz": 2.0,
+        "Iy": 3.0,
+        "Iz": 15.5,
+        "J": 7.59375,
+        "area": 6.0,
+        "id": 3
+      },
+      {
+        "Asy": 1.017876019763093,
+        "Asz": 1.017876019763093,
+        "Iy": 0.10178760197630929,
+        "Iz": 0.10178760197630929,
+        "J": 0.20357520395261858,
+        "area": 1.1309733552923256,
+        "id": 4
+      },
+      {
+        "Asy": 3.2500000000000004,
+        "Asz": 3.2500000000000004,
+        "Iy": 0.54925,
+        "Iz": 2.9250000000000003,
+        "J": 1.5989813811873457,
+        "area": 3.9000000000000004,
+        "id": 5
+      }
+    ],
+    "spectrum_combinations": [
+      {
+        "name": "EQX",
+        "spectrum_terms": [
+          {
+            "factor": 1.0,
+            "spectrum": "SPX"
+          }
+        ],
+        "static_terms": [
+          {
+            "case": "SDL-1",
+            "factor": 1.0
+          },
+          {
+            "case": "SDL-2",
+            "factor": 1.0
+          },
+          {
+            "case": "SW",
+            "factor": 1.0
+          }
+        ]
+      },
+      {
+        "name": "EQY",
+        "spectrum_terms": [
+          {
+            "factor": 1.0,
+            "spectrum": "SPY"
+          }
+        ],
+        "static_terms": [
+          {
+            "case": "SDL-1",
+            "factor": 1.0
+          },
+          {
+            "case": "SDL-2",
+            "factor": 1.0
+          },
+          {
+            "case": "SW",
+            "factor": 1.0
+          }
+        ]
+      },
+      {
+        "name": "SXY",
+        "spectrum_terms": [
+          {
+            "factor": 0.5,
+            "spectrum": "SPX"
+          },
+          {
+            "factor": 0.3,
+            "spectrum": "SPY"
+          }
+        ],
+        "static_terms": []
+      }
+    ],
+    "springs": [
+      {
+        "id": 1,
+        "local_x": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "nodes": [
+          26,
+          11
+        ],
+        "reference_y": [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        "stiffness": [
+          3000.0,
+          10000.0,
+          100000.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "id": 2,
+        "local_x": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "nodes": [
+          27,
+          13
+        ],
+        "reference_y": [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        "stiffness": [
+          3000.0,
+          10000.0,
+          100000.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "id": 3,
+        "local_x": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "nodes": [
+          29,
+          14
+        ],
+        "reference_y": [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        "stiffness": [
+          3000.0,
+          10000.0,
+          100000.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "id": 4,
+        "local_x": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "nodes": [
+          28,
+          12
+        ],
+        "reference_y": [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        "stiffness": [
+          3000.0,
+          10000.0,
+          100000.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      }
+    ],
+    "supports": [
+      {
+        "node": 1,
+        "restraints": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ]
+      },
+      {
+        "node": 6,
+        "restraints": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ]
+      },
+      {
+        "node": 7,
+        "restraints": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ]
+      },
+      {
+        "node": 22,
+        "restraints": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ]
+      },
+      {
+        "node": 23,
+        "restraints": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ]
+      },
+      {
+        "node": 26,
+        "restraints": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ]
+      },
+      {
+        "node": 27,
+        "restraints": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ]
+      },
+      {
+        "node": 28,
+        "restraints": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ]
+      },
+      {
+        "node": 29,
+        "restraints": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ]
+      }
+    ]
+  },
+  "schema": "kopruq-model-view",
+  "schema_version": 1,
+  "section_outlines": [
+    {
+      "contours": [
+        [
+          [
+            -6.0,
+            -0.5
+          ],
+          [
+            6.0,
+            -0.5
+          ],
+          [
+            6.0,
+            0.5
+          ],
+          [
+            -6.0,
+            0.5
+          ]
+        ]
+      ],
+      "section": 1
+    },
+    {
+      "contours": [
+        [
+          [
+            -1.5,
+            -1.0
+          ],
+          [
+            1.5,
+            -1.0
+          ],
+          [
+            1.5,
+            1.0
+          ],
+          [
+            -1.5,
+            1.0
+          ]
+        ]
+      ],
+      "section": 2
+    },
+    {
+      "contours": [
+        [
+          [
+            -2.5,
+            -1.0
+          ],
+          [
+            2.5,
+            -1.0
+          ],
+          [
+            2.5,
+            1.0
+          ],
+          [
+            -2.5,
+            1.0
+          ]
+        ],
+        [
+          [
+            -2.0,
+            0.5
+          ],
+          [
+            2.0,
+            0.5
+          ],
+          [
+            2.0,
+            -0.5
+          ],
+          [
+            -2.0,
+            -0.5
+          ]
+        ]
+      ],
+      "section": 3
+    },
+    {
+      "contours": [
+        [
+          [
+            0.6,
+            2.220446049250313e-16
+          ],
+          [
+            0.5948669168242862,
+            0.07831571533203119
+          ],
+          [
+            0.579555495773441,
+            0.15529142706151267
+          ],
+          [
+            0.5543277195067721,
+            0.2296100594190541
+          ],
+          [
+            0.5196152422706632,
+            0.30000000000000016
+          ],
+          [
+            0.4760120041747411,
+            0.3652568574052326
+          ],
+          [
+            0.4242640687119285,
+            0.42426406871192873
+          ],
+          [
+            0.3652568574052324,
+            0.4760120041747413
+          ],
+          [
+            0.30000000000000004,
+            0.5196152422706634
+          ],
+          [
+            0.22961005941905388,
+            0.5543277195067723
+          ],
+          [
+            0.15529142706151244,
+            0.5795554957734412
+          ],
+          [
+            0.07831571533203102,
+            0.5948669168242864
+          ],
+          [
+            3.4688442128628296e-17,
+            0.6000000000000002
+          ],
+          [
+            -0.07831571533203095,
+            0.5948669168242864
+          ],
+          [
+            -0.15529142706151236,
+            0.5795554957734412
+          ],
+          [
+            -0.22961005941905369,
+            0.5543277195067723
+          ],
+          [
+            -0.2999999999999999,
+            0.5196152422706635
+          ],
+          [
+            -0.3652568574052324,
+            0.4760120041747413
+          ],
+          [
+            -0.42426406871192845,
+            0.42426406871192873
+          ],
+          [
+            -0.476012004174741,
+            0.3652568574052327
+          ],
+          [
+            -0.5196152422706632,
+            0.30000000000000016
+          ],
+          [
+            -0.5543277195067721,
+            0.22961005941905416
+          ],
+          [
+            -0.5795554957734409,
+            0.15529142706151283
+          ],
+          [
+            -0.5948669168242862,
+            0.07831571533203141
+          ],
+          [
+            -0.6,
+            3.3306690738754696e-16
+          ],
+          [
+            -0.5948669168242862,
+            -0.07831571533203086
+          ],
+          [
+            -0.579555495773441,
+            -0.15529142706151222
+          ],
+          [
+            -0.5543277195067721,
+            -0.22961005941905355
+          ],
+          [
+            -0.5196152422706632,
+            -0.2999999999999996
+          ],
+          [
+            -0.4760120041747411,
+            -0.36525685740523217
+          ],
+          [
+            -0.42426406871192873,
+            -0.424264068711928
+          ],
+          [
+            -0.3652568574052325,
+            -0.47601200417474077
+          ],
+          [
+            -0.30000000000000027,
+            -0.5196152422706629
+          ],
+          [
+            -0.22961005941905369,
+            -0.5543277195067718
+          ],
+          [
+            -0.15529142706151236,
+            -0.5795554957734409
+          ],
+          [
+            -0.07831571533203098,
+            -0.5948669168242858
+          ],
+          [
+            -1.1226917376905407e-16,
+            -0.5999999999999998
+          ],
+          [
+            0.07831571533203076,
+            -0.594866916824286
+          ],
+          [
+            0.15529142706151217,
+            -0.5795554957734409
+          ],
+          [
+            0.2296100594190535,
+            -0.5543277195067721
+          ],
+          [
+            0.30000000000000004,
+            -0.5196152422706629
+          ],
+          [
+            0.3652568574052319,
+            -0.4760120041747412
+          ],
+          [
+            0.4242640687119284,
+            -0.42426406871192845
+          ],
+          [
+            0.47601200417474093,
+            -0.3652568574052323
+          ],
+          [
+            0.519615242270663,
+            -0.30000000000000004
+          ],
+          [
+            0.5543277195067721,
+            -0.22961005941905344
+          ],
+          [
+            0.5795554957734408,
+            -0.15529142706151278
+          ],
+          [
+            0.5948669168242862,
+            -0.07831571533203074
+          ]
+        ]
+      ],
+      "section": 4
+    },
+    {
+      "contours": [
+        [
+          [
+            -1.5,
+            -0.65
+          ],
+          [
+            1.5,
+            -0.65
+          ],
+          [
+            1.5,
+            0.65
+          ],
+          [
+            -1.5,
+            0.65
+          ]
+        ]
+      ],
+      "section": 5
+    }
+  ]
+}

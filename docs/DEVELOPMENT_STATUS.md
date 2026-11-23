@@ -3166,3 +3166,5 @@ Real model 100 (7 cases/combinations, 94 members): max equilibrium closure 9.1e-
 Evidence: C++ Debug 391/391, Release 391/391, gui-release 430/430 (+6 new). `npm test` 42/42. UI: ECharts force diagrams (Diagrams tab) fed by an automatic
 `stations` run after a successful Linear Static run. Not done: comparison with MIDAS beam-force exports (sign flip belongs to the verification layer);
 desktop-shell end-to-end of the stations run (verified in headless Edge with the real model-100 stations file).
+n## GUI V2 Phase 2 -- central unit system (2026-11-23)
+ui/src/units/units.ts: display-layer conversion between the solver units (m, kN) and kN.m, Ton.m (tf), N.mm, kg.cm (kgf) with exact definitions (1 kgf = 9.80665 N); force, length, moment, stress, distributed load, area, inertia, unit weight; dimensionless values and rotations never converted. Setting saved in localStorage. 10 new tests (hand-derived values, round trips); `npm test` 56/56. Not yet applied to tables/legend (Phases 3-4).

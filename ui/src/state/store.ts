@@ -5,6 +5,7 @@ import type { ModelView } from '../model/types';
 import { parseResults } from '../results/parse';
 import type { ResultSet } from '../results/types';
 import type { StationSet } from '../results/stations';
+import { loadUnitSystem, saveUnitSystem, type UnitSystemId } from '../units/units';
 
 export type Selection = { kind: 'node' | 'element'; id: number } | null;
 export type CenterTab = '3d' | 'tables';
@@ -27,6 +28,7 @@ interface UiState {
   setHost: (h: SolverHost) => void; patchRun: (f: (r: RunInfo) => RunInfo) => void; finishRun: (f: Finished, resultText: string | null, readError: string | null) => void;
   set: (p: Partial<Pick<UiState, 'analysis' | 'modes' | 'massType' | 'solver' | 'source' | 'run' | 'activeRun'>>) => void;
   stations: StationSet | null; stationsNote: string | null;
+  unitSystem: UnitSystemId; setUnitSystem: (u: UnitSystemId) => void;   // display only; results stay in solver units
   results: ResultSet | null; resultView: ResultView; setResultView: (p: Partial<ResultView>) => void;
   view: ModelView | null; fileName: string; loadError: string | null;
   selection: Selection; search: string; tableTab: TableTab; centerTab: CenterTab; setCenterTab: (t: CenterTab) => void;
@@ -62,6 +64,7 @@ export const useUi = create<UiState>((set, get) => ({
     return { stations: good ? null : s.stations, stationsNote: good ? (results!.kind === 'solve' ? 'Computing station results...' : null) : s.stationsNote, results: good ? results : s.results, resultView: good ? defaultResultView() : s.resultView, tableTab: good ? (results!.kind === 'modal' ? 'Tables' as TableTab : 'Displacements' as TableTab) : s.tableTab, run: { ...s.run, state, stages, seconds: f.seconds, resultPath: f.outputPath, summary, message: state === 'failed' ? (failedMsg ?? `The solver exited with code ${f.exit}`) : undefined } };
   }),
   stations: null, stationsNote: null,
+  unitSystem: loadUnitSystem(), setUnitSystem: (unitSystem) => { saveUnitSystem(unitSystem); set({ unitSystem }); },
   results: null, resultView: defaultResultView(), setResultView: (p) => set((s) => ({ resultView: { ...s.resultView, ...p } })),
   view: null, fileName: '', loadError: null, selection: null, search: '', tableTab: 'Results', centerTab: '3d', setCenterTab: (centerTab) => set({ centerTab }),
   show: { nodes: true, elements: true, supports: true, links: true, solid: true },

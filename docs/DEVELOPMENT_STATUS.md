@@ -3122,3 +3122,25 @@ Found and fixed on the way: the UTF-8 path tests (new file inspect tests and the
 shared temp folder name, so ctest running their tests as parallel processes could delete each other's
 folder (seen once in Debug); each test now uses a unique folder. Re-run with ctest -j 4.
 Tests: Debug 381/381, Release 381/381, gui-release 420/420.
+
+## React GUI Phases 3-4 (branch feature/react-gui, 2026-11-23, user-approved)
+
+Phase 3 (commit 5c0931b): vtk.js FEM viewer in ui/ -- section solids, lines, nodes, supports, links, camera
+presets, GPU picking, explorer/properties from the real model (see ui/README.md, ui/docs).
+Phase 4: Tauri 2 desktop shell (ui/src-tauri) around the unchanged C++ CLI.
+- C++ (additive, CLI front end only): `--progress json` on solve/modal/spectrum -- newline-delimited JSON
+  events on stderr (`stage` read/solve/write start|done, `case` per spectrum case, final `done` with the
+  exit code, also for failures). Without the flag stdout, stderr and result files are byte-identical.
+  Qt defines a macro `emit`; the helper is named `send`. Tests: tests/unit/cli_progress_tests.cpp (4).
+- Rust: commands solver_info, read_text_file (.json only, <= 512 MB), run_solver (validated command /
+  format / mass type / modes; output in the app cache dir), cancel_solver; events solver-log,
+  solver-progress, solver-finished; capability file grants only core:default + dialog:allow-open.
+- Verified end to end in the real desktop app (WebView2 DevTools port, real release CLI, model 100 in
+  the Turkish-named folder): open -> inspect -> viewer (106 nodes, 94 beams, 5 outlines); solve
+  (5 load cases, 2 combinations), modal (6 modes), spectrum (2 cases) all "done" with CLI stage events;
+  cancel kills the process in ~0.25 s and the next run works; a missing file shows the OS message.
+  Found by this check: Tauri rejects with plain strings, the UI read `.message` and lost the text (fixed,
+  test added); a cancelled stage was shown as failed (fixed).
+- Tests: UI vitest 24/24 (geometry, shell, scripted-host integration incl. "exit 0 but result says
+  failure is FAILED", cancel, string rejection); C++ Debug 385/385, Release 385/385, gui-release 424/424.
+Not done: production `tauri build` / packaging (Phase 7), result display (Phase 5), Linux check.

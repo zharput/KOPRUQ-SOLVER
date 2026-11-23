@@ -2,15 +2,17 @@ import { AnalysisControls } from '../components/analysis-controls/AnalysisContro
 import { FEMViewer } from '../components/fem-viewer/FEMViewer';
 import { ModelExplorer } from '../components/model-explorer/ModelExplorer';
 import { PropertiesInspector } from '../components/properties-inspector/PropertiesInspector';
+import { LogView } from '../components/results-viewer/LogView';
 import { ResultsViewer } from '../components/results-viewer/ResultsViewer';
 import { VerificationPanel } from '../components/verification-panel/VerificationPanel';
 import { useEffect, useRef } from 'react';
+import { pickAndOpen } from '../state/runner';
 import { type BottomTab, useUi } from '../state/store';
 import { MenuBar } from './MenuBar';
 import { Toolbar } from './Toolbar';
 import { useSplit } from './useSplit';
 
-const TABS: BottomTab[] = ['Results', 'Displacements', 'Reactions', 'Element Forces', 'Diagrams', 'Tables', 'Verification'];
+const TABS: BottomTab[] = ['Results', 'Log', 'Displacements', 'Reactions', 'Element Forces', 'Diagrams', 'Tables', 'Verification'];
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return <section className="panel" aria-label={title}><div className="head"><b>{title}</b></div><div className="body">{children}</div></section>;
@@ -21,9 +23,9 @@ export function Shell() {
   const right = useSplit(280, 200, 480, 'x', true);
   const bottom = useSplit(230, 90, 520, 'y', true);
   const leftSplit = useSplit(300, 120, 700, 'y');
-  const { bottomTab, setBottomTab, view, fileName, loadError, loadText, openRequest } = useUi();
+  const { bottomTab, setBottomTab, view, fileName, loadError, loadText, openRequest, host, solver, run } = useUi();
   const fileInput = useRef<HTMLInputElement>(null);
-  useEffect(() => { if (openRequest > 0) fileInput.current?.click(); }, [openRequest]);
+  useEffect(() => { if (openRequest === 0) return; if (host.kind === 'tauri') void pickAndOpen(); else fileInput.current?.click(); }, [openRequest]); // eslint-disable-line
   const onFile = async (f?: File) => { if (f) loadText(await f.text(), f.name); if (fileInput.current) fileInput.current.value = ''; };
   return (
     <div className="shell">
@@ -45,15 +47,15 @@ export function Shell() {
             <div className="head" role="tablist">
               {TABS.map((t) => <button key={t} role="tab" aria-selected={bottomTab === t} className={`tab${bottomTab === t ? ' active' : ''}`} onClick={() => setBottomTab(t)}>{t}</button>)}
             </div>
-            <div className="body">{bottomTab === 'Verification' ? <VerificationPanel /> : <ResultsViewer tab={bottomTab} />}</div>
+            <div className="body">{bottomTab === 'Verification' ? <VerificationPanel /> : bottomTab === 'Log' ? <LogView /> : <ResultsViewer tab={bottomTab} />}</div>
           </section>
         </div>
         <div className="splitter-v" onPointerDown={right.onPointerDown} role="separator" aria-orientation="vertical" />
         <Panel title="Analysis"><AnalysisControls /></Panel>
       </div>
       <footer className="statusbar">
-        <span><span className="dot" style={{ background: 'var(--warn)' }} />No solver connected</span>
-        <span>Model: {view ? fileName : 'none'}</span><span>Nodes: {view?.model.nodes.length ?? 0}</span><span>Elements: {view?.model.beams.length ?? 0}</span><span>Analysis: none</span>
+        <span><span className="dot" style={{ background: solver.state === 'connected' ? 'var(--ok)' : 'var(--warn)' }} />{solver.state === 'connected' ? `Solver: ${solver.version}` : 'No solver connected'}</span>
+        <span>Model: {view ? fileName : 'none'}</span><span>Nodes: {view?.model.nodes.length ?? 0}</span><span>Elements: {view?.model.beams.length ?? 0}</span><span>Analysis: {run.state === 'idle' ? 'none' : run.state}</span>
       </footer>
     </div>
   );

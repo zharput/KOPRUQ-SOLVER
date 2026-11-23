@@ -7,6 +7,7 @@
 #include "Sha256.hpp"
 #include "Utf8Path.hpp"
 #include "midas/MidasJsonImporter.hpp"
+#include <chrono>
 #include <fstream>
 #include <iterator>
 #include <ostream>
@@ -21,6 +22,7 @@ inline constexpr const char* cli_usage =
   "       kopruq_solver_cli modal <model.json> [-o <results.json>] [-n <num-modes>] [--format <native|midas-nx-json>] [--mass-type <consistent|lumped>]\n"
   "       kopruq_solver_cli spectrum <model.json> [-o <results.json>] [--format <native|midas-nx-json>] [--mass-type <consistent|lumped>]\n"
   "                         (runs every \"response_spectra\" entry defined in the model)\n"
+  "                         (solve, modal and spectrum accept --progress json: newline-delimited JSON events on stderr)\n"
   "       kopruq_solver_cli inspect <model.json> [-o <view.json>] [--format <native|midas-nx-json>]\n"
   "                         (writes the kopruq-model-view document for viewers; no analysis is run)\n"
   "\n"
@@ -40,7 +42,7 @@ inline constexpr const char* cli_usage =
 
 namespace detail {
 
-struct CommonArgs { std::string modelPath, outputPath, format = "native"; int numModes = 6; bool haveNumModes = false; MassMatrixType massType = MassMatrixType::Consistent; };
+struct CommonArgs { std::string modelPath, outputPath, format = "native"; int numModes = 6; bool haveNumModes = false; MassMatrixType massType = MassMatrixType::Consistent; bool progress = false; };
 
 // Parses the shared "<model.json> [-o <out>] [-n <modes>] [--format <fmt>] [--mass-type <type>]"
 // tail; -n/--mass-type are only meaningful for "modal"/"spectrum" but accepted here so every
@@ -60,6 +62,9 @@ inline bool parseArgs(const char* command, const std::vector<std::string>& args,
       if (v == "consistent") out.massType = MassMatrixType::Consistent;
       else if (v == "lumped") out.massType = MassMatrixType::Lumped;
       else { err << command << ": unsupported --mass-type '" << v << "' (expected consistent or lumped)\n"; return false; }
+    } else if (args[i] == "--progress") {
+      if (i + 1 >= args.size() || args[i + 1] != "json") { err << command << ": --progress needs the value 'json'"<<'\n'; return false; }
+      ++i; out.progress = true;
     } else if (args[i] == "--format") {
       if (i + 1 >= args.size()) { err << command << ": " << args[i] << " needs a format name\n"; return false; }
       out.format = args[++i];
@@ -129,13 +134,32 @@ inline int writeDocument(const std::string& outputPath, const std::string& docum
   return 0;
 }
 
+// Progress events (2026-11-23, opt-in --progress json): newline-delimited JSON on stderr, e.g.
+//   {"event":"stage","name":"read","state":"start","t":0.001}   stages: read, solve, write
+//   {"event":"case","name":"SPX","index":1,"of":2,"t":0.4}        (spectrum: one per response-spectrum case)
+//   {"event":"done","exit":0,"t":0.9}                              (always last, written by runCli)
+// Without the flag nothing is emitted and every output is byte-identical to before.
+inline std::chrono::steady_clock::time_point& progressClock() { static std::chrono::steady_clock::time_point t0 = std::chrono::steady_clock::now(); return t0; }
+struct Progress {
+  bool on; std::ostream& err;
+  void send(const json& j) const { if (on) err << j.dump() << '\n'; }
+  static double now() { return std::chrono::duration<double>(std::chrono::steady_clock::now() - progressClock()).count(); }
+  void stage(const char* name, const char* state) const { send({{"event", "stage"}, {"name", name}, {"state", state}, {"t", now()}}); }
+  void item(const std::string& name, std::size_t index, std::size_t of) const { send({{"event", "case"}, {"name", name}, {"index", index}, {"of", of}, {"t", now()}}); }
+};
+
 inline int runSolve(const std::vector<std::string>& args, std::ostream& out, std::ostream& err) {
   CommonArgs a; if (!parseArgs("solve", args, err, a)) return 2;
+  const Progress pr{a.progress, err};
   std::string text; ModelInput model; int code;
+  pr.stage("read", "start");
   if (!readModelFile(a.modelPath, a.format, err, text, model, code)) return code;
+  pr.stage("read", "done"); pr.stage("solve", "start");
   const auto result = LinearStaticSolver::solveCases(model.model, model.restraints, model.load_cases, model.combinations);
+  pr.stage("solve", "done"); pr.stage("write", "start");
   const std::string document = writeResults(model, result, sha256Hex(text)).dump(2) + "\n";
   if (int rc = writeDocument(a.outputPath, document, out, err)) return rc;
+  pr.stage("write", "done");
   if (!result.status.success) { err << "analysis failed: " << result.status.message << '\n'; return 1; }
   return 0;
 }
@@ -164,30 +188,43 @@ inline int runInspect(const std::vector<std::string>& args, std::ostream& out, s
 inline int runModal(const std::vector<std::string>& args, std::ostream& out, std::ostream& err) {
   CommonArgs a; if (!parseArgs("modal", args, err, a)) return 2;
   if (a.haveNumModes && a.numModes <= 0) { err << "modal: -n must be a positive integer\n"; return 2; }
+  const Progress pr{a.progress, err};
   std::string text; ModelInput model; int code;
+  pr.stage("read", "start");
   if (!readModelFile(a.modelPath, a.format, err, text, model, code)) return code;
+  pr.stage("read", "done");
   // -n on the command line always wins; otherwise fall back to the model's own modal request
   // (e.g. MIDAS EIGV's iFREQ), if the source format populated one, before this command's own
   // default (6) -- never changes behavior for a model/format with no such request.
   const int numModes = a.haveNumModes ? a.numModes : (model.modal_request.present ? model.modal_request.num_modes : a.numModes);
+  pr.stage("solve", "start");
   const auto result = ModalSolver::solve(model.model, model.restraints, numModes, a.massType);
+  pr.stage("solve", "done"); pr.stage("write", "start");
   const std::string document = writeModalResults(model.model, result, sha256Hex(text)).dump(2) + "\n";
   if (int rc = writeDocument(a.outputPath, document, out, err)) return rc;
+  pr.stage("write", "done");
   if (!result.status.success) { err << "analysis failed: " << result.status.message << '\n'; return 1; }
   return 0;
 }
 
 inline int runSpectrum(const std::vector<std::string>& args, std::ostream& out, std::ostream& err) {
   CommonArgs a; if (!parseArgs("spectrum", args, err, a)) return 2;
+  const Progress pr{a.progress, err};
   std::string text; ModelInput model; int code;
+  pr.stage("read", "start");
   if (!readModelFile(a.modelPath, a.format, err, text, model, code)) return code;
+  pr.stage("read", "done"); pr.stage("solve", "start");
   std::vector<std::pair<std::string, ResponseSpectrumResults>> results;
   results.reserve(model.response_spectra.size());
-  for (const auto& rc : model.response_spectra)
+  for (const auto& rc : model.response_spectra) {
+    pr.item(rc.name, results.size() + 1, model.response_spectra.size());
     results.emplace_back(rc.name, ResponseSpectrumSolver::solve(model.model, model.restraints, rc.input, a.massType));
+  }
+  pr.stage("solve", "done"); pr.stage("write", "start");
   const json document_json = writeResponseSpectrumResults(results, sha256Hex(text));
   const std::string document = document_json.dump(2) + "\n";
   if (int rc = writeDocument(a.outputPath, document, out, err)) return rc;
+  pr.stage("write", "done");
   if (!document_json["status"]["success"].get<bool>()) { err << "analysis failed: " << document_json["status"]["message"].get<std::string>() << '\n'; return 1; }
   return 0;
 }
@@ -195,14 +232,20 @@ inline int runSpectrum(const std::vector<std::string>& args, std::ostream& out, 
 } // namespace detail
 
 inline int runCli(const std::vector<std::string>& args, std::ostream& out, std::ostream& err) {
+  detail::progressClock(); // start the clock of the progress events
+  int rc = 2;
   const std::string command = args.empty() ? "--help" : args[0];
   if (command == "--version" || command == "version") { out << "KOPRUQ-SOLVER " << version << '\n'; return 0; }
   if (command == "--help" || command == "help") { out << cli_usage; return 0; }
-  if (command == "solve") return detail::runSolve(args, out, err);
-  if (command == "inspect") return detail::runInspect(args, out, err);
-  if (command == "spectrum") return detail::runSpectrum(args, out, err);
-  if (command == "modal") return detail::runModal(args, out, err);
-  err << "Unknown command: " << command << '\n'; return 2;
+  if (command == "solve") rc = detail::runSolve(args, out, err);
+  else if (command == "inspect") rc = detail::runInspect(args, out, err);
+  else if (command == "spectrum") rc = detail::runSpectrum(args, out, err);
+  else if (command == "modal") rc = detail::runModal(args, out, err);
+  else { err << "Unknown command: " << command << '\n'; return 2; }
+  // the closing event of an opt-in progress stream (also for failures: the exit code says which)
+  for (std::size_t i = 1; i + 1 < args.size(); ++i)
+    if (args[i] == "--progress" && args[i + 1] == "json") { detail::Progress{true, err}.send({{"event", "done"}, {"exit", rc}, {"t", detail::Progress::now()}}); break; }
+  return rc;
 }
 
 } // namespace kopruq::io

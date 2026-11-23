@@ -1,0 +1,12 @@
+const list = await (await fetch('http://127.0.0.1:9340/json')).json();
+const ws = new WebSocket(list.find((t) => t.type === 'page').webSocketDebuggerUrl); await new Promise((r) => (ws.onopen = r));
+let id = 0; const pending = new Map(); ws.onmessage = (m) => { const d = JSON.parse(m.data); if (d.id && pending.has(d.id)) { pending.get(d.id)(d); pending.delete(d.id); } };
+const ev = (expression) => new Promise((res) => { const i = ++id; pending.set(i, res); ws.send(JSON.stringify({ id: i, method: 'Runtime.evaluate', params: { expression, awaitPromise: true, returnByValue: true } })); }).then((d) => d.result?.result?.value ?? JSON.stringify(d.result?.exceptionDetails ?? d.result).slice(0, 600));
+const m22 = process.argv[2];
+console.log('open m22      :', await ev(`(async()=>{const k=window.__kopruq; await k.runner.openModelPath(${JSON.stringify(m22)}); const s=k.useUi.getState(); return JSON.stringify({err:s.loadError,nodes:s.view?.model.nodes.length})})()`));
+console.log('cancel        :', await ev(`(async()=>{const k=window.__kopruq; const t0=performance.now(); k.useUi.getState().set({analysis:'solve'});
+  const p=k.runner.startAnalysis(); await new Promise(r=>setTimeout(r,250)); const mid=k.useUi.getState().run.state; const killed=await k.runner.cancelAnalysis(); await p; const x=k.useUi.getState().run;
+  return JSON.stringify({stateWhileRunning:mid, killed, final:x.state, stages:x.stages, ms:Math.round(performance.now()-t0)})})()`));
+console.log('run after     :', await ev(`(async()=>{const k=window.__kopruq; await k.runner.startAnalysis(); const x=k.useUi.getState().run; return JSON.stringify({state:x.state,summary:x.summary,seconds:x.seconds})})()`));
+console.log('missing model :', await ev(`(async()=>{const k=window.__kopruq; k.useUi.setState({loadError:null}); await k.runner.openModelPath('C:\\no\\such\\model.json'); return k.useUi.getState().loadError})()`));
+ws.close();

@@ -31,6 +31,30 @@ Tests: `npm test` -- geometry (member axes, ear clipping, extrusion volumes, sup
 real model-100 data) and shell behaviour. Click picking in a real browser was checked with a DevTools
 script (`spikes/cdp_pick.mjs`, 16/16 on model 100); viewer timings are in `docs/viewer-evaluation.md`.
 
+## Phase 4 status: desktop app (Tauri 2) connected to the C++ solver
+
+```
+cd ui
+npm install
+npm run desktop            # tauri dev: Vite + native window (needs Rust, WebView2)
+```
+
+The app starts the existing `kopruq_solver_cli` as a child process (no shell; argument vector built
+from validated fields), streams its `--progress json` events and stderr into the Analysis panel and the
+**Log** tab, and can cancel it. Where the CLI is looked up: `KOPRUQ_SOLVER_CLI`, else next to the app
+executable (packaged), else `build/release|gui-release|debug` of this repository (development) --
+build the CLI first (`scripts/build.ps1`).
+
+Flow: **Open** picks a MIDAS NX JSON / kopruq-model / kopruq-model-view file; MIDAS and native models
+go through `kopruq_solver_cli inspect` and appear in the viewer; **Run Analysis** runs Linear Static
+(`solve`), Modal or Response Spectrum on the opened model. Status shows what the CLI reports (read /
+solve / write). "Completed" appears only when the CLI exited 0 *and* its result file says
+`status.success`; otherwise the failure reason is shown. Result values are not displayed yet (Phase 5).
+In a plain browser the analysis controls stay disabled ("Desktop app required").
+
+Security: the window can only call four app commands (solver_info, read_text_file for `.json` files,
+run_solver with a fixed command set, cancel_solver) and the open-file dialog; no fs/shell/http access.
+
 ## Layout
 
 | Area | Component |

@@ -1,0 +1,4 @@
+{ "name": "kopruq-viewer-spike", "private": true, "type": "module",
+  "scripts": { "dev": "vite --port 5180" },
+  "dependencies": { "@kitware/vtk.js": "*", "three": "*" },
+  "devDependencies": { "vite": "*" } }

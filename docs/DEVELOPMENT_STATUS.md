@@ -3059,3 +3059,22 @@ Results (production, GUI comparison path):
   crossing were this interpolation difference) -- model 16 now 100%.
 - Model 17: unchanged 100%.
 Tests: Debug 369/369, Release 369/369, gui-release 406/406 (before: 364 / 364 / 401). Every static model unchanged (static path untouched).
+
+## GUI: model 100 not shown in the model view -- non-ASCII path fix (2026-11-23)
+
+Symptom (user): model 100 does not appear in the GUI model view. Root cause, reproduced: the folder
+"100 Basit köprü" has non-ASCII characters; the GUI passes paths as UTF-8 (QString::toStdString), and
+on Windows a narrow std::ifstream interprets its path in the ANSI code page (1252 on this machine),
+so the model file could not be opened (test: narrow UTF-8 path -> not opened; same path through
+std::filesystem::path from UTF-8 -> opened). The CLI subprocess was also exposed: its narrow argv is
+in code page 1252, which has no s/g/i with Turkish diacritics.
+Fix: paths travel as UTF-8 and are opened only through kopruq::io::utf8Path (new
+include/kopruq/io/Utf8Path.hpp): CLI model read and results write; CLI main uses wmain on Windows and
+converts the wide arguments to UTF-8; GUI results/spectrum/modal JSON reads; Excel reference readers
+(xlnt loads from a stream) and the report exporter (xlnt saves to a stream).
+Verified: the CLI solves verification/models/100 Basit köprü/100 Basit köprü.json and writes to a
+path containing s/g/i with diacritics (exit 0). Tests: utf8_path_tests (3, core) and
+verification_utf8_path_tests (2, GUI build) through a folder named with ö ü ş ğ ı.
+Tests: Debug 372/372, Release 372/372, gui-release 411/411.
+Found while reading the viewer (not yet changed): load arrows ignore the load's sign, so a downward
+(negative GZ) load is drawn pointing up.

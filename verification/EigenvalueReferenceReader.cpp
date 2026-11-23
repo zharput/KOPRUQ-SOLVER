@@ -3,6 +3,7 @@
 #include <cctype>
 #include <cstdlib>
 #include <fstream>
+#include "kopruq/io/Utf8Path.hpp"
 #include <xlnt/xlnt.hpp>
 
 namespace kopruq::verification {
@@ -52,7 +53,7 @@ EigenvalueReferenceReadResult readEigenvalueReferenceExcel(const std::string& pa
   EigenvalueReferenceReadResult result;
 
   {
-    std::ifstream probe(path, std::ios::binary);
+    std::ifstream probe(kopruq::io::utf8Path(path), std::ios::binary); // path is UTF-8 (Utf8Path.hpp)
     if (!probe) { result.diagnostics.push_back("Dosya açılamadı: " + path); return result; }
     unsigned char sig[4] = {0, 0, 0, 0};
     probe.read(reinterpret_cast<char*>(sig), 4);
@@ -67,7 +68,7 @@ EigenvalueReferenceReadResult readEigenvalueReferenceExcel(const std::string& pa
   }
 
   xlnt::workbook wb;
-  try { wb.load(path); }
+  try { std::ifstream in(kopruq::io::utf8Path(path), std::ios::binary); wb.load(in); } // stream load: xlnt never sees a narrow path
   catch (const std::exception& e) { result.diagnostics.push_back(std::string("Excel dosyası okunamadı: ") + e.what()); return result; }
   xlnt::worksheet ws = wb.active_sheet();
 

@@ -4,6 +4,7 @@
 #include "FileInputPanel.h"
 #include "ResultsComparisonPanel.h"
 #include "ModelViewerWidget.h"
+#include "kopruq/io/Utf8Path.hpp"
 #include "SolverRunner.h"
 #include "EigenvalueReferenceReader.h"
 #include "ExcelReferenceReader.h"
@@ -650,7 +651,7 @@ void MainWindow::onCompare() {
 
   nlohmann::json results;
   {
-    std::ifstream in(lastResultsPath_.toStdString(), std::ios::binary);
+    std::ifstream in(kopruq::io::utf8Path(lastResultsPath_.toStdString()), std::ios::binary);
     if (!in) {
       appendLog(tr("Sonuç dosyası açılamadı: %1").arg(lastResultsPath_), /*Error*/ 3);
       return;
@@ -665,7 +666,7 @@ void MainWindow::onCompare() {
 
   // Response-spectrum results (chained `spectrum` run), merged as MIDAS's "<case>(RS)" load cases.
   if (!lastSpectrumResultsPath_.isEmpty()) {
-    std::ifstream specIn(lastSpectrumResultsPath_.toStdString(), std::ios::binary);
+    std::ifstream specIn(kopruq::io::utf8Path(lastSpectrumResultsPath_.toStdString()), std::ios::binary);
     try {
       nlohmann::json spectrum;
       if (!specIn) throw std::runtime_error("dosya açılamadı");
@@ -756,7 +757,7 @@ void MainWindow::onCompare() {
         allDiagnostics << tr("Eigenvalue Mode: modal analiz çalıştırılmadı veya başarısız oldu, karşılaştırma yapılamadı.");
       } else {
         nlohmann::json modalResults;
-        std::ifstream modalIn(lastModalResultsPath_.toStdString(), std::ios::binary);
+        std::ifstream modalIn(kopruq::io::utf8Path(lastModalResultsPath_.toStdString()), std::ios::binary);
         if (!modalIn) {
           allDiagnostics << tr("Modal sonuç dosyası açılamadı: %1").arg(lastModalResultsPath_);
         } else {

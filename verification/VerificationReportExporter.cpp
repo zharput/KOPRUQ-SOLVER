@@ -1,4 +1,6 @@
 #include "VerificationReportExporter.h"
+#include <fstream>
+#include "kopruq/io/Utf8Path.hpp"
 #include <xlnt/xlnt.hpp>
 
 namespace kopruq::verification {
@@ -162,7 +164,11 @@ bool exportVerificationReport(const std::string& outputXlsxPath, const ReportDat
     diagnostics.title("Diagnostics");
     writeDiagnosticsSheet(diagnostics, data.diagnostics);
 
-    wb.save(outputXlsxPath);
+    std::ofstream out(kopruq::io::utf8Path(outputXlsxPath), std::ios::binary); // path is UTF-8 (Utf8Path.hpp)
+    if (!out) { error = "cannot open the report file for writing: " + outputXlsxPath; return false; }
+    wb.save(out);
+    out.flush();
+    if (!out) { error = "writing the report file failed: " + outputXlsxPath; return false; }
     return true;
   } catch (const std::exception& e) {
     error = e.what();

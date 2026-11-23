@@ -4,6 +4,7 @@
 #include "ResponseSpectrumResultsJson.hpp"
 #include "ResultsJson.hpp"
 #include "Sha256.hpp"
+#include "Utf8Path.hpp"
 #include "midas/MidasJsonImporter.hpp"
 #include <fstream>
 #include <iterator>
@@ -93,7 +94,7 @@ inline void reportMidasImport(const midas::MidasImportReport& r, std::ostream& e
 // export via the Phase 7B importer), or returns false having written the exit-4/exit-3
 // diagnostic to err (caller returns that code).
 inline bool readModelFile(const std::string& path, const std::string& format, std::ostream& err, std::string& text, ModelInput& model, int& exitCode) {
-  std::ifstream in(path, std::ios::binary);
+  std::ifstream in(utf8Path(path), std::ios::binary); // path is UTF-8 (Utf8Path.hpp)
   if (!in) { err << "cannot open model file: " << path << '\n'; exitCode = 4; return false; }
   text.assign((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
   if (format == "midas-nx-json") {
@@ -119,7 +120,7 @@ inline bool readModelFile(const std::string& path, const std::string& format, st
 
 inline int writeDocument(const std::string& outputPath, const std::string& document, std::ostream& out, std::ostream& err) {
   if (outputPath.empty()) { out << document; return 0; }
-  std::ofstream o(outputPath, std::ios::binary);
+  std::ofstream o(utf8Path(outputPath), std::ios::binary); // path is UTF-8 (Utf8Path.hpp)
   o << document;
   if (!o) { err << "cannot write results file: " << outputPath << '\n'; return 4; }
   return 0;

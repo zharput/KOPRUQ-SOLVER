@@ -3,6 +3,7 @@
 #include <cctype>
 #include <cstdlib>
 #include <fstream>
+#include "kopruq/io/Utf8Path.hpp"
 #include <xlnt/xlnt.hpp>
 
 namespace kopruq::verification {
@@ -77,7 +78,7 @@ ReferenceReadResult readReferenceExcel(const std::string& path, ReferenceFileKin
   // signature D0 CF 11 E0) is rejected with a clear, actionable diagnostic -- per the
   // 2026-10-20 decision, only .xlsx (OOXML, a ZIP container, signature "PK") is supported.
   {
-    std::ifstream probe(path, std::ios::binary);
+    std::ifstream probe(kopruq::io::utf8Path(path), std::ios::binary); // path is UTF-8 (Utf8Path.hpp)
     if (!probe) {
       result.diagnostics.push_back("Dosya açılamadı: " + path);
       return result;
@@ -100,7 +101,8 @@ ReferenceReadResult readReferenceExcel(const std::string& path, ReferenceFileKin
 
   xlnt::workbook wb;
   try {
-    wb.load(path);
+    std::ifstream in(kopruq::io::utf8Path(path), std::ios::binary); // stream load: xlnt never sees a narrow path
+    wb.load(in);
   } catch (const std::exception& e) {
     result.diagnostics.push_back(std::string("Excel dosyası okunamadı: ") + e.what());
     return result;

@@ -18,9 +18,10 @@
 //     free DOF (not just the massy ones) -- a stronger check than mass-orthonormality alone,
 //     confirming the massless (rotational) DOFs' back-substituted values are exactly the ones
 //     that make the full free-DOF residual vanish, not merely "some" consistent value.
-//  4. ErrorHandling: Lumped + rigid links is explicitly rejected (not silently ignored or
-//     silently falling back to Consistent); the default (omitting the argument) is Consistent,
-//     unchanged from before this phase.
+//  4. ErrorHandling: the default (omitting the argument) is Consistent, unchanged from before this
+//     phase. (Lumped + rigid links was explicitly rejected here until 2026-11-23; it is now
+//     supported and this test checks a massless slave leaves the frequencies unchanged -- see the
+//     test body and rigid_link_lumped_mass_tests.cpp.)
 #include <gtest/gtest.h>
 #include <Eigen/Dense>
 #include <cmath>
@@ -134,13 +135,20 @@ TEST(LumpedMass, ErrorHandling) {
   for (std::size_t i = 0; i < def.modes.size(); ++i)
     EXPECT_DOUBLE_EQ(def.modes[i].angular_frequency_rad_s, explicitConsistent.modes[i].angular_frequency_rad_s);
 
-  // Lumped + rigid links: explicitly rejected, not silently ignored.
+  // Lumped + rigid links: rejected until 2026-11-23, now supported (user-approved, verification
+  // model 100; ModalSolver::solveWithRigidLinks reduces the lumped mass as T^T M T). This line
+  // used to expect InvalidModel; it now checks the supported behaviour instead: a massless,
+  // stiffness-less slave must leave the lumped frequencies exactly as without the link.
   kopruq::Model withRigid = cantilever(4.0, 1);
   withRigid.nodes.push_back({3, 4.5, 0, 0});
   withRigid.rigid_links = {{1, 2, 3}};
-  auto rejected = kopruq::ModalSolver::solve(withRigid, fixedNode1(), 6, kopruq::MassMatrixType::Lumped);
-  EXPECT_FALSE(rejected.status.success);
-  EXPECT_EQ(rejected.status.code, kopruq::SolverStatusCode::InvalidModel);
+  auto plainLumped = kopruq::ModalSolver::solve(cantilever(4.0, 1), fixedNode1(), 6, kopruq::MassMatrixType::Lumped);
+  auto linkedLumped = kopruq::ModalSolver::solve(withRigid, fixedNode1(), 6, kopruq::MassMatrixType::Lumped);
+  ASSERT_TRUE(plainLumped.status.success); ASSERT_TRUE(linkedLumped.status.success) << linkedLumped.status.message;
+  ASSERT_EQ(linkedLumped.modes.size(), plainLumped.modes.size());
+  for (std::size_t i = 0; i < plainLumped.modes.size(); ++i)
+    EXPECT_NEAR(linkedLumped.modes[i].angular_frequency_rad_s, plainLumped.modes[i].angular_frequency_rad_s,
+                1e-9 * plainLumped.modes[i].angular_frequency_rad_s);
 
   // A model with zero beams reaching a node leaves it with zero lumped mass everywhere ->
   // no massy DOFs at all -> SingularSystem, not a crash.

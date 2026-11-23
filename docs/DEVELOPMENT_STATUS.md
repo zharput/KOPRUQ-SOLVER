@@ -2981,3 +2981,60 @@ Results (GUI comparison path, production CLI):
 Open (awaiting user approval): (1) lumped mass together with rigid links (MIDAS: slave masses
 transferred to the master, i.e. T^T M T in the reduced space, with massless DOFs condensed);
 (2) static + response-spectrum combinations with the rule above.
+
+## Model 100: lumped mass with rigid links, spectrum participation fix, static + spectrum combinations (2026-11-23)
+
+User-approved tasks 1-3 after the first model 100 test.
+
+Task 1 -- lumped mass together with rigid links (production).
+- ModalSolver: lumped mass is no longer rejected with rigid links / node local axes. The lumped mass
+  is reduced like the stiffness (T^T M T; MIDAS manual "Rigid Link": a slave's nodal mass becomes an
+  equivalent component of the master). eigensolveLumped generalised: a free DOF is massless when its
+  whole row of M over the free DOFs is zero, and the massy block is taken in full (T^T M T is not
+  diagonal -- a slave's mass gives the master rotational inertia m e^2 and coupling m e); identical
+  to before for plain (diagonal) lumped mass.
+- ResponseSpectrumSolver (bug fix): the influence vector is now iota = T iota_r. Before, tied
+  rigid-link slave DOFs were left at 0, which dropped every slave node's own mass from the
+  participation factors and total mass (model 100: cap-beam / pier-top slaves carry element mass).
+- Model 100: all 20 frequencies within 0.0036% of MIDAS (uniform offset = MIDAS g 9.806 vs 9.80665);
+  modal effective mass per mode and direction within 0.007% of MIDAS's own table (Eigenvalue .out),
+  total mass 3657.48 t vs 3657.72 t (same gravity ratio).
+- Tests: new tests/unit/rigid_link_lumped_mass_tests.cpp (3): hand-derived 2-DOF frequencies of a
+  cantilever column carrying a rigid mass block through rigid links (both bending planes + axial,
+  massless torsion condensed), rigid kinematics and mass normalisation of the shapes, spectrum total
+  mass = all masses incl. slaves and full participation. Existing lumped_mass_tests ErrorHandling
+  expected "Lumped + rigid links rejected"; requirement changed (user-approved) -- now checks that a
+  massless slave leaves the lumped frequencies unchanged (documented in the test).
+
+Task 2 -- static + response-spectrum combinations (production + verification layer).
+- Rule read from MIDAS's own results (model 100, exact for every displacement, reaction and beam
+  force): EQX = SW + SDL-1 + SDL-2 + |SPX|, SXY = 0.5 |SPX| + 0.3 |SPY| -- static terms signed,
+  spectrum peaks added as magnitudes; beam forces in MIDAS's internal-force convention (1128/1128).
+- ModelInput::spectrum_combinations (definitions); MIDAS importer maps LCOM-GEN with ANAL="RS" terms
+  (static ST/CB parts expanded as usual; RS -> SPLC name; a combination with RS terms cannot be
+  referenced by another combination); native model JSON + both schemas; results.json carries the
+  definitions; verification::appendSpectrumCombinations evaluates them (GUI calls it after merging
+  the spectrum results).
+- Tests: tests/unit/spectrum_combination_tests.cpp (3: import, rejections, native round trip,
+  results definitions) and result_matcher_spectrum_combination_tests.cpp (2, GUI build: node values,
+  beam forces in MIDAS convention).
+
+Model 100 results now (production: lumped mass, linear spectrum interpolation):
+static 7 cases/combinations 100%; eigen 20/20; displacements of SPX, SPY, EQX, EQY, SXY 636/636 each;
+reactions SPX 40/54, SPY 54/54, EQX 48/54, EQY 54/54, SXY 50/54; beam forces SPX 662, SPY 1058,
+EQX 992, EQY 1085, SXY 824 of 1128.
+
+Open finding (needs a user decision) -- spectrum interpolation. Every MIDAS SPLC seen so far has
+INTERP "LOG"; KOPRUQ interpolates the spectrum table linearly. Diagnostics (spectrum points inserted at
+the mode periods, no code change): log-log interpolation (ln Sa linear in ln T) makes SPY match with a
+median ratio 0.99996 (= the gravity ratio) and makes model 16's 2 long-standing rows pass (456/456);
+model 17 unaffected. The first table segment starts at T = 0, where log-log is undefined: MIDAS uses
+neither the flat limit (p = 0: model 100 fails 38 rows) nor linear; the data require a small positive
+stand-in period for T = 0 (equivalent slope p = 0.02 .. 0.065 for model 100, p <= ~0.04 for model 16),
+i.e. T0 roughly 1e-11 .. 4e-5 s -- not determinable exactly. The importer already clamps T = 0 to
+1e-6 s (existing code), which falls inside the band (model 100 p = 0.043). With log-log interpolation
+model 100 is 100% in all 12 cases/combinations and model 16 is 100%.
+
+Regression: every static model unchanged; models 13-17 eigen max rel 3.55e-5 (unchanged); model 16/17
+spectrum unchanged (16: 454/456 pending the interpolation decision; 17: 100%).
+Tests: Debug 364/364, Release 364/364, gui-release 401/401 (before: 358 / 358 / 393).

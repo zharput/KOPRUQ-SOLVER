@@ -100,6 +100,7 @@ struct MidasImportReport {
   std::size_t joint_springs{}; // NSPR records imported as JointSpringConnection
   std::size_t elastic_links_rejected{}; // ELNK records present but NOT imported (unsupported LINK type, unconfirmed R_S release, missing node, or bad SDR) -- not a count of `springs`
   std::size_t combinations{}; // LCOM-GEN records imported as LoadCombination (nested CB references expanded to pure load-case terms)
+  std::size_t spectrum_combinations{}; // LCOM-GEN records with ANAL="RS" terms imported as SpectrumCombination definitions
   std::vector<std::string> assumptions; // disclosed substitutions, e.g. "material 1: poisson_ratio=0.2 (...)"
   std::vector<std::string> rejected;    // records explicitly not imported, with the reason
   std::map<Id, Id> originalToInternalNodeId;    // identity mapping in this importer (MIDAS IDs preserved), kept
@@ -762,8 +763,15 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
   // Only ACTIVE=="ACTIVE" and iTYPE==0 (the only values seen in any real sample) are accepted;
   // any other iTYPE (e.g. an envelope/max-min combination, which cannot be expressed as a single
   // linear superposition at all) is rejected explicitly, not silently approximated as linear.
+  // LCOM-GEN with ANAL="RS" terms (2026-11-23): kept as static + spectrum combination definitions
+  // (ModelJson.hpp SpectrumCombination). Static ST/CB terms are expanded to load cases exactly as for
+  // ordinary combinations; RS terms (SPLC names) are resolved after the SPLC import below. Such a
+  // combination cannot itself be referenced by another combination (rejected there).
+  struct PendingSpectrumCombination { std::string name, key; std::vector<std::pair<std::string, Real>> staticTerms, spectrumTerms; };
+  std::vector<PendingSpectrumCombination> pendingSpectrumCombos;
   if (dbg.contains("LCOM-GEN")) {
     std::map<std::string, std::vector<std::tuple<std::string, std::string, Real>>> rawCombos; // name -> (ANAL, ref, factor) terms
+    std::map<std::string, std::vector<std::tuple<std::string, std::string, Real>>> rsCombos; // combinations with RS terms
     std::map<std::string, std::string> comboKey; // name -> original JSON key, for diagnostics only
     for (auto it = dbg.at("LCOM-GEN").begin(); it != dbg.at("LCOM-GEN").end(); ++it) {
       const auto& v = it.value();
@@ -780,11 +788,13 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
           const std::string anal = term.value("ANAL", std::string());
           const std::string ref = term.value("LCNAME", std::string());
           const Real factor = term.value("FACTOR", Real(1));
-          if (anal != "ST" && anal != "CB") { out.report.rejected.push_back("LCOM-GEN " + it.key() + " ('" + name + "'): vCOMB term has unsupported ANAL='" + anal + "' (only ST/CB are implemented)"); ok = false; break; }
+          if (anal != "ST" && anal != "CB" && anal != "RS") { out.report.rejected.push_back("LCOM-GEN " + it.key() + " ('" + name + "'): vCOMB term has unsupported ANAL='" + anal + "' (only ST/CB/RS are implemented)"); ok = false; break; }
           terms.emplace_back(anal, ref, factor);
         }
       if (!ok) continue;
-      rawCombos[name] = std::move(terms);
+      bool hasRs = false; for (const auto& t : terms) if (std::get<0>(t) == "RS") hasRs = true;
+      if (hasRs) rsCombos[name] = std::move(terms);
+      else rawCombos[name] = std::move(terms);
     }
 
     // Recursively expands `name` into pure (load case name, net factor) terms, substituting any
@@ -835,6 +845,21 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
       }
       if (!allFound) { out.report.rejected.push_back("LCOM-GEN " + comboKey[name] + " ('" + name + "'): references a load case not present in this model"); continue; }
       out.input.combinations.push_back(lcomb);
+    }
+    for (const auto& [name, terms] : rsCombos) {
+      PendingSpectrumCombination pc; pc.name = name; pc.key = comboKey[name];
+      bool ok = true;
+      std::map<std::string, Real> merged;
+      for (const auto& [anal, ref, factor] : terms) {
+        if (anal == "RS") { pc.spectrumTerms.emplace_back(ref, factor); continue; }
+        if (anal == "ST") { merged[ref] += factor; continue; }
+        std::vector<std::string> stack; std::vector<std::pair<std::string, Real>> sub;
+        if (rsCombos.count(ref) || !expand(ref, stack, sub)) { ok = false; break; }
+        for (const auto& [n, f] : sub) merged[n] += f * factor;
+      }
+      if (!ok) { out.report.rejected.push_back("LCOM-GEN " + pc.key + " ('" + name + "'): a CB term references a combination that is missing, unsupported or itself contains spectrum (RS) terms"); continue; }
+      for (const auto& [n, f] : merged) pc.staticTerms.emplace_back(n, f);
+      pendingSpectrumCombos.push_back(std::move(pc));
     }
   }
   out.report.combinations = out.input.combinations.size();
@@ -976,6 +1001,29 @@ inline MidasImportResult importMidasJson(const nlohmann::json& root) {
   } else if (dbg.contains("SPFC") && !dbg.at("SPFC").empty()) {
     out.report.rejected.push_back("SPFC (response-spectrum function) present without any SPLC (response-spectrum case) referencing it -- nothing to import");
   }
+
+  // Static + spectrum combinations (pending from LCOM-GEN above): resolve load case and SPLC names.
+  for (const auto& pc : pendingSpectrumCombos) {
+    SpectrumCombination sc; sc.name = pc.name;
+    std::string missing;
+    for (const auto& [n, f] : pc.staticTerms) {
+      auto ci = caseIndex.find(n);
+      if (ci == caseIndex.end()) { missing = "load case '" + n + "'"; break; }
+      sc.static_terms.emplace_back(ci->second, f);
+    }
+    for (const auto& [n, f] : pc.spectrumTerms) {
+      if (!missing.empty()) break;
+      std::size_t idx = out.input.response_spectra.size();
+      for (std::size_t r = 0; r < out.input.response_spectra.size(); ++r) if (out.input.response_spectra[r].name == n) idx = r;
+      if (idx == out.input.response_spectra.size()) { missing = "response spectrum '" + n + "' (SPLC missing or not imported)"; break; }
+      sc.spectrum_terms.emplace_back(idx, f);
+    }
+    if (!missing.empty()) { out.report.rejected.push_back("LCOM-GEN " + pc.key + " ('" + pc.name + "'): references " + missing); continue; }
+    out.input.spectrum_combinations.push_back(std::move(sc));
+  }
+  out.report.spectrum_combinations = out.input.spectrum_combinations.size();
+  if (!out.input.spectrum_combinations.empty())
+    out.report.assumptions.push_back(std::to_string(out.input.spectrum_combinations.size()) + " static + response-spectrum combination(s) (LCOM-GEN with RS terms) imported as definitions: value = sum(static) + sum(factor * |spectrum peak|), the rule read from MIDAS's own results (verification model 100); evaluated by the verification layer");
 
   return out;
 }

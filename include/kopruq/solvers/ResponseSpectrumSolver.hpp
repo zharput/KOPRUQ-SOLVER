@@ -130,20 +130,26 @@ class ResponseSpectrumSolver { public:
       Eigen::SparseMatrix<Real> Mfull = massType == MassMatrixType::Lumped ? MatrixAssembler::assembleLumpedMass(m) : MatrixAssembler::assembleMass(m);
 
       auto all = rs; for (const auto& n : m.nodes) if (!all.count(n.id)) all[n.id] = {};
-      // A rigid-link slave node's TIED DOFs are not independent (see RigidLink.hpp) -- they must be
-      // excluded here exactly as LinearStaticSolver::solveCasesWithRigidLinks excludes them
-      // (RigidLinkReduction::classifyRetained), or they would wrongly appear as extra "free" DOFs with
-      // their own iota=1 entries, double-counting mass already captured through the master's
-      // modal response (ModalSolver::solve has already expanded each mode's shape through the
-      // same rigid kinematics, so the slave DOFs' motion is already fully represented in `phi`).
-      auto free = m.rigid_links.empty() ? MatrixAssembler::classify(dm, all).free
-                                        : RigidLinkReduction::build(m, dm).classifyRetained(dm, all).free;
-
-      // iota: 1 at every FREE translational DOF matching `direction` (DOF index mod 6:
-      // 0=UX, 1=UY, 2=UZ), 0 everywhere else, including restrained DOFs -- see the
-      // formulation note above.
+      // iota: the structure's rigid-body displacement for a unit ground motion along `direction`
+      // (DOF index mod 6: 0=UX, 1=UY, 2=UZ) -- 1 at every FREE translational DOF in that direction, 0
+      // at restrained DOFs (they move with the ground) and at rotations.
+      // Rigid links (corrected 2026-11-23): iota = T * iota_r, with iota_r built on the retained
+      // (reduced) free DOFs, so a tied slave DOF gets its master's value (1 when the master moves, 0
+      // when the master is restrained). Then Gamma = phi^T M iota = phi_r^T (T^T M T) iota_r is the
+      // reduced-space participation factor exactly. Before, tied slave DOFs were left at 0 ("to
+      // avoid double counting"), which dropped every slave node's own mass from Gamma and from
+      // total_mass (verification model 100: cap-beam / pier-top slaves carry element mass).
       Eigen::VectorXd iota = Eigen::VectorXd::Zero(static_cast<Eigen::Index>(dm.dof_count()));
-      for (auto idx : free) if (idx % 6 == static_cast<std::size_t>(input.direction)) iota(static_cast<Eigen::Index>(idx)) = 1.0;
+      if (m.rigid_links.empty()) {
+        for (auto idx : MatrixAssembler::classify(dm, all).free)
+          if (idx % 6 == static_cast<std::size_t>(input.direction)) iota(static_cast<Eigen::Index>(idx)) = 1.0;
+      } else {
+        const auto red = RigidLinkReduction::build(m, dm);
+        Eigen::VectorXd iotaR = Eigen::VectorXd::Zero(static_cast<Eigen::Index>(red.reduced_count()));
+        for (auto idx : red.classifyRetained(dm, all).free)
+          if (idx % 6 == static_cast<std::size_t>(input.direction)) iotaR(static_cast<Eigen::Index>(red.fullToReduced(idx))) = 1.0;
+        iota = red.expand(iotaR);
+      }
       Eigen::VectorXd Miota = Mfull * iota;
       out.total_mass = iota.dot(Miota);
 

@@ -28,10 +28,7 @@ class ModalSolver { public:
     ModalResults out;
     try {
       DofManager dm(m);
-      if (!m.rigid_links.empty() || !m.node_axes.empty()) {
-        if (massType == MassMatrixType::Lumped) { out.status = {false, "Lumped mass is not yet supported together with rigid links or node local axes", SolverStatusCode::InvalidModel}; return out; }
-        return solveWithRigidLinks(m, rs, numModes, dm);
-      }
+      if (!m.rigid_links.empty() || !m.node_axes.empty()) return solveWithRigidLinks(m, rs, numModes, dm, massType);
       out.total_dofs = dm.dof_count();
       if (rs.empty()) { out.status = {false, "no restraints", SolverStatusCode::NoRestraints}; return out; }
       auto all = rs; for (const auto& n : m.nodes) if (!all.count(n.id)) all[n.id] = {};
@@ -100,8 +97,12 @@ class ModalSolver { public:
 
   // Lumped-mass eigensolve: `Mfree` (the lumped mass reduced to free DOFs) is singular on every
   // rotational DOF (lumpedMassMatrix puts zero mass there, by design -- see its own comment).
-  // Splits `free` into "massy" (nonzero lumped mass, i.e. translational) and "massless"
-  // (rotational) subsets, statically condenses the massless ones out of K (Guyan reduction,
+  // 2026-11-23: `Mfull` may also be the rigid-link-reduced T^T M T (solveWithRigidLinks), which is
+  // no longer diagonal -- a slave's translational mass gives its master rotational inertia
+  // (m e^2) and translation-rotation coupling (m e). A free DOF is therefore "massless" when its
+  // whole row of M over the free DOFs is zero, and the massy block M_aa is taken in full (dense),
+  // not just its diagonal; for a plain lumped (diagonal) M both choices are identical.
+  // Splits `free` into "massy" and "massless" subsets, statically condenses the massless ones out of K (Guyan reduction,
   // K_cond = K_aa - K_ar*K_rr^-1*K_ra, the same technique RigidLink.hpp's rigid-link slaves and
   // Releases.hpp's end releases both already use elsewhere in this codebase), solves the
   // well-posed (Kcond, diag(massy mass)) generalized eigenproblem, then recovers each massless
@@ -114,7 +115,14 @@ class ModalSolver { public:
                                         const std::vector<std::size_t>& free, int numModes, std::size_t shapeSize) {
     ModalResults out;
     std::vector<std::size_t> active, massless; // both index into `free`'s own global DOF indices
-    for (auto idx : free) ((Mfull.coeff(static_cast<int>(idx), static_cast<int>(idx)) > 0) ? active : massless).push_back(idx);
+    std::vector<char> isFree(static_cast<std::size_t>(Mfull.rows()), 0);
+    for (auto idx : free) isFree[idx] = 1;
+    for (auto idx : free) {
+      bool hasMass = false;
+      for (Eigen::SparseMatrix<Real>::InnerIterator it(Mfull, static_cast<Eigen::Index>(idx)); it; ++it)
+        if (it.value() != 0 && isFree[static_cast<std::size_t>(it.row())]) { hasMass = true; break; }
+      (hasMass ? active : massless).push_back(idx);
+    }
     if (active.empty()) { out.status = {false, "mass matrix is not positive definite on the free degrees of freedom (a free DOF has no mass -- check unit_weight)", SolverStatusCode::SingularSystem}; return out; }
 
     auto denseBlock = [&](const std::vector<std::size_t>& rows, const std::vector<std::size_t>& cols) {
@@ -135,9 +143,10 @@ class ModalSolver { public:
       Kcond -= Kar * Krr_inv_Kra;
     }
 
-    Eigen::VectorXd mDiag(static_cast<Eigen::Index>(active.size()));
-    for (std::size_t i = 0; i < active.size(); ++i) mDiag(static_cast<Eigen::Index>(i)) = Mfull.coeff(static_cast<int>(active[i]), static_cast<int>(active[i]));
-    Eigen::MatrixXd Maa = mDiag.asDiagonal();
+    Eigen::MatrixXd Maa(static_cast<Eigen::Index>(active.size()), static_cast<Eigen::Index>(active.size()));
+    for (std::size_t i = 0; i < active.size(); ++i)
+      for (std::size_t j = 0; j < active.size(); ++j)
+        Maa(static_cast<Eigen::Index>(i), static_cast<Eigen::Index>(j)) = Mfull.coeff(static_cast<int>(active[i]), static_cast<int>(active[j]));
 
     EigenResult eig = symmetricGeneralizedEigen(Kcond, Maa);
     if (!eig.status.success) { out.status = eig.status; return out; }
@@ -167,7 +176,11 @@ class ModalSolver { public:
   // Mass-normalization survives the expansion exactly: phi_full^T M_full phi_full =
   // phiReduced^T (T^T M_full T) phiReduced = phiReduced^T Mmid phiReduced = phiFree^T Mff phiFree = 1,
   // since Mmid = red.reduceMatrix(M) by construction.
-  static ModalResults solveWithRigidLinks(const Model& m, const Restraints& rs, int numModes, const DofManager& dm) {
+  // massType (2026-11-23): Lumped uses the lumped mass reduced the same way (T^T M_lumped T -- MIDAS
+  // manual "Rigid Link": a slave's nodal mass is converted into an equivalent component of the
+  // master) and eigensolveLumped's massless-DOF condensation; node local axes go through the same
+  // path (a rotation leaves the isotropic translational lumped mass unchanged).
+  static ModalResults solveWithRigidLinks(const Model& m, const Restraints& rs, int numModes, const DofManager& dm, MassMatrixType massType) {
     ModalResults out;
     out.total_dofs = dm.dof_count();
     try {
@@ -180,10 +193,15 @@ class ModalSolver { public:
       for (auto fi : bFull.free) freeReduced.push_back(red.fullToReduced(fi));
       out.free_dofs = freeReduced.size(); out.fixed_dofs = bFull.fixed.size();
       if (freeReduced.empty()) { out.status = {false, "no free degrees of freedom", SolverStatusCode::NoRestraints}; return out; }
-      Eigen::SparseMatrix<Real> K = MatrixAssembler::assemble(m), M = MatrixAssembler::assembleMass(m);
+      const bool lumped = massType == MassMatrixType::Lumped;
+      Eigen::SparseMatrix<Real> K = MatrixAssembler::assemble(m), M = lumped ? MatrixAssembler::assembleLumpedMass(m) : MatrixAssembler::assembleMass(m);
       Eigen::SparseMatrix<Real> Kmid = red.reduceMatrix(K), Mmid = red.reduceMatrix(M);
-      Eigen::SparseMatrix<Real> Kff = LinearStaticSolver::reduceKff(Kmid, freeReduced), Mff = LinearStaticSolver::reduceKff(Mmid, freeReduced);
-      ModalResults reduced = eigensolve(Kff, Mff, freeReduced, numModes, red.reduced_count());
+      ModalResults reduced;
+      if (lumped) reduced = eigensolveLumped(Kmid, Mmid, freeReduced, numModes, red.reduced_count());
+      else {
+        Eigen::SparseMatrix<Real> Kff = LinearStaticSolver::reduceKff(Kmid, freeReduced), Mff = LinearStaticSolver::reduceKff(Mmid, freeReduced);
+        reduced = eigensolve(Kff, Mff, freeReduced, numModes, red.reduced_count());
+      }
       if (!reduced.status.success) { out.status = reduced.status; return out; }
       out.modes.reserve(reduced.modes.size());
       for (auto& mode : reduced.modes) { mode.shape = red.expand(mode.shape); out.modes.push_back(std::move(mode)); }

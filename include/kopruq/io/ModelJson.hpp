@@ -31,7 +31,7 @@ inline constexpr int model_schema_version = 1;
 // Keys accepted in each JSON object. io_tests checks these against schemas/model.schema.json.
 struct KeySpec { std::vector<std::string> required, optional; };
 namespace model_keys {
-inline const KeySpec top{{"schema","schema_version","nodes","materials","sections","beams","supports"},{"units","trusses","springs","joint_springs","rigid_links","node_axes","load_cases","combinations","response_spectra"}};
+inline const KeySpec top{{"schema","schema_version","nodes","materials","sections","beams","supports"},{"units","trusses","springs","joint_springs","rigid_links","node_axes","load_cases","combinations","response_spectra","spectrum_combinations"}};
 inline const KeySpec units{{},{"length","force","angle"}};
 inline const KeySpec node{{"id","x","y","z"},{}};
 inline const KeySpec material{{"id","elastic_modulus","poisson_ratio"},{"unit_weight","thermal_expansion"}};
@@ -54,6 +54,8 @@ inline const KeySpec member_thermal_load{{"element"},{"uniform_delta_t","gradien
 inline const KeySpec combination{{"name","terms"},{}};
 inline const KeySpec combination_term{{"case","factor"},{}};
 inline const KeySpec response_spectrum_case{{"name","direction","spectrum"},{"num_modes"}};
+inline const KeySpec spectrum_combination{{"name"},{"static_terms","spectrum_terms"}};
+inline const KeySpec spectrum_term{{"spectrum","factor"},{}};
 inline const KeySpec spectrum_point{{"period","sa"},{}};
 }
 
@@ -77,6 +79,19 @@ struct ResponseSpectrumCase { std::string name; ResponseSpectrumInput input; };
 // request exists, so callers fall back to their own default exactly as before this field existed.
 struct ModalRequest { bool present{false}; int num_modes{6}; };
 
+// Combination of static load cases and response-spectrum results (2026-11-23; MIDAS LCOM-GEN with
+// ANAL="RS" terms, verification model 100). Rule, established from MIDAS's own results (every
+// displacement, reaction and beam-force component of models 100's EQX/EQY/SXY): value =
+// sum(static factor * static result) + sum(spectrum factor * |spectrum peak|), beam forces in
+// MIDAS's internal-force (diagram) convention. Definitions only: the static cases and spectrum
+// cases are solved by their own solvers; the verification layer evaluates the rule
+// (verification/ResultMatcher.h, appendSpectrumCombinations).
+struct SpectrumCombination {
+  std::string name;
+  std::vector<std::pair<std::size_t, Real>> static_terms;   // (load case index, factor)
+  std::vector<std::pair<std::size_t, Real>> spectrum_terms; // (response_spectra index, factor)
+};
+
 struct ModelInput {
   Model model;
   LinearStaticSolver::Restraints restraints;
@@ -84,6 +99,7 @@ struct ModelInput {
   std::vector<LoadCombination> combinations;
   std::vector<ResponseSpectrumCase> response_spectra;
   ModalRequest modal_request;
+  std::vector<SpectrumCombination> spectrum_combinations;
 };
 
 namespace detail {
@@ -114,6 +130,7 @@ class ModelReader {
     readLoadCases(root, R, in);
     readCombinations(root, R, in);
     readResponseSpectra(root, R, in);
+    readSpectrumCombinations(root, R, in);
     return in;
   }
 
@@ -696,6 +713,59 @@ class ModelReader {
     return ok;
   }
 
+  // spectrum_combinations: [{"name", "static_terms": [{"case", "factor"}], "spectrum_terms":
+  // [{"spectrum", "factor"}]}] -- by name; at least one term in total.
+  void readSpectrumCombinations(const json& root, const std::string& R, ModelInput& in) {
+    const json* a = array(root, R, "spectrum_combinations");
+    if (!a) return;
+    std::set<std::string> names;
+    for (const auto& cb : in.combinations) names.insert(cb.name);
+    for (std::size_t i = 0; i < a->size(); ++i) {
+      const std::string p = at(key(R, "spectrum_combinations"), i);
+      const json& c = (*a)[i];
+      if (!object(c, p, model_keys::spectrum_combination)) continue;
+      SpectrumCombination sc;
+      bool ok = true;
+      if (string(c, p, "name", sc.name)) {
+        if (sc.name.empty()) { issue(key(p, "name"), "must not be empty"); ok = false; }
+        else if (!names.insert(sc.name).second) { issue(key(p, "name"), "duplicate combination name \"" + sc.name + "\""); ok = false; }
+      } else ok = false;
+      if (const json* t = field(c, "static_terms")) {
+        if (!t->is_array()) { issue(key(p, "static_terms"), "must be an array"); ok = false; }
+        else for (std::size_t k = 0; k < t->size(); ++k) {
+          const std::string tp = at(key(p, "static_terms"), k);
+          const json& term = (*t)[k];
+          if (!object(term, tp, model_keys::combination_term)) { ok = false; continue; }
+          std::string cname; Real factor{};
+          bool tok = string(term, tp, "case", cname);
+          tok = number(term, tp, "factor", factor) && tok;
+          if (!tok) { ok = false; continue; }
+          auto it = caseIndex_.find(cname);
+          if (it == caseIndex_.end()) { issue(key(tp, "case"), "references unknown load case \"" + cname + "\""); ok = false; continue; }
+          sc.static_terms.emplace_back(it->second, factor);
+        }
+      }
+      if (const json* t = field(c, "spectrum_terms")) {
+        if (!t->is_array()) { issue(key(p, "spectrum_terms"), "must be an array"); ok = false; }
+        else for (std::size_t k = 0; k < t->size(); ++k) {
+          const std::string tp = at(key(p, "spectrum_terms"), k);
+          const json& term = (*t)[k];
+          if (!object(term, tp, model_keys::spectrum_term)) { ok = false; continue; }
+          std::string sname; Real factor{};
+          bool tok = string(term, tp, "spectrum", sname);
+          tok = number(term, tp, "factor", factor) && tok;
+          if (!tok) { ok = false; continue; }
+          std::size_t idx = in.response_spectra.size();
+          for (std::size_t r = 0; r < in.response_spectra.size(); ++r) if (in.response_spectra[r].name == sname) idx = r;
+          if (idx == in.response_spectra.size()) { issue(key(tp, "spectrum"), "references unknown response spectrum \"" + sname + "\""); ok = false; continue; }
+          sc.spectrum_terms.emplace_back(idx, factor);
+        }
+      }
+      if (ok && sc.static_terms.empty() && sc.spectrum_terms.empty()) { issue(p, "needs at least one static or spectrum term"); ok = false; }
+      if (ok) in.spectrum_combinations.push_back(std::move(sc));
+    }
+  }
+
   void readCombinations(const json& root, const std::string& R, ModelInput& in) {
     const json* a = array(root, R, "combinations");
     if (!a) return;
@@ -797,6 +867,18 @@ inline ModelInput readModelText(std::string_view text) {
   return readModel(root);
 }
 
+// Shared by writeModel and the results writer (ResultsJson.hpp): definitions by name.
+inline json spectrumCombinationsJson(const ModelInput& in) {
+  json a = json::array();
+  for (const auto& sc : in.spectrum_combinations) {
+    json c = {{"name", sc.name}, {"static_terms", json::array()}, {"spectrum_terms", json::array()}};
+    for (const auto& [idx, f] : sc.static_terms) c["static_terms"].push_back({{"case", in.load_cases.at(idx).name}, {"factor", f}});
+    for (const auto& [idx, f] : sc.spectrum_terms) c["spectrum_terms"].push_back({{"spectrum", in.response_spectra.at(idx).name}, {"factor", f}});
+    a.push_back(c);
+  }
+  return a;
+}
+
 inline json writeModel(const ModelInput& in) {
   json j;
   j["schema"] = model_schema_name;
@@ -873,6 +955,7 @@ inline json writeModel(const ModelInput& in) {
     for (const auto& pt : rc.input.spectrum) c["spectrum"].push_back({{"period", pt.period_s}, {"sa", pt.spectral_acceleration}});
     j["response_spectra"].push_back(c);
   }
+  if (!in.spectrum_combinations.empty()) j["spectrum_combinations"] = spectrumCombinationsJson(in); // omitted when empty
   return j;
 }
 

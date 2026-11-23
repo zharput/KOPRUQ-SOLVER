@@ -672,6 +672,11 @@ void MainWindow::onCompare() {
       specIn >> spectrum;
       kopruq::verification::appendSpectrumCases(results, spectrum);
       appendLog(tr("Spektrum sonuçları karşılaştırmaya eklendi (tepe değerler |KOPRUQ| ile |MIDAS| karşılaştırılır)."), /*Info*/ 0);
+      // Static + spectrum combinations (MIDAS LCOM-GEN with RS terms): static + factor * |spectrum peak|.
+      if (results.contains("spectrum_combinations") && !results.at("spectrum_combinations").empty()) {
+        kopruq::verification::appendSpectrumCombinations(results);
+        appendLog(tr("Statik + spektrum kombinasyonları karşılaştırmaya eklendi (statik + katsayı x |spektrum tepe değeri|)."), /*Info*/ 0);
+      }
     } catch (const std::exception& e) {
       appendLog(tr("Spektrum sonuç dosyası okunamadı (%1): %2").arg(lastSpectrumResultsPath_, QString::fromStdString(e.what())), /*Warning*/ 2);
     }

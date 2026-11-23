@@ -53,6 +53,14 @@ CategoryComparison matchElasticLinks(const nlohmann::json& results, const Refere
 // (and apply no beam-force sign convention). Cases already present by that name are not added twice.
 void appendSpectrumCases(nlohmann::json& results, const nlohmann::json& spectrumResults);
 
+// 2026-11-23. Evaluates results["spectrum_combinations"] (static + response-spectrum combination
+// definitions written by io::writeResults, MIDAS LCOM-GEN with RS terms) and appends one load case
+// per definition: value = sum(factor * static result) + sum(factor * |spectrum peak|) -- the rule
+// read from MIDAS's own results (verification model 100: every displacement, reaction and beam force
+// of EQX/EQY/SXY). Beam forces: |spectrum| is added in MIDAS's internal-force convention. Call after
+// appendSpectrumCases; a definition whose static or spectrum cases are missing is not appended.
+void appendSpectrumCombinations(nlohmann::json& results);
+
 // MIDAS's "Truss Force" export (TYPE=="TRUSS" elements only, see MidasJsonImporter.hpp): a
 // single axial force per element per load case, given as separate "Force-I"/"Force-J" columns
 // in the SAME row (unlike Beam Force's separate-row-per-end "Part" column layout) -- for a

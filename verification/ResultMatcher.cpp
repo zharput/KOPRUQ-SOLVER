@@ -457,6 +457,64 @@ void appendSpectrumCases(Json& results, const Json& spectrumResults) {
   }
 }
 
+void appendSpectrumCombinations(Json& results) {
+  if (!results.contains("spectrum_combinations") || !results.at("spectrum_combinations").is_array()) return;
+  if (!results.contains("load_cases") || !results.at("load_cases").is_array()) results["load_cases"] = Json::array();
+  auto findStatic = [&](const std::string& n) -> const Json* {
+    const Json* lc = findLoadCase(results, n);
+    return (lc && !isPeakMagnitudeCase(lc) && lc->contains("status") && lc->at("status").value("success", false)) ? lc : nullptr;
+  };
+  auto findSpectrum = [&](const std::string& n) -> const Json* {
+    const Json* lc = findLoadCase(results, n + "(RS)");
+    return (lc && isPeakMagnitudeCase(lc)) ? lc : nullptr;
+  };
+  std::vector<Json> added;
+  for (const auto& def : results.at("spectrum_combinations")) {
+    const std::string name = def.value("name", std::string{});
+    if (name.empty() || findLoadCase(results, name)) continue;
+    std::vector<std::pair<const Json*, double>> st, rs;
+    bool complete = true;
+    for (const auto& t : def.value("static_terms", Json::array())) { const Json* lc = findStatic(t.value("case", std::string{})); if (!lc) complete = false; else st.emplace_back(lc, t.value("factor", 0.0)); }
+    for (const auto& t : def.value("spectrum_terms", Json::array())) { const Json* lc = findSpectrum(t.value("spectrum", std::string{})); if (!lc) complete = false; else rs.emplace_back(lc, t.value("factor", 0.0)); }
+    if (!complete || (st.empty() && rs.empty())) continue; // left absent: the matchers report its rows N/A with a diagnostic
+    // id -> entry maps per term
+    auto index = [](const Json* lc, const char* arr) { std::map<long, const Json*> m; if (lc->contains(arr)) for (const auto& x : lc->at(arr)) m[toId(x.at("id").get<double>())] = &x; return m; };
+    std::vector<std::map<long, const Json*>> stN, stE, rsN, rsE;
+    for (const auto& [lc, f] : st) { (void)f; stN.push_back(index(lc, "nodes")); stE.push_back(index(lc, "elements")); }
+    for (const auto& [lc, f] : rs) { (void)f; rsN.push_back(index(lc, "nodes")); rsE.push_back(index(lc, "elements")); }
+    const auto& idsN = !stN.empty() ? stN.front() : rsN.front();
+    const auto& idsE = !stE.empty() ? stE.front() : rsE.front();
+    Json lc = {{"name", name}, {"status", {{"success", true}}}, {"spectrum_combination", true}, {"nodes", Json::array()}, {"elements", Json::array()}};
+    for (const auto& [id, _] : idsN) {
+      (void)_;
+      std::array<double, 6> d{}, r{};
+      bool ok = true;
+      for (std::size_t i = 0; i < st.size() && ok; ++i) { auto it = stN[i].find(id); if (it == stN[i].end()) { ok = false; break; } for (int k = 0; k < 6; ++k) { d[k] += st[i].second * it->second->at("displacement").at(k).get<double>(); r[k] += st[i].second * it->second->at("reaction").at(k).get<double>(); } }
+      for (std::size_t i = 0; i < rs.size() && ok; ++i) { auto it = rsN[i].find(id); if (it == rsN[i].end()) { ok = false; break; } for (int k = 0; k < 6; ++k) { d[k] += rs[i].second * std::abs(it->second->at("displacement").at(k).get<double>()); r[k] += rs[i].second * std::abs(it->second->at("reaction").at(k).get<double>()); } }
+      if (ok) lc["nodes"].push_back({{"id", id}, {"displacement", d}, {"reaction", r}});
+    }
+    for (const auto& [id, _] : idsE) {
+      (void)_;
+      std::array<double, 12> f{};
+      bool ok = true;
+      for (std::size_t i = 0; i < st.size() && ok; ++i) { auto it = stE[i].find(id); if (it == stE[i].end()) { ok = false; break; } for (int k = 0; k < 12; ++k) f[k] += st[i].second * it->second->at("local_end_forces").at(k).get<double>(); }
+      for (std::size_t i = 0; i < rs.size() && ok; ++i) {
+        auto it = rsE[i].find(id); if (it == rsE[i].end()) { ok = false; break; }
+        for (int k = 0; k < 12; ++k) {
+          // |spectrum| is added in MIDAS's internal-force convention: choose the sign so that
+          // toMidasBeamForceConvention(f) gains +|RS| (the static part is converted as usual).
+          const bool isI = k < 6; const std::size_t c = static_cast<std::size_t>(k % 6);
+          const bool flip = isI ? kBeamForceFlipsAtIEnd[c] : !kBeamForceFlipsAtIEnd[c];
+          f[k] += (flip ? -1.0 : 1.0) * rs[i].second * std::abs(it->second->at("local_end_forces").at(k).get<double>());
+        }
+      }
+      if (ok) lc["elements"].push_back({{"id", id}, {"local_end_forces", f}});
+    }
+    added.push_back(std::move(lc));
+  }
+  for (auto& lc : added) results["load_cases"].push_back(std::move(lc));
+}
+
 CategoryStats summarizeCategory(const std::vector<ComparisonRow>& rows) {
   CategoryStats s;
   s.total = static_cast<int>(rows.size());

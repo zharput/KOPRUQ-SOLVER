@@ -79,6 +79,64 @@
       "items": {
         "$ref": "#/$defs/solution"
       }
+    },
+    "spectrum_combinations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "description": "Static + response-spectrum combination: value = sum(static factor * static result) + sum(spectrum factor * |spectrum peak|) (MIDAS LCOM-GEN with RS terms).",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "static_terms": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "case": {
+                  "type": "string"
+                },
+                "factor": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "case",
+                "factor"
+              ],
+              "additionalProperties": false,
+              "description": "Static load case by name."
+            }
+          },
+          "spectrum_terms": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "spectrum": {
+                  "type": "string"
+                },
+                "factor": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "spectrum",
+                "factor"
+              ],
+              "additionalProperties": false,
+              "description": "Response spectrum (response_spectra) by name."
+            }
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "description": "Static + response-spectrum combination definitions copied from the model (present only when the model has any); evaluated by the verification layer."
     }
   },
   "required": [

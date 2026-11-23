@@ -29,7 +29,7 @@ inline constexpr const char* cli_usage =
   "long-standing, independently-verified mass formulation; lumped is a classic translational-\n"
   "only lumped mass (zero rotational mass), added specifically because it reproduces MIDAS NX's\n"
   "own default eigenvalue analysis far more closely on the models it was validated against --\n"
-  "see docs/SOLVER_ROADMAP.md's Phase 7H entry. Not yet supported together with rigid links.\n"
+  "see docs/SOLVER_ROADMAP.md's Phase 7H entry. Works with rigid links (slave masses move to the master).\n"
   "\n"
   "Exit codes: 0 success, 1 analysis failed (results still written),\n"
   "            2 usage error, 3 invalid model, 4 file I/O error.\n";

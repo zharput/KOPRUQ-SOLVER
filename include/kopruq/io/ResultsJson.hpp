@@ -76,6 +76,9 @@ inline json writeResults(const ModelInput& in, const MultiCaseSolution& r, const
   for (std::size_t i = 0; i < r.cases.size(); ++i) j["load_cases"].push_back(solutionJson(in.load_cases.at(i).name, r.cases[i]));
   j["combinations"] = json::array();
   for (std::size_t i = 0; i < r.combinations.size(); ++i) j["combinations"].push_back(solutionJson(in.combinations.at(i).name, r.combinations[i]));
+  // Static + response-spectrum combination DEFINITIONS (2026-11-23, ModelJson.hpp SpectrumCombination);
+  // evaluated by the verification layer once the spectrum results are available. Omitted when empty.
+  if (!in.spectrum_combinations.empty()) j["spectrum_combinations"] = spectrumCombinationsJson(in);
   return j;
 }
 

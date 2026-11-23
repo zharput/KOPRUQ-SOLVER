@@ -9,10 +9,12 @@ import type { StationSet } from '../results/stations';
 import { loadUnitSystem, saveUnitSystem, type UnitSystemId } from '../units/units';
 
 export type Selection = { kind: 'node' | 'element'; id: number } | null;
-export interface TableUi { sorting: { id: string; desc: boolean }[]; filters: Record<string, string>; hidden: string[]; widths: Record<string, number>; selected: (number | string)[]; idQuery: string; showFilters: boolean; endI: boolean; endJ: boolean; selectedOnly: boolean }
-export const defaultTableUi = (): TableUi => ({ sorting: [{ id: 'id', desc: false }], filters: {}, hidden: [], widths: {}, selected: [], idQuery: '', showFilters: false, endI: true, endJ: true, selectedOnly: false });
+export interface TableUi { sorting: { id: string; desc: boolean }[]; filters: Record<string, string>; hidden: string[]; widths: Record<string, number>; selected: (number | string)[]; idQuery: string; showFilters: boolean; endI: boolean; endJ: boolean; selectedOnly: boolean; envMode: 'case' | 'absmax' | 'envelope'; envScope: 'cases' | 'combinations' }
+export const defaultTableUi = (): TableUi => ({ sorting: [{ id: 'id', desc: false }], filters: {}, hidden: [], widths: {}, selected: [], idQuery: '', showFilters: false, endI: true, endJ: true, selectedOnly: false, envMode: 'case', envScope: 'cases' });
+/** Shared immutable default (a fresh object per render would re-create memoised row sets and make the table library re-render forever). */
+export const DEFAULT_TABLE_UI: TableUi = Object.freeze(defaultTableUi()) as TableUi;
 export type CenterTab = '3d' | 'tables';
-export type TableTab = 'Results' | 'Displacements' | 'Reactions' | 'Element Forces' | 'Diagrams' | 'Tables';
+export type TableTab = 'Results' | 'Displacements' | 'Reactions' | 'Element Forces' | 'Diagrams' | 'Tables' | 'Springs';
 export type CameraPreset = 'iso' | 'front' | 'top' | 'side' | 'fit';
 export interface ShowFlags { nodes: boolean; elements: boolean; supports: boolean; links: boolean; solid: boolean }
 

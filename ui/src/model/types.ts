@@ -16,7 +16,7 @@ export interface ModelMaterial { id: number }
 export interface LoadCaseInfo { name: string }
 export interface KopruqModel {
   nodes: ModelNode[]; beams: ModelBeam[]; trusses?: ModelTruss[]; springs?: ModelSpring[]; rigid_links?: ModelRigidLink[];
-  supports: ModelSupport[]; sections: ModelSection[]; materials: ModelMaterial[]; load_cases?: LoadCaseInfo[]; combinations?: { name: string }[];
+  supports: ModelSupport[]; sections: ModelSection[]; materials: ModelMaterial[]; load_cases?: LoadCaseInfo[]; response_spectra?: { name: string; direction?: string; num_modes?: number; interpolation?: string }[]; combinations?: { name: string }[];
 }
 export type Contour = [number, number][]; // [y, z] points in metres, section coordinates, centroid at origin
 export interface SectionOutline { section: number; contours: Contour[] } // contours[0] = outer, others = holes

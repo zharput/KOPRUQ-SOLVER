@@ -1,6 +1,6 @@
 // Pure helpers behind the result tables: row building from result cases, unit-aware columns, filters, id search, TSV.
 // Values stay in solver units in the rows; conversion to the display unit happens in the column accessors only.
-import { type ElemValues, type NodeValues, type ResultCase } from './types';
+import type { ElemValues, ModeRow, NodeValues, ResultCase } from './types';
 import { memberAxesOfBeam } from '../model/geometry';
 import type { ModelView, Vec3 } from '../model/types';
 import { header, type Quantity, toDisplay, type UnitSystemId } from '../units/units';
@@ -70,3 +70,45 @@ export function parseIdQuery(text: string): ((id: number) => boolean) | null {
 
 // ---- copy / export text ----
 export const toTsv = (headers: string[], rows: (number | string)[][]): string => [headers, ...rows.map((r) => r.map(String))].map((r) => r.join('\t')).join('\n');
+
+// ---- envelopes of signed static results ----
+export interface TaggedForceRow extends ForceRow { tag?: string }
+export type EnvelopeMode = 'absmax' | 'envelope';
+/** Absolute maximum (signed value of the largest magnitude) or max/min envelope of every end-force component over the given SIGNED static cases
+ *  (load cases, or combinations -- the caller never mixes in response-spectrum peak magnitudes). Components are enveloped independently, as usual for member forces. */
+export function envelopeRows(view: ModelView, cases: ResultCase[], mode: EnvelopeMode): TaggedForceRow[] {
+  const byId = new Map<number, number[][]>();
+  for (const c of cases) for (const e of c.elements) { const l = byId.get(e.id); if (l) l.push(e.local); else byId.set(e.id, [e.local]); }
+  const pick = (vs: number[][], f: (a: number, b: number) => number) => Array.from({ length: 12 }, (_, k) => vs.map((v) => v[k]).reduce(f));
+  const out: TaggedForceRow[] = [];
+  for (const [id, vs] of byId) {
+    const mk = (local: number[], tag?: string): TaggedForceRow => ({ ...buildForceRows(view, [{ id, local }])[0], tag });
+    if (mode === 'absmax') out.push(mk(pick(vs, (a, b) => (Math.abs(b) > Math.abs(a) ? b : a))));
+    else { out.push(mk(pick(vs, (a, b) => Math.max(a, b)), 'Max')); out.push(mk(pick(vs, (a, b) => Math.min(a, b)), 'Min')); }
+  }
+  return out;
+}
+export const forceColumns = (withTag: boolean): Col<TaggedForceRow>[] => (withTag
+  ? [FORCE_COLUMNS[0], textCol<TaggedForceRow>('tag', 'Value', (r) => r.tag ?? '', { width: 62 }), ...FORCE_COLUMNS.slice(1)] : FORCE_COLUMNS) as Col<TaggedForceRow>[];
+
+// ---- modal / spectrum / link tables ----
+export const modalColumns = (spectrum: boolean): Col<ModeRow>[] => [
+  numCol<ModeRow>('id', 'Mode', 'none', (m) => m.index + (spectrum ? 1 : 0), { width: 62 }),
+  numCol<ModeRow>('f', 'Frequency (Hz)', 'none', (m) => m.frequency, { width: 120 }), numCol<ModeRow>('T', 'Period (s)', 'none', (m) => m.period, { width: 110 }),
+  numCol<ModeRow>('lambda', 'Eigenvalue ω² (rad²/s²)', 'none', (m) => m.omega * m.omega, { width: 160 }),
+  ...(spectrum ? [numCol<ModeRow>('ratio', 'Modal participation (mass ratio)', 'none', (m) => m.participation ?? NaN, { width: 190 }), numCol<ModeRow>('meff', 'Effective modal mass', 'mass', (m) => m.effectiveMass ?? NaN, { width: 230 })] : []),
+];
+export interface SpectrumRow { id: number; name: string; direction: string; modes: number; totalMass: number; ratio: number }
+export const SPECTRUM_COLUMNS: Col<SpectrumRow>[] = [
+  numCol<SpectrumRow>('id', 'No.', 'none', (r) => r.id, { width: 50 }), textCol<SpectrumRow>('name', 'Analysis case', (r) => r.name, { width: 150 }), textCol<SpectrumRow>('dir', 'Direction', (r) => r.direction, { width: 90 }),
+  numCol<SpectrumRow>('modes', 'Modes', 'none', (r) => r.modes, { width: 70 }), numCol<SpectrumRow>('mass', 'Total mass', 'mass', (r) => r.totalMass, { width: 140 }), numCol<SpectrumRow>('ratio', 'Total mass participation', 'none', (r) => r.ratio, { width: 170 }),
+];
+/** Direction comes from the model's own response_spectra entry of the same name; the modal combination method (SRSS/CQC) is not written to any result or model file, so it is not shown. */
+export const spectrumRows = (view: ModelView | null, cases: ResultCase[]): SpectrumRow[] => cases.filter((c) => c.kind === 'spectrum').map((c, i) => ({
+  id: i + 1, name: c.name, direction: (view?.model.response_spectra?.find((r) => r.name === c.name)?.direction ?? '—').toUpperCase(), modes: c.modeRows?.length ?? 0, totalMass: c.totalMass ?? NaN, ratio: c.massRatio ?? NaN }));
+const LF = ['Fx', 'Fy', 'Fz', 'Mx', 'My', 'Mz'] as const;
+export const LINK_COLUMNS: Col<ForceRow>[] = [
+  numCol<ForceRow>('id', 'Link ID', 'none', (r) => r.id, { width: 78 }),
+  ...(['i', 'j'] as const).flatMap((end) => LF.map((n, k) => numCol<ForceRow>(`${end}_${n}`, n, k < 3 ? 'force' : 'moment', (r) => r[end][k], { group: end === 'i' ? 'End-I' : 'End-J', width: 96 }))),
+];
+export const linkRows = (springs: { id: number; local: number[] }[]): ForceRow[] => springs.map((e) => ({ id: e.id, type: 'Link', section: NaN, length: NaN, i: e.local.slice(0, 6), j: e.local.slice(6, 12) }));

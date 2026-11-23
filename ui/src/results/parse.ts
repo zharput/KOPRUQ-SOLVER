@@ -1,4 +1,4 @@
-import type { ElemValues, NodeValues, ResultCase, ResultSet } from './types';
+import type { ElemValues, ModeRow, NodeValues, ResultCase, ResultSet } from './types';
 
 const num = (a: unknown, n: number): number[] => (Array.isArray(a) && a.length === n && a.every((x) => typeof x === 'number') ? (a as number[]) : new Array(n).fill(NaN));
 
@@ -15,7 +15,8 @@ export function parseResults(text: string): ResultSet {
         if (!c.status?.success) { failed.push({ name: c.name, message: c.status?.message ?? 'failed' }); continue; }
         cases.push({ name: c.name, kind,
           nodes: (c.nodes ?? []).map((n: any): NodeValues => ({ id: n.id, disp: num(n.displacement, 6), reac: num(n.reaction, 6), reacLocal: n.reaction_local ? num(n.reaction_local, 6) : undefined, restrained: n.restrained })),
-          elements: (c.elements ?? []).map((e: any): ElemValues => ({ id: e.id, local: num(e.local_end_forces, 12) })) });
+          elements: (c.elements ?? []).map((e: any): ElemValues => ({ id: e.id, local: num(e.local_end_forces, 12) })),
+          springs: Array.isArray(c.springs) ? c.springs.map((e: any): ElemValues => ({ id: e.id, local: num(e.local_end_forces, 12) })) : undefined });
       }
     return { kind: 'solve', cases, modes: [], failed, solverVersion: version };
   }
@@ -32,7 +33,8 @@ export function parseResults(text: string): ResultSet {
     for (const c of j.cases ?? []) {
       if (!c.status?.success) { failed.push({ name: c.name, message: c.status?.message ?? 'failed' }); continue; }
       totalMass = c.total_mass;
-      cases.push({ name: c.name, kind: 'spectrum', peak: true, note: 'Combined peak values (SRSS/CQC magnitudes): not a signed field, deformed shape is a magnitude envelope',
+      const modeRows: ModeRow[] = (c.modes ?? []).map((m: any, i: number): ModeRow => ({ index: i, frequency: m.frequency_hz, omega: 2 * Math.PI * m.frequency_hz, period: m.period_s, effectiveMass: m.effective_mass, participation: m.mass_participation_ratio }));
+      cases.push({ name: c.name, kind: 'spectrum', peak: true, modeRows, totalMass: c.total_mass, massRatio: c.total_mass_participation_ratio, note: 'Combined peak values (SRSS/CQC magnitudes): not a signed field, deformed shape is a magnitude envelope',
         nodes: (c.combined_nodes ?? []).map((n: any): NodeValues => ({ id: n.id, disp: num(n.displacement, 6), reac: num(n.reaction, 6) })),
         elements: (c.combined_elements ?? []).map((e: any): ElemValues => ({ id: e.id, local: num(e.local_end_forces, 12) })) });
       if (!modes.length) (c.modes ?? []).forEach((m: any, i: number) => modes.push({ index: i, frequency: m.frequency_hz, omega: 2 * Math.PI * m.frequency_hz, period: m.period_s, effectiveMass: m.effective_mass, participation: m.mass_participation_ratio }));

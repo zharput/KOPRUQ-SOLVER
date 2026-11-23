@@ -9,7 +9,7 @@ export const UNIT_SYSTEMS: UnitSystemId[] = ['kN.m', 'Ton.m', 'N.mm', 'kg.cm'];
 export const DEFAULT_UNIT_SYSTEM: UnitSystemId = 'kN.m';
 
 /** Physical dimension of a quantity. `none` (strains, ratios, radians, counts, ids) is never converted. */
-export type Quantity = 'force' | 'length' | 'moment' | 'stress' | 'distLoad' | 'area' | 'inertia' | 'unitWeight' | 'none';
+export type Quantity = 'force' | 'length' | 'moment' | 'stress' | 'distLoad' | 'area' | 'inertia' | 'unitWeight' | 'mass' | 'none';
 
 export const KGF_IN_N = 9.80665;
 const KN_PER_TF = KGF_IN_N; // 1 tf = 1000 kgf = 9.80665 kN
@@ -24,9 +24,9 @@ const BASE: Record<UnitSystemId, Base> = {
   'kg.cm': { forceKn: KN_PER_KGF, lengthM: 1e-2, force: 'kgf', length: 'cm' },
 };
 
-// exponent of (force, length) in each quantity
+// exponent of (force, length) in each quantity; mass = force * s^2 / length (the solver's mass unit kN*s2/m is the tonne; time is in seconds in every system)
 const DIM: Record<Quantity, [number, number]> = {
-  force: [1, 0], length: [0, 1], moment: [1, 1], stress: [1, -2], distLoad: [1, -1], area: [0, 2], inertia: [0, 4], unitWeight: [1, -3], none: [0, 0],
+  force: [1, 0], length: [0, 1], moment: [1, 1], stress: [1, -2], distLoad: [1, -1], area: [0, 2], inertia: [0, 4], unitWeight: [1, -3], mass: [1, -1], none: [0, 0],
 };
 
 /** Multiplier turning a solver value (kN, m) into the display unit of `system`. */
@@ -44,7 +44,7 @@ export function label(q: Quantity, system: UnitSystemId): string {
   const { force: f, length: l } = BASE[system];
   switch (q) {
     case 'force': return f; case 'length': return l; case 'moment': return `${f}·${l}`; case 'stress': return `${f}/${l}${sup(2)}`;
-    case 'distLoad': return `${f}/${l}`; case 'area': return `${l}${sup(2)}`; case 'inertia': return `${l}${sup(4)}`; case 'unitWeight': return `${f}/${l}${sup(3)}`;
+    case 'distLoad': return `${f}/${l}`; case 'area': return `${l}${sup(2)}`; case 'inertia': return `${l}${sup(4)}`; case 'unitWeight': return `${f}/${l}${sup(3)}`; case 'mass': return `${f}·s²/${l}`;
     default: return '';
   }
 }

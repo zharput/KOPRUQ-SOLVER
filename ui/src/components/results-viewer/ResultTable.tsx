@@ -1,7 +1,9 @@
 import { type ColumnDef, type ColumnFiltersState, flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel, type SortingState, useReactTable, type VisibilityState } from '@tanstack/react-table';
 import { type ReactNode, useMemo, useRef, useState } from 'react';
 import { type Col, colHeader, parseFilter, parseIdQuery, toTsv } from '../../results/tableModel';
-import { defaultTableUi, useUi } from '../../state/store';
+import { DEFAULT_TABLE_UI, useUi } from '../../state/store';
+
+const NO_GROUPS: string[] = [];
 import { fmt } from './DataTable';
 
 const ROW_H = 22, OVERSCAN = 12, SEL_W = 30;
@@ -9,17 +11,17 @@ type Id = number | string;
 
 /** Engineering result table: group headers, unit-aware headers, numeric sort, per-column filters ("> 5", "10..20", text), id search,
  *  multi-row selection, column visibility and resizing, sticky headers, windowed rows, copy. All view state lives in the store (per `tableKey`). */
-export function ResultTable<T>({ tableKey, rows, columns, getId, testId, hiddenGroups = [], onRowClick, footer }: {
-  tableKey: string; rows: T[]; columns: Col<T>[]; getId: (r: T) => Id; testId?: string; hiddenGroups?: string[]; onRowClick?: (r: T) => void; footer?: ReactNode;
+export function ResultTable<T>({ tableKey, rows, columns, getId, searchId, testId, hiddenGroups = NO_GROUPS, onRowClick, footer }: {
+  tableKey: string; rows: T[]; columns: Col<T>[]; getId: (r: T) => Id; searchId?: (r: T) => number; testId?: string; hiddenGroups?: string[]; onRowClick?: (r: T) => void; footer?: ReactNode;
 }) {
-  const unit = useUi((s) => s.unitSystem); const ui = useUi((s) => s.tableUi[tableKey]) ?? defaultTableUi(); const patch = useUi((s) => s.patchTableUi);
+  const unit = useUi((s) => s.unitSystem); const ui = useUi((s) => s.tableUi[tableKey]) ?? DEFAULT_TABLE_UI; const patch = useUi((s) => s.patchTableUi);
   const [menu, setMenu] = useState(false); const [top, setTop] = useState(0); const box = useRef<HTMLDivElement>(null);
   const selected = useMemo(() => new Set<Id>(ui.selected), [ui.selected]);
 
   const idPred = useMemo(() => parseIdQuery(ui.idQuery), [ui.idQuery]);
   const data = useMemo(() => rows.filter((r) => {
-    const id = getId(r); if (idPred && !(typeof id === 'number' && idPred(id))) return false; if (ui.selectedOnly && !selected.has(id)) return false; return true;
-  }), [rows, idPred, ui.selectedOnly, selected, getId]);
+    const id = getId(r); const sid = searchId ? searchId(r) : id; if (idPred && !(typeof sid === 'number' && idPred(sid))) return false; if (ui.selectedOnly && !selected.has(id)) return false; return true;
+  }), [rows, idPred, ui.selectedOnly, selected, getId, searchId, unit]); // `unit` in the deps: a new data array makes the table drop its per-row value cache (cells are computed from the unit)
 
   const defs = useMemo<ColumnDef<T, any>[]>(() => { // eslint-disable-line
     const leaf = (c: Col<T>): ColumnDef<T, any> => ({ id: c.id, header: colHeader(c, unit), accessorFn: (r) => c.get(r, unit), size: ui.widths[c.id] ?? c.width ?? 96, minSize: 40, sortDescFirst: false,
@@ -34,10 +36,10 @@ export function ResultTable<T>({ tableKey, rows, columns, getId, testId, hiddenG
   }, [columns, unit, ui.widths]);
 
   const visibility = useMemo<VisibilityState>(() => { const v: VisibilityState = {}; for (const c of columns) v[c.id] = !ui.hidden.includes(c.id) && !(c.group && hiddenGroups.includes(c.group)); return v; }, [columns, ui.hidden, hiddenGroups]);
-  const sorting: SortingState = ui.sorting; const filters: ColumnFiltersState = Object.entries(ui.filters).filter(([, v]) => v.trim()).map(([id, value]) => ({ id, value }));
+  const sorting: SortingState = ui.sorting; const filters = useMemo<ColumnFiltersState>(() => Object.entries(ui.filters).filter(([, v]) => v.trim()).map(([id, value]) => ({ id, value })), [ui.filters]);
 
   const table = useReactTable({
-    data, columns: defs, state: { sorting, columnFilters: filters, columnVisibility: visibility }, columnResizeMode: 'onChange', enableColumnResizing: true,
+    data, columns: defs, state: { sorting, columnFilters: filters, columnVisibility: visibility }, columnResizeMode: 'onChange', enableColumnResizing: true, autoResetPageIndex: false,
     onSortingChange: (u) => patch(tableKey, { sorting: typeof u === 'function' ? u(sorting) : u }),
     onColumnSizingChange: (u) => { const cur = Object.fromEntries(table.getAllLeafColumns().map((c) => [c.id, c.getSize()])); const nx = typeof u === 'function' ? u(cur) : u; patch(tableKey, { widths: { ...ui.widths, ...nx } }); },
     getCoreRowModel: getCoreRowModel(), getSortedRowModel: getSortedRowModel(), getFilteredRowModel: getFilteredRowModel(), getRowId: (r) => String(getId(r)),

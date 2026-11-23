@@ -3182,3 +3182,11 @@ Displacements, Reactions with unit-aware headers; sortable (numeric), per-column
 sticky grouped headers, windowed rows, copy as TSV. Table view state (sort, filters, selection, widths) is kept in the store across tab switches. Values are converted only for display; solver
 sign conventions untouched. Section column shows the section id (the model view carries no section names). `npm test` 74/74; verified in headless Edge on model 100 (94 members).
 Not yet: modal/spectrum/spring tables, Absolute Max/Envelope, CSV/Excel export, viewer/Explorer synchronisation (Phases 5-6).
+
+## GUI V2 Phase 5 -- advanced result tables (2026-11-23)
+ui/: Modal table (mode, frequency, period, eigenvalue = omega^2; participation ratio and effective modal mass only where the result file has them, i.e. spectrum cases), spectrum case table
+(direction taken from the model's own response_spectra entry; the modal combination method SRSS/CQC is NOT recorded in any result or model file and is therefore not shown), per-case
+participation table, Spring / Link Results (link-local end forces; tab disabled when the analysis has none), Absolute Maximum and Envelope (max/min) of member end forces over signed static load
+cases or over combinations (never mixed with spectrum peak magnitudes; disabled for spectrum/modal results). New display quantity "mass" (kN s2/m = tonne) in the unit system.
+Bug found by the new tests: Math.max/min passed directly to reduce returned NaN. A table re-render loop (new filter array every render) and a stale per-row value cache on unit change were fixed.
+`npm test` 85/85; model 100 verified in headless Edge (188 envelope rows over 2 combinations, spectrum SPX/SPY directions X/Y, 20 modes). Not yet: CSV/XLSX export and viewer/Explorer synchronisation (Phase 6).

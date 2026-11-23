@@ -124,3 +124,4 @@ code{font-family:var(--mono);color:#9fc5ee}
 .ropts{display:flex;gap:16px;align-items:center;padding:4px 8px;border-top:1px solid var(--line);font-size:12px;flex-wrap:wrap}.ropts label{display:flex;gap:4px;align-items:center;white-space:nowrap}
 .tfilters{display:flex;gap:14px;align-items:center;padding:5px 10px;border-bottom:1px solid var(--line);flex-wrap:wrap;font-size:12px}
 .tfilters select{background:var(--bg-2);color:var(--text);border:1px solid var(--line);padding:2px 4px}.tfilters label{display:flex;gap:6px;align-items:center}
+.ropts select{background:var(--bg-2);color:var(--text);border:1px solid var(--line);padding:1px 4px}

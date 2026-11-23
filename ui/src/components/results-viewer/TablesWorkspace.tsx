@@ -6,8 +6,17 @@ import { ResultsViewer } from './ResultsViewer';
 export const CATEGORIES: { tab: TableTab | null; label: string; why?: string }[] = [
   { tab: 'Element Forces', label: 'Element Forces' }, { tab: 'Displacements', label: 'Displacements' }, { tab: 'Reactions', label: 'Reactions' },
   { tab: null, label: 'Element Stresses', why: 'The result files carry no stresses (no section moduli in the model); not available' },
-  { tab: 'Diagrams', label: 'Diagrams' }, { tab: 'Tables', label: 'Modal / Spectrum' }, { tab: 'Results', label: 'Summary' },
+  { tab: 'Springs', label: 'Spring / Link Results' }, { tab: 'Diagrams', label: 'Diagrams' }, { tab: 'Tables', label: 'Modal / Spectrum' }, { tab: 'Results', label: 'Summary' },
 ];
+
+/** Why a category cannot be shown for the current results (undefined = available). Nothing is shown that the result files do not contain. */
+function unavailable(tab: TableTab | null, results: ReturnType<typeof useUi.getState>['results']): string | undefined {
+  if (!results || !tab) return undefined;
+  if (tab === 'Springs' && !results.cases.some((c) => c.springs?.length)) return 'No elastic-link results in this analysis';
+  if (tab === 'Element Forces' && results.kind === 'modal') return 'Mode shapes carry no member forces';
+  if (tab === 'Reactions' && results.kind === 'modal') return 'Mode shapes carry no reactions';
+  return undefined;
+}
 
 /** Top filters: Load Case, Load Combination, Result Type, Unit System. One case is active at a time (the viewer shows the same one). */
 function Filters() {
@@ -25,7 +34,7 @@ function Filters() {
           {active?.kind !== 'combination' && <option value="">{combos.length ? '—' : 'none defined'}</option>}{combos.map(({ c, i }) => <option key={i} value={i}>{c.name}</option>)}</select></label>
       <label>Result Type
         <select aria-label="Result type" value={tableTab} onChange={(e) => setTableTab(e.target.value as TableTab)}>
-          {CATEGORIES.map((c) => <option key={c.label} value={c.tab ?? ''} disabled={!c.tab} title={c.why}>{c.label}</option>)}</select></label>
+          {CATEGORIES.map((c) => <option key={c.label} value={c.tab ?? ''} disabled={!c.tab || !!unavailable(c.tab, results)} title={c.why ?? unavailable(c.tab, results)}>{c.label}</option>)}</select></label>
       <label>Unit System
         <select aria-label="Unit system" value={unitSystem} onChange={(e) => setUnitSystem(e.target.value as UnitSystemId)}>{UNIT_SYSTEMS.map((u) => <option key={u} value={u}>{u}</option>)}</select></label>
       {results && results.failed.length > 0 && <span className="warn" role="status">{results.failed.length} case(s) failed and are not listed: {results.failed.map((f) => `${f.name} (${f.message})`).join('; ')}</span>}
@@ -36,12 +45,12 @@ function Filters() {
 
 /** Centre-workspace result tables: filters on top, category tabs, result views (same store state as the 3D viewer; nothing is lost when switching). */
 export function TablesWorkspace() {
-  const { tableTab, setTableTab } = useUi();
+  const { tableTab, setTableTab, results } = useUi();
   return (
     <div className="tablesws" data-testid="tables-workspace">
       <Filters />
       <div className="subtabs" role="tablist" aria-label="Result categories">
-        {CATEGORIES.map((c) => <button key={c.label} role="tab" className={`tab${c.tab === tableTab ? ' active' : ''}`} aria-selected={c.tab === tableTab} disabled={!c.tab} title={c.why} onClick={() => c.tab && setTableTab(c.tab)}>{c.label}</button>)}
+        {CATEGORIES.map((c) => <button key={c.label} role="tab" className={`tab${c.tab === tableTab ? ' active' : ''}`} aria-selected={c.tab === tableTab} disabled={!c.tab || !!unavailable(c.tab, results)} title={c.why ?? unavailable(c.tab, results)} onClick={() => c.tab && setTableTab(c.tab)}>{c.label}</button>)}
       </div>
       <div className="tbody"><ResultsViewer tab={tableTab} /></div>
     </div>

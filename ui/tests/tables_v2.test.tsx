@@ -58,7 +58,7 @@ describe('Tables workspace', () => {
     fireEvent.change(screen.getByLabelText('Search by ID'), { target: { value: '5-9' } }); expect(screen.getByTestId('tbl-forces').getAttribute('data-rows')).toBe('1');
     fireEvent.click(screen.getByRole('button', { name: 'Filters' })); fireEvent.change(screen.getByLabelText('Filter length'), { target: { value: '>5' } }); expect(screen.getByTestId('tbl-forces').getAttribute('data-rows')).toBe('0');
     fireEvent.change(screen.getByLabelText('Filter length'), { target: { value: '3..5' } }); expect(screen.getByTestId('tbl-forces').getAttribute('data-rows')).toBe('1');
-    fireEvent.click(screen.getByLabelText('Select 7')); expect(useUi.getState().tableUi.forces.selected).toEqual([7]);
+    fireEvent.click(screen.getByLabelText('Select 7')); expect(useUi.getState().tableUi['forces-case'].selected).toEqual([7]);
     fireEvent.click(screen.getByRole('tab', { name: 'Displacements' })); fireEvent.click(screen.getByRole('tab', { name: 'Element Forces' }));
     expect((screen.getByLabelText('Search by ID') as HTMLInputElement).value).toBe('5-9'); expect((screen.getByLabelText('Select 7') as HTMLInputElement).checked).toBe(true);
     fireEvent.click(screen.getByLabelText('Show selected elements only')); expect(screen.getByTestId('tbl-forces').getAttribute('data-rows')).toBe('1');

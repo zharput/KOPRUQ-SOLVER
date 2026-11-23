@@ -1,15 +1,14 @@
-import type { ColumnDef } from '@tanstack/react-table';
 import { useMemo } from 'react';
-import type { ModeRow, ResultCase } from '../../results/types';
-import { defaultTableUi, type TableTab, useUi } from '../../state/store';
-import { DataTable, fmt } from './DataTable';
+import type { ResultCase } from '../../results/types';
+import { DEFAULT_TABLE_UI, type TableTab, useUi } from '../../state/store';
 import { ResultTable } from './ResultTable';
-import { buildForceRows, DISP_COLUMNS, FORCE_COLUMNS, reactionColumns, reactionRows } from '../../results/tableModel';
+import { buildForceRows, DISP_COLUMNS, envelopeRows, forceColumns, LINK_COLUMNS, linkRows, modalColumns, reactionColumns, reactionRows, SPECTRUM_COLUMNS, spectrumRows, type TaggedForceRow } from '../../results/tableModel';
 import { ForceDiagram } from './ForceDiagram';
 
-const num = <T,>(key: string, get: (r: T) => number): ColumnDef<T, number> => ({ id: key, header: key, accessorFn: get, cell: (c) => fmt(c.getValue()) });
-
+const NO_MODES: never[] = [];
 const idOf = (r: { id: number }) => r.id;
+const forceId = (r: TaggedForceRow) => (r.tag ? `${r.id}-${r.tag}` : r.id);
+const modeId = (m: { index: number }) => m.index;
 
 function Displacements({ c }: { c: ResultCase }) {
   return <ResultTable tableKey="disp" rows={c.nodes} columns={DISP_COLUMNS} getId={idOf} testId="tbl-disp" />;
@@ -20,25 +19,43 @@ function Reactions({ c }: { c: ResultCase }) {
   return <ResultTable tableKey="reac" rows={rows} columns={cols} getId={idOf} testId="tbl-reac" />;
 }
 function Forces({ c }: { c: ResultCase }) {
-  const view = useUi((s) => s.view); const ui = useUi((s) => s.tableUi.forces) ?? defaultTableUi(); const patch = useUi((s) => s.patchTableUi);
-  const rows = useMemo(() => (view ? buildForceRows(view, c.elements) : []), [view, c]);
+  const view = useUi((s) => s.view); const results = useUi((s) => s.results)!; const ui = useUi((s) => s.tableUi.forces) ?? DEFAULT_TABLE_UI; const patch = useUi((s) => s.patchTableUi);
+  const signed = results.kind === 'solve';                                   // spectrum peaks are magnitudes, mode shapes carry no forces: no envelopes there
+  const pool = useMemo(() => results.cases.filter((x) => x.kind === (ui.envScope === 'cases' ? 'load case' : 'combination')), [results, ui.envScope]);
+  const mode = signed && ui.envMode !== 'case' && pool.length ? ui.envMode : 'case';
+  const rows = useMemo<TaggedForceRow[]>(() => (!view ? [] : mode === 'case' ? buildForceRows(view, c.elements) : envelopeRows(view, pool, mode)), [view, c, mode, pool]);
+  const hidden = useMemo(() => [...(ui.endI ? [] : ['End-I']), ...(ui.endJ ? [] : ['End-J'])], [ui.endI, ui.endJ]);
+  const cols = useMemo(() => forceColumns(mode === 'envelope'), [mode]); const tui = useUi((st) => st.tableUi[`forces-${mode}`]) ?? DEFAULT_TABLE_UI;
   if (!c.elements.length) return <div className="empty">This case has no element forces.</div>;
-  const hidden = [...(ui.endI ? [] : ['End-I']), ...(ui.endJ ? [] : ['End-J'])];
-  return <ResultTable tableKey="forces" rows={rows} columns={FORCE_COLUMNS} getId={idOf} hiddenGroups={hidden} testId="tbl-forces" footer={
+  const why = !signed ? 'Only for Linear Static results (signed load cases / combinations)' : undefined;
+  return <ResultTable tableKey={`forces-${mode}`} rows={rows} columns={cols} getId={forceId} searchId={idOf} hiddenGroups={hidden} testId="tbl-forces" footer={
     <div className="ropts" aria-label="Result options">
       <b>Result Options</b>
       <label><input type="checkbox" checked={ui.endI} onChange={(e) => patch('forces', { endI: e.target.checked })} />Show End-I</label>
       <label><input type="checkbox" checked={ui.endJ} onChange={(e) => patch('forces', { endJ: e.target.checked })} />Show End-J</label>
-      <label><input type="checkbox" checked={ui.selectedOnly} onChange={(e) => patch('forces', { selectedOnly: e.target.checked })} />Show selected elements only</label>
-      <span className="muted">Solver local axes; end forces = forces exerted by the nodes on the element ends (no sign change).</span>
+      <label><input type="checkbox" checked={tui.selectedOnly} onChange={(e) => patch(`forces-${mode}`, { selectedOnly: e.target.checked })} />Show selected elements only</label>
+      <label title={why}><input type="radio" name="envmode" disabled={!signed} checked={mode === 'case'} onChange={() => patch('forces', { envMode: 'case' })} />Selected case</label>
+      <label title={why}><input type="radio" name="envmode" disabled={!signed || !pool.length} checked={mode === 'absmax'} onChange={() => patch('forces', { envMode: 'absmax' })} />Absolute maximum</label>
+      <label title={why}><input type="radio" name="envmode" disabled={!signed || !pool.length} checked={mode === 'envelope'} onChange={() => patch('forces', { envMode: 'envelope' })} />Envelope (max / min)</label>
+      {signed && <label>over <select aria-label="Envelope scope" value={ui.envScope} onChange={(e) => patch('forces', { envScope: e.target.value as 'cases' | 'combinations' })}><option value="cases">load cases</option><option value="combinations">combinations</option></select></label>}
+      <span className="muted">{mode === 'case' ? 'Solver local axes; end forces = forces exerted by the nodes on the element ends (no sign change).' : `Per component over ${pool.length} signed ${ui.envScope === 'cases' ? 'load case(s)' : 'combination(s)'}; the result type of the other group is never mixed in.`}</span>
     </div>} />;
 }
-function Modes() {
-  const results = useUi((s) => s.results)!;
-  const hasMass = results.modes.some((m) => m.effectiveMass !== undefined);
-  const cols = useMemo<ColumnDef<ModeRow, any>[]>(() => [num<ModeRow>('Mode', (m) => m.index + (results.kind === 'modal' ? 0 : 1)), num<ModeRow>('f (Hz)', (m) => m.frequency), num<ModeRow>('ω (rad/s)', (m) => m.omega), num<ModeRow>('T (s)', (m) => m.period),
-    ...(hasMass ? [num<ModeRow>('Eff. mass', (m) => m.effectiveMass ?? NaN), num<ModeRow>('Mass ratio', (m) => m.participation ?? NaN)] : [])], [results, hasMass]); // eslint-disable-line
-  return <>{results.totalMass !== undefined && <div className="muted pad">Total mass {fmt(results.totalMass)}</div>}<DataTable data={results.modes} columns={cols} testId="tbl-modes" /></>;
+function Springs({ c }: { c: ResultCase }) {
+  const rows = useMemo(() => linkRows(c.springs ?? []), [c]);
+  if (!c.springs?.length) return <div className="empty">This case has no elastic-link results.</div>;
+  return <><div className="muted pad">Forces exerted by the nodes on the link, in the link's own axes (SpringLink.hpp); not converted.</div><ResultTable tableKey="links" rows={rows} columns={LINK_COLUMNS} getId={idOf} testId="tbl-links" /></>;
+}
+function Modes({ c }: { c: ResultCase }) {
+  const view = useUi((s) => s.view); const results = useUi((s) => s.results)!;
+  const spectrum = results.kind === 'spectrum'; const rows = spectrum ? (c.modeRows ?? NO_MODES) : results.modes;
+  const cols = useMemo(() => modalColumns(spectrum), [spectrum]); const sp = useMemo(() => spectrumRows(view, results.cases), [view, results]);
+  return <div className="resbox">
+    {spectrum && <><div className="muted pad">Response-spectrum cases (direction from the model's own spectrum definition; the modal combination method is not recorded in any result or model file, so it is not shown).</div>
+      <div style={{ height: 150, display: 'flex', flex: '0 0 auto' }}><ResultTable tableKey="spcases" rows={sp} columns={SPECTRUM_COLUMNS} getId={idOf} testId="tbl-spectra" /></div>
+      <div className="muted pad">Modes of the selected case: <b>{c.name}</b></div></>}
+    <ResultTable tableKey={spectrum ? 'modes-sp' : 'modes'} rows={rows} columns={cols} getId={modeId} testId="tbl-modes" />
+  </div>;
 }
 function Summary() {
   const { results, run } = useUi(); const r = results!;
@@ -56,5 +73,5 @@ export function ResultsViewer({ tab }: { tab: TableTab }) {
   const c = results.cases[Math.min(resultView.caseIndex, results.cases.length - 1)];
   return <div className="resbox">
     {tab === 'Results' ? <Summary /> : tab === 'Displacements' ? <Displacements c={c} /> : tab === 'Reactions' ? <Reactions c={c} /> : tab === 'Element Forces' ? <Forces c={c} />
-      : results.modes.length ? <Modes /> : <div className="empty">No modal table for this analysis.</div>}</div>;
+      : tab === 'Springs' ? <Springs c={c} /> : results.modes.length || c.modeRows?.length ? <Modes c={c} /> : <div className="empty">No modal table for this analysis.</div>}</div>;
 }

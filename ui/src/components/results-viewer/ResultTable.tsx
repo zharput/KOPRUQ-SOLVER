@@ -1,0 +1,103 @@
+import { type ColumnDef, type ColumnFiltersState, flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel, type SortingState, useReactTable, type VisibilityState } from '@tanstack/react-table';
+import { type ReactNode, useMemo, useRef, useState } from 'react';
+import { type Col, colHeader, parseFilter, parseIdQuery, toTsv } from '../../results/tableModel';
+import { defaultTableUi, useUi } from '../../state/store';
+import { fmt } from './DataTable';
+
+const ROW_H = 22, OVERSCAN = 12, SEL_W = 30;
+type Id = number | string;
+
+/** Engineering result table: group headers, unit-aware headers, numeric sort, per-column filters ("> 5", "10..20", text), id search,
+ *  multi-row selection, column visibility and resizing, sticky headers, windowed rows, copy. All view state lives in the store (per `tableKey`). */
+export function ResultTable<T>({ tableKey, rows, columns, getId, testId, hiddenGroups = [], onRowClick, footer }: {
+  tableKey: string; rows: T[]; columns: Col<T>[]; getId: (r: T) => Id; testId?: string; hiddenGroups?: string[]; onRowClick?: (r: T) => void; footer?: ReactNode;
+}) {
+  const unit = useUi((s) => s.unitSystem); const ui = useUi((s) => s.tableUi[tableKey]) ?? defaultTableUi(); const patch = useUi((s) => s.patchTableUi);
+  const [menu, setMenu] = useState(false); const [top, setTop] = useState(0); const box = useRef<HTMLDivElement>(null);
+  const selected = useMemo(() => new Set<Id>(ui.selected), [ui.selected]);
+
+  const idPred = useMemo(() => parseIdQuery(ui.idQuery), [ui.idQuery]);
+  const data = useMemo(() => rows.filter((r) => {
+    const id = getId(r); if (idPred && !(typeof id === 'number' && idPred(id))) return false; if (ui.selectedOnly && !selected.has(id)) return false; return true;
+  }), [rows, idPred, ui.selectedOnly, selected, getId]);
+
+  const defs = useMemo<ColumnDef<T, any>[]>(() => { // eslint-disable-line
+    const leaf = (c: Col<T>): ColumnDef<T, any> => ({ id: c.id, header: colHeader(c, unit), accessorFn: (r) => c.get(r, unit), size: ui.widths[c.id] ?? c.width ?? 96, minSize: 40, sortDescFirst: false,
+      sortingFn: c.text ? 'alphanumeric' : 'basic', filterFn: (row, id, value: string) => { const p = parseFilter(value); return p ? p(row.getValue(id)) : true; }, meta: c });
+    const out: ColumnDef<T, any>[] = []; // consecutive columns with the same `group` form one group header
+    for (const c of columns) {
+      const last = out[out.length - 1] as { header?: string; columns?: ColumnDef<T, any>[] } | undefined;
+      if (c.group) { if (last && last.header === c.group && last.columns) last.columns.push(leaf(c)); else out.push({ id: `g_${c.group}`, header: c.group, columns: [leaf(c)] } as ColumnDef<T, any>); }
+      else out.push(leaf(c));
+    }
+    return out;
+  }, [columns, unit, ui.widths]);
+
+  const visibility = useMemo<VisibilityState>(() => { const v: VisibilityState = {}; for (const c of columns) v[c.id] = !ui.hidden.includes(c.id) && !(c.group && hiddenGroups.includes(c.group)); return v; }, [columns, ui.hidden, hiddenGroups]);
+  const sorting: SortingState = ui.sorting; const filters: ColumnFiltersState = Object.entries(ui.filters).filter(([, v]) => v.trim()).map(([id, value]) => ({ id, value }));
+
+  const table = useReactTable({
+    data, columns: defs, state: { sorting, columnFilters: filters, columnVisibility: visibility }, columnResizeMode: 'onChange', enableColumnResizing: true,
+    onSortingChange: (u) => patch(tableKey, { sorting: typeof u === 'function' ? u(sorting) : u }),
+    onColumnSizingChange: (u) => { const cur = Object.fromEntries(table.getAllLeafColumns().map((c) => [c.id, c.getSize()])); const nx = typeof u === 'function' ? u(cur) : u; patch(tableKey, { widths: { ...ui.widths, ...nx } }); },
+    getCoreRowModel: getCoreRowModel(), getSortedRowModel: getSortedRowModel(), getFilteredRowModel: getFilteredRowModel(), getRowId: (r) => String(getId(r)),
+  });
+  const all = table.getRowModel().rows, leaves = table.getVisibleLeafColumns();
+  const h = box.current?.clientHeight || 300; const first = Math.max(0, Math.floor(top / ROW_H) - OVERSCAN), last = Math.min(all.length, Math.ceil((top + h) / ROW_H) + OVERSCAN);
+  const vis = all.slice(first, last);
+  const allSel = all.length > 0 && all.every((r) => selected.has(getId(r.original)));
+  const setSel = (ids: Id[]) => patch(tableKey, { selected: ids });
+  const toggle = (id: Id) => setSel(selected.has(id) ? ui.selected.filter((x) => x !== id) : [...ui.selected, id]);
+
+  const copy = async () => { // selected rows when there are any, else every shown row; visible columns, values in the active unit
+    const src = (selected.size ? all.filter((r) => selected.has(getId(r.original))) : all).map((r) => leaves.map((c) => { const v = r.getValue(c.id); return typeof v === 'number' ? v : String(v); }));
+    const text = toTsv(leaves.map((c) => { const m = c.columnDef.meta as Col<T>; return (m.group ? `${m.group} ` : '') + colHeader(m, unit); }), src);
+    try { await navigator.clipboard.writeText(text); } catch { /* clipboard unavailable: nothing to do */ }
+    return text;
+  };
+  const total = leaves.reduce((a, c) => a + c.getSize(), SEL_W);
+  const hasGroups = table.getHeaderGroups().length > 1;
+
+  return (
+    <div className="rtable" data-testid={testId} data-rows={all.length} tabIndex={0} onKeyDown={(e) => { if ((e.ctrlKey || e.metaKey) && e.key === 'c' && !(e.target instanceof HTMLInputElement)) { e.preventDefault(); void copy(); } }}>
+      <div className="rtools">
+        <input aria-label="Search by ID" placeholder="Search ID (1, 5, 10-20)" value={ui.idQuery} onChange={(e) => patch(tableKey, { idQuery: e.target.value })} />
+        <button className={`tbtn${ui.showFilters ? ' on' : ''}`} aria-pressed={ui.showFilters} onClick={() => patch(tableKey, { showFilters: !ui.showFilters })}>Filters</button>
+        <span className="menuwrap"><button className="tbtn" aria-expanded={menu} onClick={() => setMenu(!menu)}>Columns</button>
+          {menu && <div className="colmenu" role="menu">{columns.map((c) => <label key={c.id}><input type="checkbox" checked={!ui.hidden.includes(c.id)} onChange={() => patch(tableKey, { hidden: ui.hidden.includes(c.id) ? ui.hidden.filter((x) => x !== c.id) : [...ui.hidden, c.id] })} />{c.group ? `${c.group} ` : ''}{colHeader(c, unit)}</label>)}</div>}</span>
+        <button className="tbtn" onClick={() => void copy()} title="Copy the selected rows (or all shown rows) as tab-separated text; Ctrl+C in the table does the same">Copy</button>
+        {ui.showFilters && Object.keys(ui.filters).length > 0 && <button className="tbtn" onClick={() => patch(tableKey, { filters: {} })}>Clear filters</button>}
+        <span className="muted">{all.length} of {rows.length} rows{selected.size ? ` · ${selected.size} selected` : ''}</span>
+      </div>
+      <div className="rscroll" ref={box} onScroll={(e) => setTop(e.currentTarget.scrollTop)}>
+        <table style={{ width: total }}>
+          <colgroup><col style={{ width: SEL_W }} />{leaves.map((c) => <col key={c.id} style={{ width: c.getSize() }} />)}</colgroup>
+          <thead>
+            {table.getHeaderGroups().map((g, gi) => (
+              <tr key={g.id} className={hasGroups && gi === 0 ? 'ghead' : ''}>
+                {gi === (hasGroups ? 1 : 0) ? <th className="selcol" rowSpan={hasGroups ? 1 : 1}><input type="checkbox" aria-label="Select all shown rows" checked={allSel} onChange={() => setSel(allSel ? [] : all.map((r) => getId(r.original)))} /></th> : <th className="selcol" />}
+                {g.headers.map((hd) => hd.isPlaceholder ? <th key={hd.id} /> : (
+                  <th key={hd.id} colSpan={hd.colSpan} aria-sort={hd.column.getIsSorted() === 'asc' ? 'ascending' : hd.column.getIsSorted() === 'desc' ? 'descending' : 'none'}
+                      className={hd.colSpan > 1 ? 'grp' : ''} onClick={hd.column.getCanSort() && hd.colSpan === 1 ? hd.column.getToggleSortingHandler() : undefined}>
+                    {flexRender(hd.column.columnDef.header, hd.getContext())}{{ asc: ' ▲', desc: ' ▼' }[hd.column.getIsSorted() as string] ?? ''}
+                    {hd.colSpan === 1 && <span className="rz" onMouseDown={hd.getResizeHandler()} onTouchStart={hd.getResizeHandler()} onClick={(e) => e.stopPropagation()} />}
+                  </th>))}
+              </tr>))}
+            {ui.showFilters && <tr className="frow"><th className="selcol" />{leaves.map((c) => <th key={c.id}><input aria-label={`Filter ${c.id}`} placeholder=">5, 1..9, text" value={ui.filters[c.id] ?? ''} onChange={(e) => patch(tableKey, { filters: { ...ui.filters, [c.id]: e.target.value } })} /></th>)}</tr>}
+          </thead>
+          <tbody>
+            {first > 0 && <tr style={{ height: first * ROW_H }}><td colSpan={leaves.length + 1} /></tr>}
+            {vis.map((r) => { const id = getId(r.original), on = selected.has(id);
+              return (<tr key={r.id} style={{ height: ROW_H }} className={on ? 'sel' : ''} data-row-id={String(id)} onClick={(e) => { if (e.ctrlKey || e.metaKey) toggle(id); else setSel([id]); onRowClick?.(r.original); }}>
+                <td className="selcol"><input type="checkbox" aria-label={`Select ${id}`} checked={on} onClick={(e) => e.stopPropagation()} onChange={() => toggle(id)} /></td>
+                {r.getVisibleCells().map((c) => { const v = c.getValue(); const m = c.column.columnDef.meta as Col<T>; return <td key={c.id} className={m.text ? '' : 'num'}>{typeof v === 'number' ? (m.id === 'id' || m.q === 'none' && Number.isInteger(v) ? String(v) : fmt(v)) : String(v)}</td>; })}
+              </tr>); })}
+            {last < all.length && <tr style={{ height: (all.length - last) * ROW_H }}><td colSpan={leaves.length + 1} /></tr>}
+          </tbody>
+        </table>
+        {all.length === 0 && <div className="empty">No rows match the current search / filters.</div>}
+      </div>
+      {footer}
+    </div>
+  );
+}

@@ -9,6 +9,8 @@ import type { StationSet } from '../results/stations';
 import { loadUnitSystem, saveUnitSystem, type UnitSystemId } from '../units/units';
 
 export type Selection = { kind: 'node' | 'element'; id: number } | null;
+export interface TableUi { sorting: { id: string; desc: boolean }[]; filters: Record<string, string>; hidden: string[]; widths: Record<string, number>; selected: (number | string)[]; idQuery: string; showFilters: boolean; endI: boolean; endJ: boolean; selectedOnly: boolean }
+export const defaultTableUi = (): TableUi => ({ sorting: [{ id: 'id', desc: false }], filters: {}, hidden: [], widths: {}, selected: [], idQuery: '', showFilters: false, endI: true, endJ: true, selectedOnly: false });
 export type CenterTab = '3d' | 'tables';
 export type TableTab = 'Results' | 'Displacements' | 'Reactions' | 'Element Forces' | 'Diagrams' | 'Tables';
 export type CameraPreset = 'iso' | 'front' | 'top' | 'side' | 'fit';
@@ -30,6 +32,7 @@ interface UiState {
   setHost: (h: SolverHost) => void; patchRun: (f: (r: RunInfo) => RunInfo) => void; finishRun: (f: Finished, resultText: string | null, readError: string | null) => void;
   set: (p: Partial<Pick<UiState, 'analysis' | 'modes' | 'massType' | 'solver' | 'source' | 'run' | 'activeRun'>>) => void;
   stations: StationSet | null; stationsNote: string | null;
+  tableUi: Record<string, TableUi>; patchTableUi: (key: string, p: Partial<TableUi>) => void;   // per-table view state survives tab switches
   unitSystem: UnitSystemId; setUnitSystem: (u: UnitSystemId) => void;   // display only; results stay in solver units
   results: ResultSet | null; resultView: ResultView; setResultView: (p: Partial<ResultView>) => void;
   view: ModelView | null; fileName: string; loadError: string | null;
@@ -66,13 +69,14 @@ export const useUi = create<UiState>((set, get) => ({
     return { stations: good ? null : s.stations, stationsNote: good ? (results!.kind === 'solve' ? 'Computing station results...' : null) : s.stationsNote, results: good ? results : s.results, resultView: good ? defaultResultView() : s.resultView, tableTab: good ? (results!.kind === 'modal' ? 'Tables' as TableTab : 'Displacements' as TableTab) : s.tableTab, run: { ...s.run, state, stages, seconds: f.seconds, resultPath: f.outputPath, summary, message: state === 'failed' ? (failedMsg ?? `The solver exited with code ${f.exit}`) : undefined } };
   }),
   stations: null, stationsNote: null,
+  tableUi: {}, patchTableUi: (key, p) => set((s) => ({ tableUi: { ...s.tableUi, [key]: { ...(s.tableUi[key] ?? defaultTableUi()), ...p } } })),
   unitSystem: loadUnitSystem(), setUnitSystem: (unitSystem) => { saveUnitSystem(unitSystem); set({ unitSystem }); },
   results: null, resultView: defaultResultView(), setResultView: (p) => set((s) => ({ resultView: { ...s.resultView, ...p } })),
   view: null, fileName: '', loadError: null, selection: null, search: '', tableTab: 'Results', centerTab: '3d', setCenterTab: (centerTab) => set({ centerTab }),
   show: { nodes: true, elements: true, supports: true, links: true, solid: true },
   camera: { preset: 'iso', n: 0 }, openRequest: 0,
   loadText: (text, name) => {
-    try { set({ view: parseModelView(text), results: null, stations: null, stationsNote: null, resultView: defaultResultView(), fileName: name, loadError: null, selection: null, search: '', camera: { preset: 'iso', n: get().camera.n + 1 } }); }
+    try { set({ view: parseModelView(text), tableUi: {}, results: null, stations: null, stationsNote: null, resultView: defaultResultView(), fileName: name, loadError: null, selection: null, search: '', camera: { preset: 'iso', n: get().camera.n + 1 } }); }
     catch (e) { set({ loadError: (e as Error).message }); } // keep the previously loaded model
   },
   loadSample: async () => {

@@ -1,45 +1,37 @@
 import type { ColumnDef } from '@tanstack/react-table';
 import { useMemo } from 'react';
-import { COMPONENTS, FORCE_COLS } from '../../results/parse';
-import type { ModeRow, NodeValues, ResultCase } from '../../results/types';
-import { type TableTab, useUi } from '../../state/store';
+import type { ModeRow, ResultCase } from '../../results/types';
+import { defaultTableUi, type TableTab, useUi } from '../../state/store';
 import { DataTable, fmt } from './DataTable';
+import { ResultTable } from './ResultTable';
+import { buildForceRows, DISP_COLUMNS, FORCE_COLUMNS, reactionColumns, reactionRows } from '../../results/tableModel';
 import { ForceDiagram } from './ForceDiagram';
 
 const num = <T,>(key: string, get: (r: T) => number): ColumnDef<T, number> => ({ id: key, header: key, accessorFn: get, cell: (c) => fmt(c.getValue()) });
 
-function CaseBar() {
-  const { results, resultView, setResultView } = useUi();
-  if (!results) return null; const c = results.cases[resultView.caseIndex];
-  return (
-    <div className="casebar">
-      <label>Case <select aria-label="Result case" value={resultView.caseIndex} onChange={(e) => setResultView({ caseIndex: +e.target.value })}>
-        {results.cases.map((k, i) => <option key={i} value={i}>{k.name}{k.kind === 'combination' ? ' (combination)' : ''}</option>)}</select></label>
-      {c?.note && <span className="muted">{c.note}</span>}
-      {results.failed.length > 0 && <span className="warn" role="status">{results.failed.length} case(s) failed and are not listed: {results.failed.map((f) => `${f.name} (${f.message})`).join('; ')}</span>}
-    </div>
-  );
-}
+const idOf = (r: { id: number }) => r.id;
 
 function Displacements({ c }: { c: ResultCase }) {
-  const cols = useMemo<ColumnDef<NodeValues, any>[]>(() => [num<NodeValues>('Node', (n) => n.id), ...COMPONENTS.map((k, i) => num<NodeValues>(k, (n) => n.disp[i]))], []); // eslint-disable-line
-  return <DataTable data={c.nodes} columns={cols} testId="tbl-disp" />;
+  return <ResultTable tableKey="disp" rows={c.nodes} columns={DISP_COLUMNS} getId={idOf} testId="tbl-disp" />;
 }
 function Reactions({ c }: { c: ResultCase }) {
-  const rows = useMemo(() => c.nodes.filter((n) => n.restrained?.some(Boolean) || (n.reac && n.reac.some((v) => v !== 0))), [c]);
-  const local = rows.some((r) => r.reacLocal);
-  const cols = useMemo<ColumnDef<NodeValues, any>[]>(() => [num<NodeValues>('Node', (n) => n.id),
-    ...(['FX', 'FY', 'FZ', 'MX', 'MY', 'MZ'] as const).map((k, i) => num<NodeValues>(k, (n) => n.reac![i])),
-    ...(local ? (['FX', 'FY', 'FZ', 'MX', 'MY', 'MZ'] as const).map((k, i) => num<NodeValues>(`${k} (local)`, (n) => n.reacLocal?.[i] ?? NaN)) : [])], [local]); // eslint-disable-line
+  const rows = useMemo(() => reactionRows(c), [c]); const cols = useMemo(() => reactionColumns(rows.some((r) => r.reacLocal)), [rows]);
   if (!c.nodes.some((n) => n.reac)) return <div className="empty">This case has no reactions.</div>;
-  return <DataTable data={rows} columns={cols} testId="tbl-reac" />;
+  return <ResultTable tableKey="reac" rows={rows} columns={cols} getId={idOf} testId="tbl-reac" />;
 }
 function Forces({ c }: { c: ResultCase }) {
-  type R = { id: number; end: 'i' | 'j'; v: number[] };
-  const rows = useMemo<R[]>(() => c.elements.flatMap((e) => [{ id: e.id, end: 'i' as const, v: e.local.slice(0, 6) }, { id: e.id, end: 'j' as const, v: e.local.slice(6, 12) }]), [c]);
-  const cols = useMemo<ColumnDef<R, any>[]>(() => [num<R>('Element', (r) => r.id), { id: 'End', header: 'End', accessorFn: (r) => r.end, cell: (x) => x.getValue() }, ...FORCE_COLS.map((k, i) => num<R>(k, (r) => r.v[i]))], []); // eslint-disable-line
+  const view = useUi((s) => s.view); const ui = useUi((s) => s.tableUi.forces) ?? defaultTableUi(); const patch = useUi((s) => s.patchTableUi);
+  const rows = useMemo(() => (view ? buildForceRows(view, c.elements) : []), [view, c]);
   if (!c.elements.length) return <div className="empty">This case has no element forces.</div>;
-  return <><div className="muted pad">Local end forces exactly as the solver reports them (forces acting on the element ends, kN / kNm; i = first node, j = second node).</div><DataTable data={rows} columns={cols} testId="tbl-forces" /></>;
+  const hidden = [...(ui.endI ? [] : ['End-I']), ...(ui.endJ ? [] : ['End-J'])];
+  return <ResultTable tableKey="forces" rows={rows} columns={FORCE_COLUMNS} getId={idOf} hiddenGroups={hidden} testId="tbl-forces" footer={
+    <div className="ropts" aria-label="Result options">
+      <b>Result Options</b>
+      <label><input type="checkbox" checked={ui.endI} onChange={(e) => patch('forces', { endI: e.target.checked })} />Show End-I</label>
+      <label><input type="checkbox" checked={ui.endJ} onChange={(e) => patch('forces', { endJ: e.target.checked })} />Show End-J</label>
+      <label><input type="checkbox" checked={ui.selectedOnly} onChange={(e) => patch('forces', { selectedOnly: e.target.checked })} />Show selected elements only</label>
+      <span className="muted">Solver local axes; end forces = forces exerted by the nodes on the element ends (no sign change).</span>
+    </div>} />;
 }
 function Modes() {
   const results = useUi((s) => s.results)!;
@@ -62,7 +54,7 @@ export function ResultsViewer({ tab }: { tab: TableTab }) {
   if (!results) return <div className="empty" data-testid="results-empty">{tab}: no results. Run an analysis in the desktop app; the values of the last successful run appear here.</div>;
   if (!results.cases.length) return <div className="empty">The analysis produced no usable case.{results.failed.map((f) => ` ${f.name}: ${f.message}`)}</div>;
   const c = results.cases[Math.min(resultView.caseIndex, results.cases.length - 1)];
-  return <div className="resbox"><CaseBar />
+  return <div className="resbox">
     {tab === 'Results' ? <Summary /> : tab === 'Displacements' ? <Displacements c={c} /> : tab === 'Reactions' ? <Reactions c={c} /> : tab === 'Element Forces' ? <Forces c={c} />
       : results.modes.length ? <Modes /> : <div className="empty">No modal table for this analysis.</div>}</div>;
 }

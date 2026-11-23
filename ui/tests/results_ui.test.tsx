@@ -25,9 +25,10 @@ describe('result tables', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Deformed' })); expect(useUi.getState().resultView.deformed).toBe(true);
     act(() => useUi.getState().loadText(view, 'again')); expect(useUi.getState().results).toBeNull(); expect(useUi.getState().resultView.deformed).toBe(false);
   });
-  it('element forces show 2 rows per element with the solver sign convention; reactions only at supports', () => {
+  it('element forces show one row per element (End-I and End-J column groups) with the solver sign convention; reactions only at supports', () => {
     render(<App />); act(() => { useUi.setState({ results: parseResults(res) }); useUi.getState().setTableTab('Element Forces'); });
-    const t = screen.getByTestId('tbl-forces'); expect(t.getAttribute('data-rows')).toBe('2');
+    // 2026-11-23 (GUI V2 phase 4): one row per element with End-I/End-J column groups instead of two rows per element
+    const t = screen.getByTestId('tbl-forces'); expect(t.getAttribute('data-rows')).toBe('1');
     expect(within(t).getByText('-4000')).toBeTruthy();
     act(() => useUi.getState().setTableTab('Reactions')); expect(screen.getByTestId('tbl-reac').getAttribute('data-rows')).toBe('1');
   });

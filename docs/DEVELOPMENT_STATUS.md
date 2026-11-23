@@ -3175,3 +3175,10 @@ picker at the bottom right, member-force contours N/Vy/Vz/T/My/Mz from the stati
 unit system (display only). Force contours are enabled only for Linear Static with station data; modal/spectrum/missing stations are disabled with the reason.
 Camera fit now projects the bounding box (independent of canvas shape). Verified: `npm test` 64/64 (cantilever My = P(L-x) at every vertex, units, ticks,
 availability, controls), headless Edge on model 100 (My max 30660 kNm = 3126.4 tf.m in Ton.m), picking script 16/16.
+
+## GUI V2 Phase 4 -- Tables workspace (2026-11-23)
+ui/: top filters (Load Case, Load Combination, Result Type, Unit System), Element Forces (one row per member: ID, type, section id, member-axis length, End-I / End-J N Vy Vz T My Mz),
+Displacements, Reactions with unit-aware headers; sortable (numeric), per-column filters ("> 5", "10..20", text), ID search (1, 5, 10-20), multi-row selection, column visibility and resizing,
+sticky grouped headers, windowed rows, copy as TSV. Table view state (sort, filters, selection, widths) is kept in the store across tab switches. Values are converted only for display; solver
+sign conventions untouched. Section column shows the section id (the model view carries no section names). `npm test` 74/74; verified in headless Edge on model 100 (94 members).
+Not yet: modal/spectrum/spring tables, Absolute Max/Envelope, CSV/Excel export, viewer/Explorer synchronisation (Phases 5-6).

@@ -10,6 +10,81 @@ Build a standalone, production-grade C++20 three-dimensional finite-element stru
 - Numerical correctness before optimization. Each new capability requires independent reference tests.
 - No unapproved edits to the separate KOPRUQ frontend project.
 
+## Current capability summary — 2026-11-23 (verified state, HEAD `26c3532`)
+What the solver does today. Everything listed is implemented and covered by tests (Debug 358/358,
+Release 358/358, gui-release 393/393) and, where noted, verified against MIDAS NX reference models.
+Anything not listed is not supported; the MIDAS importer rejects unsupported records explicitly
+(never approximates them silently) and reports every disclosed assumption.
+
+**Analyses**
+- Linear static: multiple load cases from one factorisation, load combinations by superposition
+  (MIDAS LCOM-GEN incl. nested combinations).
+- Modal (eigenvalue): consistent mass (default) or lumped translational mass (MIDAS-like),
+  mass-normalised modes.
+- Response spectrum: single direction (global X/Y/Z), SRSS or CQC modal combination,
+  caller-supplied spectrum points.
+- Not available: buckling / P-Delta / nonlinear / time history / construction stages (cancelled);
+  traffic (moving) loads (reinstated 2026-11-16, not started).
+
+**Elements**
+- 3D beam (6 DOF/node), Euler-Bernoulli or Timoshenko (shear areas > 0); end releases (static
+  condensation); rigid end offsets (incl. MIDAS section offset "CT").
+- Truss (pin-ended, axial only).
+- Two-node elastic link, 6 independent springs in link-local axes (MIDAS ELNK "GEN").
+- Single-node elastic support spring, 6 components (MIDAS NSPR "LINEAR").
+- Rigid link (master-slave), all six or selected DOFs (MIDAS RIGD with DOF mask; a restrained
+  slave DOF is dropped from the link, MIDAS behaviour).
+
+**Supports / boundary conditions**
+- Per-node restraints UX..RZ in global axes, or in node local axes (MIDAS SKEW, one rotation
+  angle) with reactions reported in global and local axes.
+- MIDAS structure type STYP = 1 (X-Z plane: UY, RX, RZ restrained everywhere); STYP = 0 (3D).
+- Elastic supports via NSPR springs or elastic links to restrained nodes.
+
+**Loads**
+- Nodal forces and moments (global).
+- Member loads, local or global axes: uniform / trapezoidal / multi-point piecewise-linear
+  distributed forces and moments over full or partial length; concentrated forces and moments;
+  projected global loads (native model only; MIDAS USE_PROJECTION is rejected as unverified).
+- Equivalent nodal loads consistent with the element: Hermite for Euler-Bernoulli,
+  Timoshenko interdependent shape functions for shear-deformable members.
+- Self-weight (global -Z, unit weight x area).
+- Temperature: uniform change (MIDAS ETMP) and linear gradients over the section depth
+  (MIDAS GTMP).
+- Not imported from MIDAS: BTMP section temperature profiles, eccentric or pressure beam loads.
+
+**Sections**
+- Native model: direct values A, Iy, Iz, J, Asy, Asz.
+- MIDAS DB/User: SB (rectangle), SR (solid circle), B (box), T, H/I (unequal flanges, web
+  fillets r1), C (channel), L (angle, truss members only), STRK (track), SOCT (octagon) --
+  each with MIDAS's own J and shear-area conventions identified from MIDAS results.
+- MIDAS PSC: 1CEL (single-cell box, joints off) and PSCI (precast I girder, joints JL1/JL4):
+  exact polygon A/I/centroid; J and shear areas from a 2D FE section analysis (SectionFE). These
+  differ from MIDAS's own mesh-dependent values by up to ~0.25% (J) / ~0.75% (Asz).
+- Not supported: catalog profiles (AISC/EN, removed by user decision), other PSC shapes,
+  user-input PSC stiffness, tapered sections.
+
+**Materials**
+- EN 1992-1-1 concrete grades (Ecm = 22 ((fck+8)/10)^0.3 GPa, nu 0.2, 25 kN/m3,
+  alpha 1e-5/K); EN 1993 structural steel grades (E 210 GPa, nu 0.3, 78.5 kN/m3).
+- Native model: any isotropic linear-elastic material (E, nu, unit weight, alpha).
+
+**Input / output and tools**
+- Native JSON model/results schemas (versioned, validated, deterministic, SHA-256 provenance).
+- MIDAS Civil NX JSON import (`--format midas-nx-json`).
+- CLI: `solve`, `modal`, `spectrum`.
+- Qt6 verification GUI: runs the solver on a MIDAS model and compares against MIDAS Excel
+  exports -- displacements, global and local reactions, beam forces, truss forces, elastic link
+  forces, eigenvalues, response-spectrum results -- with Excel report export.
+
+**MIDAS verification status (reference models in `verification/models`)**
+- 100%: models 01-12, 13-15 (eigen), 17, 18, 19, 20, 21, 24.
+- Model 16 (spectrum): 2 zero-crossing rows. Model 22: 4 zero-crossing rows (TU). Model 23: 1
+  zero-crossing row. The 5 rows of models 22/23 trace to the PSC section J/As mesh dependence
+  above (diagnostic: with MIDAS's own section values both are 100%); model 16's 2 rows are the
+  CQC residue at a pier moment zero crossing (15.97 vs 16.60 kNm next to ~1450 kNm values).
+- Model 100 ("Basit köprü"): not yet tested.
+
 ## Scope change — 2026-10-17 (user decision)
 Phase 6.3 (linear buckling / P-Delta), Phase 7 (time-dependent and nonlinear
 analysis) and Phase 8 (bridge engineering capabilities: construction
@@ -244,9 +319,9 @@ CLI `modal` command.
 **6.2 single-direction response spectrum analysis — COMPLETE (verified, CI
 run `39051080335`, commits `b207adf`, `5807f51`):** `ResponseSpectrumSolver`
 on top of 6.1's modes; caller-supplied spectrum points only (spectrum
-shape itself stays outside the solver kernel); SRSS modal combination; CQC
-and multi-direction combination rules not implemented (out of scope unless
-separately requested).
+shape itself stays outside the solver kernel); SRSS modal combination (CQC added
+later in Phase 7I.1; multi-direction combination rules still not
+implemented).
 
 **6.2b JSON/CLI support for response spectrum analysis — COMPLETE
 (verified, run `39055492002`, commits `3073eb6`, `7831ddd`):** model
@@ -1055,6 +1130,25 @@ file-loading helper). Every other test in both files (self-contained synthetic f
 unaffected. **Verified: Debug CTest 258/258 PASS, gui-release 288/288 PASS -- 100%, no permanent
 failures remain.** Future CTest/report baselines in this document should read "all tests
 passing," not carry forward the old "same 5 pre-existing failures" framing.
+
+### Phase 7J — MIDAS verification models 19-24: missing physics and import coverage — COMPLETE (2026-11-20 .. 2026-11-23)
+User-approved work driven by the user's MIDAS reference models; each item verified against MIDAS
+results and covered by dedicated new tests (details and evidence: `docs/DEVELOPMENT_STATUS.md`).
+- Sections: user H with fillets (Roark torsion), C, truss-only L; catalog profiles removed (user
+  decision: precast bridges first); square SB torsion 2.25 a^4; PSC 1CEL and PSC-I with 2D FE
+  section analysis (SectionFE); mesh rule h = max(tmin/16, sqrt(A/80000)) (h = 0.01 m was tried and
+  reverted by user decision: same results, longer runs).
+- Boundary conditions: per-DOF rigid links (MIDAS RIGD DOF mask, restrained slave DOFs dropped);
+  node local axes (MIDAS SKEW) with local reactions; STYP = 1; section offset "CT"; temperature
+  gradient (GTMP).
+- Loads: full MIDAS BMLD coverage except projection/eccentricity/pressure (uniform, trapezoidal,
+  multi-point, moments, concentrated, local/global); Timoshenko-consistent member-load vectors
+  (exact fixed-end forces for shear-deformable members).
+- Verification tooling: GUI comparison of elastic link forces and local reactions (new input row,
+  tab and report sheet); response-spectrum comparison.
+Open (needs user data or a decision): PSC J/As differ from MIDAS's undocumented section mesh by
+up to ~0.25% / ~0.75%, leaving 5 zero-crossing rows in models 22/23; PSC user-input stiffness not
+imported (no sample export).
 
 ### Phase 7F — Final standalone release
 Not started; depends on 7A-7I.

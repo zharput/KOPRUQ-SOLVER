@@ -113,9 +113,9 @@ code{font-family:var(--mono);color:#9fc5ee}
 .rscroll{flex:1 1 0;min-height:0;overflow:auto;position:relative}
 .rscroll table{table-layout:fixed;border-collapse:collapse;font-size:12px}
 .rscroll th{position:sticky;top:0;z-index:2;background:var(--bg-2);text-align:right;padding:2px 6px;white-space:nowrap;overflow:hidden;user-select:none;cursor:pointer;border-bottom:1px solid var(--line);border-right:1px solid var(--line-soft);height:24px;box-sizing:border-box}
-.rscroll tr.ghead+tr th{top:24px}.rscroll tr.ghead th{top:0}
+.rscroll tr.ghead+tr th{top:25px}.rscroll tr.ghead th{top:0;height:25px}
 .rscroll th.grp{text-align:center;cursor:default;color:var(--accent);border-bottom:1px solid var(--line)}
-.rscroll .frow th{top:48px;cursor:default;padding:1px 2px}.rscroll tr.ghead~tr.frow th{top:48px}
+.rscroll .frow th{top:49px;cursor:default;padding:1px 2px}.rscroll tr.ghead~tr.frow th{top:49px}
 .rscroll .frow input{width:100%;box-sizing:border-box;background:var(--bg-1);color:var(--text);border:1px solid var(--line);font-size:11px;padding:1px 3px}
 .rscroll .rz{position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize}
 .rscroll td{padding:0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-bottom:1px solid var(--line-soft)}
@@ -125,3 +125,7 @@ code{font-family:var(--mono);color:#9fc5ee}
 .tfilters{display:flex;gap:14px;align-items:center;padding:5px 10px;border-bottom:1px solid var(--line);flex-wrap:wrap;font-size:12px}
 .tfilters select{background:var(--bg-2);color:var(--text);border:1px solid var(--line);padding:2px 4px}.tfilters label{display:flex;gap:6px;align-items:center}
 .ropts select{background:var(--bg-2);color:var(--text);border:1px solid var(--line);padding:1px 4px}
+.rscroll tr.active td{box-shadow:inset 0 1px 0 #f59e0b,inset 0 -1px 0 #f59e0b}.rscroll tr.active td:first-child{box-shadow:inset 2px 0 0 #f59e0b,inset 0 1px 0 #f59e0b,inset 0 -1px 0 #f59e0b}
+/* the whole header block sticks together (no gap between the group row and the column row) */
+.rscroll thead{position:sticky;top:0;z-index:3}
+.rscroll thead th{position:relative;top:auto!important}

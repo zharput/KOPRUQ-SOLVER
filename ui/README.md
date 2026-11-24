@@ -76,6 +76,13 @@ the 3D scene, selection, results and table category survive tab switches. Result
 Element Stresses [disabled: the result files carry no stresses], Diagrams, Modal / Spectrum, Summary) are sub-tabs of Tables; the solver
 log is a collapsible section of the Analysis panel. Next phases: unit system, legend/units in the viewer, full tables, export.
 
+## GUI V2 Phase 6: export and synchronisation (2026-11-23)
+Every result table has **CSV** and **Excel** buttons: the selected rows (or all shown rows, after search/filters), visible columns, values in the active unit system, with a metadata
+block (model name, analysis case, load case/combination, result type, unit system). CSV is UTF-8 with BOM; XLSX is written directly (OOXML zipped with `fflate`, the only added dependency;
+checked by re-reading a generated file with openpyxl). Files are produced by a browser download; the desktop shell's save behaviour (WebView2 download) has not been verified.
+Synchronisation: clicking a table row selects the node/element for the 3D viewer, Model Explorer and Properties; a selection made in any of those marks and scrolls to its row (a note says
+when the object is not in the table or hidden by search/filters). The multi-row checkbox selection is table-local.
+
 ## Layout
 
 | Area | Component |

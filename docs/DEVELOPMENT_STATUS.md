@@ -3190,3 +3190,9 @@ participation table, Spring / Link Results (link-local end forces; tab disabled 
 cases or over combinations (never mixed with spectrum peak magnitudes; disabled for spectrum/modal results). New display quantity "mass" (kN s2/m = tonne) in the unit system.
 Bug found by the new tests: Math.max/min passed directly to reduce returned NaN. A table re-render loop (new filter array every render) and a stale per-row value cache on unit change were fixed.
 `npm test` 85/85; model 100 verified in headless Edge (188 envelope rows over 2 combinations, spectrum SPX/SPY directions X/Y, 20 modes). Not yet: CSV/XLSX export and viewer/Explorer synchronisation (Phase 6).
+
+## GUI V2 Phase 6 -- export and synchronisation (2026-11-23/24)
+ui/: CSV and XLSX export of every result table (metadata block + table, selected rows or all shown rows, active unit system); XLSX written in-house with fflate (new dependency, 0 vulnerabilities),
+validated by reading a generated workbook back with openpyxl (sheet name, text incl. non-ASCII, exact numbers, NaN left empty). Row click -> global selection (viewer, Model Explorer, Properties);
+selection from any of them marks and scrolls to the row; hidden selections are reported. `npm test` 93/93; verified in headless Edge on model 100 (E85 scrolled to and marked).
+Known: browser-download based (desktop-shell save not verified); multi-row table selection is not mirrored in the viewer; a 2-3 px sliver of a scrolled row is visible between the two sticky header rows of grouped tables (cosmetic).

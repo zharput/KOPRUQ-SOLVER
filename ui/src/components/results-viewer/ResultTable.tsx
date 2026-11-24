@@ -1,18 +1,19 @@
 import { type ColumnDef, type ColumnFiltersState, flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel, type SortingState, useReactTable, type VisibilityState } from '@tanstack/react-table';
-import { type ReactNode, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { type Col, colHeader, parseFilter, parseIdQuery, toTsv } from '../../results/tableModel';
 import { DEFAULT_TABLE_UI, useUi } from '../../state/store';
 
 const NO_GROUPS: string[] = [];
 import { fmt } from './DataTable';
+import { download, type ExportDoc, safeFileName, toCsv, toXlsx } from '../../results/exportTable';
 
 const ROW_H = 22, OVERSCAN = 12, SEL_W = 30;
 type Id = number | string;
 
 /** Engineering result table: group headers, unit-aware headers, numeric sort, per-column filters ("> 5", "10..20", text), id search,
  *  multi-row selection, column visibility and resizing, sticky headers, windowed rows, copy. All view state lives in the store (per `tableKey`). */
-export function ResultTable<T>({ tableKey, rows, columns, getId, searchId, testId, hiddenGroups = NO_GROUPS, onRowClick, footer }: {
-  tableKey: string; rows: T[]; columns: Col<T>[]; getId: (r: T) => Id; searchId?: (r: T) => number; testId?: string; hiddenGroups?: string[]; onRowClick?: (r: T) => void; footer?: ReactNode;
+export function ResultTable<T>({ tableKey, title, rows, columns, getId, searchId, testId, hiddenGroups = NO_GROUPS, onRowClick, isActive, footer }: {
+  tableKey: string; title: string; isActive?: (r: T) => boolean; rows: T[]; columns: Col<T>[]; getId: (r: T) => Id; searchId?: (r: T) => number; testId?: string; hiddenGroups?: string[]; onRowClick?: (r: T) => void; footer?: ReactNode;
 }) {
   const unit = useUi((s) => s.unitSystem); const ui = useUi((s) => s.tableUi[tableKey]) ?? DEFAULT_TABLE_UI; const patch = useUi((s) => s.patchTableUi);
   const [menu, setMenu] = useState(false); const [top, setTop] = useState(0); const box = useRef<HTMLDivElement>(null);
@@ -51,12 +52,25 @@ export function ResultTable<T>({ tableKey, rows, columns, getId, searchId, testI
   const setSel = (ids: Id[]) => patch(tableKey, { selected: ids });
   const toggle = (id: Id) => setSel(selected.has(id) ? ui.selected.filter((x) => x !== id) : [...ui.selected, id]);
 
-  const copy = async () => { // selected rows when there are any, else every shown row; visible columns, values in the active unit
+  // rows that Copy / Export use: the selected rows when there are any, else every shown row; visible columns; values in the active unit
+  const buildDoc = (): { headers: string[]; rows: (number | string)[][] } => {
     const src = (selected.size ? all.filter((r) => selected.has(getId(r.original))) : all).map((r) => leaves.map((c) => { const v = r.getValue(c.id); return typeof v === 'number' ? v : String(v); }));
-    const text = toTsv(leaves.map((c) => { const m = c.columnDef.meta as Col<T>; return (m.group ? `${m.group} ` : '') + colHeader(m, unit); }), src);
-    try { await navigator.clipboard.writeText(text); } catch { /* clipboard unavailable: nothing to do */ }
-    return text;
+    return { headers: leaves.map((c) => { const m = c.columnDef.meta as Col<T>; return (m.group ? `${m.group} ` : '') + colHeader(m, unit); }), rows: src };
   };
+  const copy = async () => { const d = buildDoc(); const text = toTsv(d.headers, d.rows); try { await navigator.clipboard.writeText(text); } catch { /* clipboard unavailable: nothing to do */ } return text; };
+  const st = useUi.getState;
+  const exportDoc = (): ExportDoc => {
+    const s0 = st(), r = s0.results, c = r?.cases[Math.min(s0.resultView.caseIndex, Math.max(0, (r?.cases.length ?? 1) - 1))], d = buildDoc();
+    return { meta: [['Model Name', s0.fileName], ['Analysis Case', r ? (r.kind === 'solve' ? 'Linear Static' : r.kind === 'modal' ? 'Modal' : 'Response Spectrum') : ''], ['Load Case / Combination', c ? `${c.name}${c.kind === 'combination' ? ' (combination)' : ''}` : ''],
+      ['Result Type', title], ['Unit System', unit], ['Rows', `${d.rows.length}${selected.size ? ' (selected)' : ''}`]], headers: d.headers, rows: d.rows };
+  };
+  const base = () => safeFileName(`${st().fileName.replace(/\.json$/i, '')}_${title}_${st().results?.cases[st().resultView.caseIndex]?.name ?? ''}_${unit}`);
+  const exportCsv = () => download(`${base()}.csv`, toCsv(exportDoc()), 'text/csv;charset=utf-8');
+  const exportXlsx = () => download(`${base()}.xlsx`, toXlsx(exportDoc(), title), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  // scroll the row of the externally selected object (3D viewer / Model Explorer) into view; the table is windowed, so the position is computed
+  const activeIdx = isActive ? all.findIndex((r) => isActive(r.original)) : -1;
+  const activeKey = activeIdx >= 0 ? getId(all[activeIdx].original) : null;
+  useEffect(() => { const el = box.current; if (!el || activeIdx < 0) return; const y = activeIdx * ROW_H, h2 = el.clientHeight || 300; if (y < el.scrollTop + ROW_H * 2 || y > el.scrollTop + h2 - ROW_H * 3) el.scrollTop = Math.max(0, y - h2 / 2); }, [activeKey]); // eslint-disable-line
   const total = leaves.reduce((a, c) => a + c.getSize(), SEL_W);
   const hasGroups = table.getHeaderGroups().length > 1;
 
@@ -68,8 +82,11 @@ export function ResultTable<T>({ tableKey, rows, columns, getId, searchId, testI
         <span className="menuwrap"><button className="tbtn" aria-expanded={menu} onClick={() => setMenu(!menu)}>Columns</button>
           {menu && <div className="colmenu" role="menu">{columns.map((c) => <label key={c.id}><input type="checkbox" checked={!ui.hidden.includes(c.id)} onChange={() => patch(tableKey, { hidden: ui.hidden.includes(c.id) ? ui.hidden.filter((x) => x !== c.id) : [...ui.hidden, c.id] })} />{c.group ? `${c.group} ` : ''}{colHeader(c, unit)}</label>)}</div>}</span>
         <button className="tbtn" onClick={() => void copy()} title="Copy the selected rows (or all shown rows) as tab-separated text; Ctrl+C in the table does the same">Copy</button>
+        <button className="tbtn" onClick={exportCsv} title="Export the selected rows (or all shown rows) as CSV, in the active unit system">CSV</button>
+        <button className="tbtn" onClick={exportXlsx} title="Export the selected rows (or all shown rows) as an Excel workbook, in the active unit system">Excel</button>
         {ui.showFilters && Object.keys(ui.filters).length > 0 && <button className="tbtn" onClick={() => patch(tableKey, { filters: {} })}>Clear filters</button>}
         <span className="muted">{all.length} of {rows.length} rows{selected.size ? ` · ${selected.size} selected` : ''}</span>
+        {isActive && activeIdx < 0 && useUi.getState().selection && <span className="muted" data-testid="hidden-selection">· the selected object is not in this table (or hidden by search / filters)</span>}
       </div>
       <div className="rscroll" ref={box} onScroll={(e) => setTop(e.currentTarget.scrollTop)}>
         <table style={{ width: total }}>
@@ -90,7 +107,7 @@ export function ResultTable<T>({ tableKey, rows, columns, getId, searchId, testI
           <tbody>
             {first > 0 && <tr style={{ height: first * ROW_H }}><td colSpan={leaves.length + 1} /></tr>}
             {vis.map((r) => { const id = getId(r.original), on = selected.has(id);
-              return (<tr key={r.id} style={{ height: ROW_H }} className={on ? 'sel' : ''} data-row-id={String(id)} onClick={(e) => { if (e.ctrlKey || e.metaKey) toggle(id); else setSel([id]); onRowClick?.(r.original); }}>
+              return (<tr key={r.id} style={{ height: ROW_H }} className={`${on ? 'sel' : ''}${isActive?.(r.original) ? ' active' : ''}`} data-row-id={String(id)} onClick={(e) => { if (e.ctrlKey || e.metaKey) toggle(id); else setSel([id]); onRowClick?.(r.original); }}>
                 <td className="selcol"><input type="checkbox" aria-label={`Select ${id}`} checked={on} onClick={(e) => e.stopPropagation()} onChange={() => toggle(id)} /></td>
                 {r.getVisibleCells().map((c) => { const v = c.getValue(); const m = c.column.columnDef.meta as Col<T>; return <td key={c.id} className={m.text ? '' : 'num'}>{typeof v === 'number' ? (m.id === 'id' || m.q === 'none' && Number.isInteger(v) ? String(v) : fmt(v)) : String(v)}</td>; })}
               </tr>); })}

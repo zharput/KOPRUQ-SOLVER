@@ -3196,3 +3196,11 @@ ui/: CSV and XLSX export of every result table (metadata block + table, selected
 validated by reading a generated workbook back with openpyxl (sheet name, text incl. non-ASCII, exact numbers, NaN left empty). Row click -> global selection (viewer, Model Explorer, Properties);
 selection from any of them marks and scrolls to the row; hidden selections are reported. `npm test` 93/93; verified in headless Edge on model 100 (E85 scrolled to and marked).
 Known: browser-download based (desktop-shell save not verified); multi-row table selection is not mirrored in the viewer; a 2-3 px sliver of a scrolled row is visible between the two sticky header rows of grouped tables (cosmetic).
+
+## GUI V2 Phase 7 -- verification (2026-11-24)
+Desktop shell (Tauri 2 + real C++ CLI, WebView2 debug port, `ui/spikes/cdp_desktop_v2.mjs`) on model 100: open (inspect) -> Linear Static run -> automatic `stations` run (7 cases) -> Element Forces table (94 rows) ->
+unit change to Ton.m (headers and values) -> element selection marks and scrolls the row -> CSV export (WebView2 saves it silently to the user's Downloads folder; content checked: metadata block, tf units,
+E1 N = -280.0227 tf = -2746.084 kN / 9.80665) -> force diagrams -> 3D My contour legend (max 3126 tf.m = 30660 kNm / 9.80665).
+New `ui/tests/consistency_v2.test.ts` (6 tests): unit factors against an independent constant list (4 systems x 9 quantities), column header units, table values equal the raw JSON values,
+cantilever statics in the table, model-100 force rows equal the raw end forces for all 7 cases/combinations, station ends reproduce the end forces (1e-6 relative).
+Evidence: `npm test` 99/99, typecheck and production build clean; C++ Debug 391/391, Release 391/391, gui-release 430/430 (no C++ change since the stations commit).

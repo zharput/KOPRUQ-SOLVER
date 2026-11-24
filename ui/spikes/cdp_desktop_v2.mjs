@@ -1,0 +1,22 @@
+// End-to-end check of the desktop app (Tauri + real C++ CLI) for GUI V2: open -> solve (+ automatic stations) -> tables -> export -> viewer sync.
+import { writeFileSync } from 'node:fs';
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const list = await (await fetch('http://127.0.0.1:9340/json')).json();
+const ws = new WebSocket(list.find((t) => t.type === 'page').webSocketDebuggerUrl); await new Promise((r) => (ws.onopen = r));
+let id = 0; const pending = new Map(); ws.onmessage = (m) => { const d = JSON.parse(m.data); if (d.id && pending.has(d.id)) { pending.get(d.id)(d); pending.delete(d.id); } };
+const send = (method, params = {}) => new Promise((res) => { const i = ++id; pending.set(i, res); ws.send(JSON.stringify({ id: i, method, params })); });
+const ev = async (expression) => { const d = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }); return d.result?.result?.value ?? JSON.stringify(d.result?.exceptionDetails?.exception?.description ?? d.result); };
+const model = process.argv[2];
+console.log('tauri         :', await ev(`'__TAURI_INTERNALS__' in window`));
+await sleep(1500);
+console.log('open          :', await ev(`(async()=>{const k=window.__kopruq; await k.runner.openModelPath(${JSON.stringify(model)}); const s=k.useUi.getState(); return JSON.stringify({err:s.loadError, nodes:s.view?.model.nodes.length, beams:s.view?.model.beams.length})})()`));
+await sleep(1500);
+console.log('solve+stations:', await ev(`(async()=>{const k=window.__kopruq, u=k.useUi; u.getState().set({analysis:'solve'}); await k.runner.startAnalysis(); const s=u.getState(); return JSON.stringify({run:s.run.state, msg:s.run.message, cases:s.results?.cases.map(c=>c.name), stations:s.stations?.cases.length ?? null, note:s.stationsNote})})()`));
+console.log('tables        :', await ev(`(async()=>{const u=window.__kopruq.useUi; u.getState().setCenterTab('tables'); u.getState().setTableTab('Element Forces'); await new Promise(r=>setTimeout(r,800)); const t=document.querySelector('[data-testid=tbl-forces]'); return JSON.stringify({rows:t?.getAttribute('data-rows'), headers:[...document.querySelectorAll('[data-testid=tbl-forces] thead th')].map(h=>h.innerText).filter(Boolean).slice(0,8)})})()`));
+console.log('unit Ton.m    :', await ev(`(async()=>{const u=window.__kopruq.useUi; u.getState().setUnitSystem('Ton.m'); await new Promise(r=>setTimeout(r,500)); return [...document.querySelectorAll('[data-testid=tbl-forces] thead th')].map(h=>h.innerText).filter((x)=>/tf/.test(x)).slice(0,3).join(' | ')})()`));
+console.log('sync          :', await ev(`(async()=>{const u=window.__kopruq.useUi; u.getState().select({kind:'element',id:60}); await new Promise(r=>setTimeout(r,500)); return document.querySelector('tr.active')?.getAttribute('data-row-id')})()`));
+console.log('export click  :', await ev(`(async()=>{ const b=[...document.querySelectorAll('.rtools button')].find(x=>x.textContent==='CSV'); b.click(); await new Promise(r=>setTimeout(r,800)); return 'clicked (file location not observable here)'})()`));
+console.log('diagrams      :', await ev(`(async()=>{const u=window.__kopruq.useUi; u.getState().setTableTab('Diagrams'); await new Promise(r=>setTimeout(r,800)); return document.querySelector('[data-testid=diagrams]') ? 'charts shown' : document.querySelector('[data-testid=diagrams-na]')?.innerText})()`));
+console.log('3d view       :', await ev(`(async()=>{const u=window.__kopruq.useUi; u.getState().setCenterTab('3d'); u.getState().setResultView({contour:'My', deformed:true, scale:200}); await new Promise(r=>setTimeout(r,1500)); return document.querySelector('[data-testid=legend]')?.innerText.replace(/\s+/g,' ')})()`));
+const d = await send('Page.captureScreenshot', { format: 'png' }); writeFileSync('../docs/desktop-v2.png', Buffer.from(d.result.data, 'base64'));
+ws.close();
